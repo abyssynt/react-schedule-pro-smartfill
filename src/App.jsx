@@ -383,8 +383,8 @@ export default function App() {
       <div className="max-w-[95vw] mx-auto mb-6">
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">班表管理工具 <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span></h1>
-            <p className="text-slate-500 text-xs mt-1 italic">提供手動排班、統計、暫存與匯出功能</p>
+            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">智能排班系統 PRO｜智慧排班開發版 <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span></h1>
+            <p className="text-slate-500 text-xs mt-1 italic">開發版開發使用</p>
           </div>
           
           <div className="flex flex-wrap items-center gap-2">
