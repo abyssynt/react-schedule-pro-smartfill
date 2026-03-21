@@ -703,7 +703,6 @@ export default function App() {
                 {DICT.LEAVES.map(l => (
                   <th key={l} className="p-2 border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">{l}</th>
                 ))}
-                <th className="p-4 bg-slate-100 w-24">操作</th>
               </tr>
             </thead>
 
@@ -728,17 +727,43 @@ export default function App() {
                         )}
 
                         <td className="sticky left-[96px] bg-white z-10 border-r p-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
-                          <input
-                            type="text"
-                            value={staff.name}
-                            onChange={(e) => {
-                              const next = [...staffs];
-                              const currentIndex = next.findIndex(s => s.id === staff.id);
-                              if (currentIndex !== -1) next[currentIndex].name = e.target.value;
-                              setStaffs(next);
-                            }}
-                            className="w-full text-center py-2 font-bold text-slate-700 border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent"
-                          />
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-8">
+                              <button
+                                onClick={() => moveStaffInGroup(staff.id, 'up')}
+                                disabled={groupIndex === 0}
+                                className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
+                              >
+                                <ArrowUp size={14} />
+                              </button>
+                              <button
+                                onClick={() => moveStaffInGroup(staff.id, 'down')}
+                                disabled={groupIndex === groupStaffList.length - 1}
+                                className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
+                              >
+                                <ArrowDown size={14} />
+                              </button>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={staff.name}
+                              onChange={(e) => {
+                                const next = [...staffs];
+                                const currentIndex = next.findIndex(s => s.id === staff.id);
+                                if (currentIndex !== -1) next[currentIndex].name = e.target.value;
+                                setStaffs(next);
+                              }}
+                              className="flex-1 text-center py-2 font-bold text-slate-700 border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent"
+                            />
+
+                            <button
+                              onClick={() => removeStaff(staff.id)}
+                              className="text-slate-400 hover:text-red-500 shrink-0 w-8 flex items-center justify-center"
+                            >
+                              <Minus size={14} />
+                            </button>
+                          </div>
                         </td>
 
                         {daysInMonth.map(d => {
@@ -775,31 +800,6 @@ export default function App() {
                             {stats.leaveDetails[l] || ''}
                           </td>
                         ))}
-
-                        <td className="p-2">
-                          <div className="flex justify-center gap-1">
-                            <button
-                              onClick={() => moveStaffInGroup(staff.id, 'up')}
-                              disabled={groupIndex === 0}
-                              className="text-slate-400 hover:text-blue-500 disabled:opacity-10"
-                            >
-                              <ArrowUp size={14} />
-                            </button>
-                            <button
-                              onClick={() => moveStaffInGroup(staff.id, 'down')}
-                              disabled={groupIndex === groupStaffList.length - 1}
-                              className="text-slate-400 hover:text-blue-500 disabled:opacity-10"
-                            >
-                              <ArrowDown size={14} />
-                            </button>
-                            <button
-                              onClick={() => removeStaff(staff.id)}
-                              className="text-slate-400 hover:text-red-500"
-                            >
-                              <Minus size={14} />
-                            </button>
-                          </div>
-                        </td>
                       </tr>
                     );
                   })}
@@ -824,7 +824,7 @@ export default function App() {
                       ></td>
                     ))}
 
-                    <td colSpan={3 + DICT.LEAVES.length + 1}></td>
+                    <td colSpan={3 + DICT.LEAVES.length}></td>
                   </tr>
                 </React.Fragment>
               ))}
@@ -845,7 +845,7 @@ export default function App() {
                       </td>
                     );
                   })}
-                  <td colSpan={3 + DICT.LEAVES.length + 1}></td>
+                  <td colSpan={3 + DICT.LEAVES.length}></td>
                 </tr>
               ))}
             </tfoot>
