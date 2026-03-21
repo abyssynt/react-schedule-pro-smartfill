@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Plus, AlertCircle, Settings, Sparkles, Loader2,
+  Plus, Minus, AlertCircle, Settings, Sparkles, Loader2,
   ArrowUp, ArrowDown, Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar
 } from 'lucide-react';
@@ -446,17 +447,12 @@ export default function App() {
     setSchedule(prev => ({ ...prev, [newId]: {} }));
   };
 
-  const removeLastStaffFromGroup = (group) => {
-    const groupStaffs = staffs.filter(s => (s.group || '白班') === group);
-    if (groupStaffs.length === 0) return;
-
-    const target = groupStaffs[groupStaffs.length - 1];
-    if (!window.confirm(`確定刪減 ${group} 的最後一位人員嗎？`)) return;
-
-    setStaffs(prev => prev.filter(s => s.id !== target.id));
+  const removeStaff = (staffId) => {
+    if (!window.confirm("確定要刪除此人員嗎？")) return;
+    setStaffs(prev => prev.filter(s => s.id !== staffId));
     setSchedule(prev => {
       const next = { ...prev };
-      delete next[target.id];
+      delete next[staffId];
       return next;
     });
   };
@@ -796,6 +792,12 @@ export default function App() {
                             >
                               <ArrowDown size={14} />
                             </button>
+                            <button
+                              onClick={() => removeStaff(staff.id)}
+                              className="text-slate-400 hover:text-red-500"
+                            >
+                              <Minus size={14} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -804,18 +806,12 @@ export default function App() {
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
                     <td className="sticky left-[96px] bg-white z-10 border-r p-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
-                          className="bg-blue-600 text-white px-3 py-2 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 font-bold text-sm"
+                          className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 font-bold text-sm"
                         >
                           <Plus size={16} /> 新增人員
-                        </button>
-                        <button
-                          onClick={() => removeLastStaffFromGroup(group)}
-                          className="bg-white text-slate-700 border border-slate-300 px-3 py-2 rounded-xl hover:bg-slate-100 transition-colors font-bold text-sm"
-                        >
-                          刪減人員
                         </button>
                       </div>
                     </td>
