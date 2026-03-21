@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Plus, Minus, AlertCircle, Settings, Sparkles, Loader2, 
-  ArrowUp, ArrowDown, Save, History as Clock, Download, 
-  FileSpreadsheet, FileText, X, Check, Calendar 
+import {
+  Plus, AlertCircle, Settings, Sparkles, Loader2,
+  ArrowUp, ArrowDown, Save, History as Clock, Download,
+  FileSpreadsheet, FileText, X, Check, Calendar
 } from 'lucide-react';
 
 // ==========================================
@@ -21,7 +21,7 @@ const HOLIDAY_MAP = {
   2026: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-28', '2026-04-04', '2026-04-05', '2026-06-19', '2026-09-25', '2026-10-10']
 };
 
-const apiKey = ""; 
+const apiKey = "";
 const STORAGE_KEY = 'schedule_app_history';
 
 // 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
@@ -38,7 +38,11 @@ const loadExcelJS = () => {
 const normalizeStaffGroup = (staffList = []) => {
   if (!Array.isArray(staffList) || staffList.length === 0) return [];
 
-  const fallbackGroups = ['白班', '白班', '白班', '白班', '白班', '小夜', '小夜', '小夜', '小夜', '小夜', '大夜', '大夜', '大夜', '大夜', '大夜'];
+  const fallbackGroups = [
+    '白班', '白班', '白班', '白班', '白班',
+    '小夜', '小夜', '小夜', '小夜', '小夜',
+    '大夜', '大夜', '大夜', '大夜', '大夜'
+  ];
 
   return staffList.map((staff, index) => ({
     ...staff,
@@ -52,9 +56,9 @@ export default function App() {
   // ==========================================
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(3);
-  const [holidaysText, setHolidaysText] = useState(''); 
+  const [holidaysText, setHolidaysText] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
-  
+
   const [colors, setColors] = useState({ weekend: '#dcfce7', holiday: '#fca5a5' });
 
   const [staffs, setStaffs] = useState(normalizeStaffGroup([
@@ -62,10 +66,14 @@ export default function App() {
     { id: 's6', name: '新成員' }, { id: 's7', name: '新成員' }, { id: 's8', name: '新成員' }, { id: 's9', name: '新成員' }, { id: 's10', name: '新成員' },
     { id: 's11', name: '新成員' }, { id: 's12', name: '新成員' }, { id: 's13', name: '新成員' }, { id: 's14', name: '新成員' }, { id: 's15', name: '新成員' }
   ]));
-  const [schedule, setSchedule] = useState({ 's1': {}, 's2': {}, 's3': {}, 's4': {}, 's5': {}, 's6': {}, 's7': {}, 's8': {}, 's9': {}, 's10': {}, 's11': {}, 's12': {}, 's13': {}, 's14': {}, 's15': {} });
+  const [schedule, setSchedule] = useState({
+    s1: {}, s2: {}, s3: {}, s4: {}, s5: {},
+    s6: {}, s7: {}, s8: {}, s9: {}, s10: {},
+    s11: {}, s12: {}, s13: {}, s14: {}, s15: {}
+  });
 
   const [showSettings, setShowSettings] = useState(false);
-  const [showAiControl, setShowAiControl] = useState(false); 
+  const [showAiControl, setShowAiControl] = useState(false);
   const [aiFeedback, setAiFeedback] = useState("");
 
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -75,7 +83,7 @@ export default function App() {
 
   // AI 指定排班設定
   const [aiConfig, setAiConfig] = useState({
-    selectedStaffs: [], 
+    selectedStaffs: [],
     dateRange: { start: 1, end: 31 },
     targetShift: ''
   });
@@ -92,7 +100,9 @@ export default function App() {
           setHistoryList(parsed);
           setShowDraftPrompt(true);
         }
-      } catch (e) { console.error("歷史紀錄解析失敗"); }
+      } catch (e) {
+        console.error("歷史紀錄解析失敗");
+      }
     }
   }, []);
 
@@ -103,17 +113,23 @@ export default function App() {
     }
   }, [year]);
 
-  const holidays = useMemo(() => holidaysText.split(',').map(s => s.trim()).filter(Boolean), [holidaysText]);
+  const holidays = useMemo(
+    () => holidaysText.split(',').map(s => s.trim()).filter(Boolean),
+    [holidaysText]
+  );
 
   const daysInMonth = useMemo(() => {
     const days = [];
     const daysCount = new Date(year, month, 0).getDate();
     const weekNames = ['日', '一', '二', '三', '四', '五', '六'];
+
     for (let i = 1; i <= daysCount; i++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       const weekNum = new Date(year, month - 1, i).getDay();
       days.push({
-        day: i, date: dateStr, weekStr: weekNames[weekNum],
+        day: i,
+        date: dateStr,
+        weekStr: weekNames[weekNum],
         isWeekend: weekNum === 0 || weekNum === 6,
         isHoliday: holidays.includes(dateStr)
       });
@@ -121,7 +137,10 @@ export default function App() {
     return days;
   }, [year, month, holidays]);
 
-  const requiredLeaves = useMemo(() => daysInMonth.filter(d => d.isWeekend || d.isHoliday).length, [daysInMonth]);
+  const requiredLeaves = useMemo(
+    () => daysInMonth.filter(d => d.isWeekend || d.isHoliday).length,
+    [daysInMonth]
+  );
 
   // ==========================================
   // 4. Excel 匯出 (ExcelJS 實現)
@@ -139,9 +158,12 @@ export default function App() {
     header.eachCell((cell, colNumber) => {
       cell.font = { bold: true, size: 10 };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-      if (colNumber > 1 && colNumber <= daysInMonth.length + 1) {
-        const d = daysInMonth[colNumber - 2];
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+      if (colNumber > 2 && colNumber <= daysInMonth.length + 2) {
+        const d = daysInMonth[colNumber - 3];
         if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCACA' } };
         else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
       }
@@ -160,12 +182,16 @@ export default function App() {
         ...DICT.LEAVES.map(l => stats.leaveDetails[l] || '')
       ];
       const row = worksheet.addRow(rowData);
+
       row.eachCell((cell, colNumber) => {
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-        if (colNumber > 1 && colNumber <= daysInMonth.length + 1) {
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+        if (colNumber > 2 && colNumber <= daysInMonth.length + 2) {
           cell.numFmt = '@';
-          const d = daysInMonth[colNumber - 2];
+          const d = daysInMonth[colNumber - 3];
           if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E4' } };
           else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
         }
@@ -174,20 +200,25 @@ export default function App() {
 
     ['D', 'E', 'N', 'totalLeave'].forEach(rowKey => {
       const label = rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`;
-      const rowData = [label, ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || '')];
+      const rowData = ['', label, ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || '')];
       const row = worksheet.addRow(rowData);
       row.eachCell((cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
-        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
       });
     });
 
     worksheet.getColumn(1).width = 10;
     worksheet.getColumn(2).width = 15;
-    for(let i=3; i <= daysInMonth.length + 2; i++) worksheet.getColumn(i).width = 5;
+    for (let i = 3; i <= daysInMonth.length + 2; i++) worksheet.getColumn(i).width = 5;
 
     const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -198,16 +229,52 @@ export default function App() {
   };
 
   const exportToWord = () => {
-    let html = `
-    <html><head><meta charset="utf-8"><style>@page { size: landscape; margin: 1cm; } body { font-family: sans-serif; } table { border-collapse: collapse; width: 100%; font-size: 9pt; } th, td { border: 1px solid #000; padding: 4px; text-align: center; } .holiday { background-color: ${colors.holiday}; } .weekend { background-color: ${colors.weekend}; }</style></head>
-    <body><h2 style="text-align:center;">${year}年${month}月 班表</h2><table><thead><tr><th>班別</th><th>姓名</th>${daysInMonth.map(d => `<th class="${d.isHoliday ? 'holiday' : (d.isWeekend ? 'weekend' : '')}">${d.day}<br/>(${d.weekStr})</th>`).join('')}<th>上班</th><th>總休</th></tr></thead>
-    <tbody>${staffs.map(staff => {
-      const stats = getStaffStats(staff.id);
-      return `<tr><td>${staff.group}</td><td>${staff.name}</td>${daysInMonth.map(d => {
-        const cellData = schedule[staff.id]?.[d.date];
-        return `<td>${typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '')}</td>`;
-      }).join('')}<td>${stats.work}</td><td>${stats.totalLeave}</td></tr>`;
-    }).join('')}</tbody></table></body></html>`;
+    const html = `
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          @page { size: landscape; margin: 1cm; }
+          body { font-family: sans-serif; }
+          table { border-collapse: collapse; width: 100%; font-size: 9pt; }
+          th, td { border: 1px solid #000; padding: 4px; text-align: center; }
+          .holiday { background-color: ${colors.holiday}; }
+          .weekend { background-color: ${colors.weekend}; }
+        </style>
+      </head>
+      <body>
+        <h2 style="text-align:center;">${year}年${month}月 班表</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>班別</th>
+              <th>姓名</th>
+              ${daysInMonth.map(d => `<th class="${d.isHoliday ? 'holiday' : (d.isWeekend ? 'weekend' : '')}">${d.day}<br/>(${d.weekStr})</th>`).join('')}
+              <th>上班</th>
+              <th>總休</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${staffs.map(staff => {
+              const stats = getStaffStats(staff.id);
+              return `
+                <tr>
+                  <td>${staff.group}</td>
+                  <td>${staff.name}</td>
+                  ${daysInMonth.map(d => {
+                    const cellData = schedule[staff.id]?.[d.date];
+                    return `<td>${typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '')}</td>`;
+                  }).join('')}
+                  <td>${stats.work}</td>
+                  <td>${stats.totalLeave}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </body>
+    </html>`;
+
     const blob = new Blob([html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -223,19 +290,19 @@ export default function App() {
   const handleAiAutoSchedule = async (isPartial = false) => {
     setIsAiLoading(true);
     setAiFeedback(isPartial ? "✨ AI 正在根據指定區域填寫班表..." : "✨ AI 正在規劃全月空缺...");
-    
+
     const systemPrompt = `你是一個專業護理排班專家。請為未排班的日期填寫代碼。可用班別: ${DICT.SHIFTS.join(', ')}，可用休假: ${DICT.LEAVES.join(', ')}。${isPartial && aiConfig.targetShift ? `優先填寫指定班別: ${aiConfig.targetShift}` : ''} 格式要求: {"schedule": {"staffId": {"YYYY-MM-DD": "CODE"}}}`;
-    
+
     const currentScheduleForAi = {};
     staffs.forEach(s => {
       currentScheduleForAi[s.id] = {};
       Object.keys(schedule[s.id] || {}).forEach(date => {
         const cell = schedule[s.id][date];
-        if(cell && (cell.value || typeof cell === 'string')) currentScheduleForAi[s.id][date] = cell.value || cell;
+        if (cell && (cell.value || typeof cell === 'string')) currentScheduleForAi[s.id][date] = cell.value || cell;
       });
     });
 
-    const userPrompt = `年: ${year}, 月: ${month}, 人員對象: ${JSON.stringify(isPartial ? aiConfig.selectedStaffs : staffs.map(s=>s.id))}, 日期區間: ${isPartial ? `${aiConfig.dateRange.start}號到${aiConfig.dateRange.end}號` : '全月'}, 既有排班數據: ${JSON.stringify(currentScheduleForAi)}。注意：絕對不可覆蓋已有的手動排班內容。`;
+    const userPrompt = `年: ${year}, 月: ${month}, 人員對象: ${JSON.stringify(isPartial ? aiConfig.selectedStaffs : staffs.map(s => s.id))}, 日期區間: ${isPartial ? `${aiConfig.dateRange.start}號到${aiConfig.dateRange.end}號` : '全月'}, 既有排班數據: ${JSON.stringify(currentScheduleForAi)}。注意：絕對不可覆蓋已有的手動排班內容。`;
 
     try {
       const result = await callGemini(userPrompt, systemPrompt);
@@ -245,15 +312,15 @@ export default function App() {
           if (isPartial && !aiConfig.selectedStaffs.includes(staffId)) return;
           if (!mergedSchedule[staffId]) mergedSchedule[staffId] = {};
           Object.keys(result.schedule[staffId]).forEach(dateStr => {
-            const dayNum = parseInt(dateStr.split('-')[2]);
+            const dayNum = parseInt(dateStr.split('-')[2], 10);
             if (isPartial && (dayNum < aiConfig.dateRange.start || dayNum > aiConfig.dateRange.end)) return;
             const aiCode = result.schedule[staffId][dateStr];
             const existingCell = mergedSchedule[staffId][dateStr];
-            if (existingCell && existingCell.source === 'manual') return; 
+            if (existingCell && existingCell.source === 'manual') return;
 
             if (aiCode) {
               let finalValue = aiCode;
-              if(isPartial && aiConfig.targetShift && !DICT.LEAVES.includes(aiCode)) finalValue = aiConfig.targetShift;
+              if (isPartial && aiConfig.targetShift && !DICT.LEAVES.includes(aiCode)) finalValue = aiConfig.targetShift;
               mergedSchedule[staffId][dateStr] = { value: finalValue, source: 'ai' };
             }
           });
@@ -262,8 +329,11 @@ export default function App() {
         saveToHistory(isPartial ? 'AI區域排班' : 'AI全月排班', mergedSchedule);
         setAiFeedback(`✅ ${isPartial ? '區域' : '全月'}補空完成！`);
       }
-    } catch (error) { setAiFeedback("❌ AI 排班失敗，請檢查網路。"); }
-    finally { setIsAiLoading(false); }
+    } catch (error) {
+      setAiFeedback("❌ AI 排班失敗，請檢查網路。");
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   const callGemini = async (prompt, systemInstruction = "") => {
@@ -271,7 +341,8 @@ export default function App() {
     for (let i = 0; i < 5; i++) {
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
@@ -293,16 +364,23 @@ export default function App() {
   // 6. 輔助統計與操作
   // ==========================================
   const getStaffStats = (staffId) => {
-    let stats = { work: 0, holidayLeave: 0, totalLeave: 0, leaveDetails: Object.fromEntries(DICT.LEAVES.map(l => [l, 0])) };
+    const stats = {
+      work: 0,
+      holidayLeave: 0,
+      totalLeave: 0,
+      leaveDetails: Object.fromEntries(DICT.LEAVES.map(l => [l, 0]))
+    };
+
     const mySchedule = schedule[staffId] || {};
     daysInMonth.forEach(d => {
       const cellData = mySchedule[d.date];
-      let code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
+      const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
+
       if (DICT.SHIFTS.includes(code)) stats.work += 1;
       if (DICT.LEAVES.includes(code)) {
         stats.totalLeave += 1;
-        if(stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
+        if (stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
         if (d.isWeekend || d.isHoliday) stats.holidayLeave += 1;
       }
     });
@@ -310,10 +388,10 @@ export default function App() {
   };
 
   const getDailyStats = (dateStr) => {
-    let stats = { 'D': 0, 'E': 0, 'N': 0, '8-8': 0, totalLeave: 0 };
+    const stats = { D: 0, E: 0, N: 0, '8-8': 0, totalLeave: 0 };
     staffs.forEach(staff => {
       const cellData = schedule[staff.id]?.[dateStr];
-      let code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
+      const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
       if (DICT.SHIFTS.includes(code)) stats[code] += 1;
       else if (DICT.LEAVES.includes(code)) stats.totalLeave += 1;
@@ -323,9 +401,12 @@ export default function App() {
 
   const saveToHistory = (label, currentSchedule = schedule) => {
     const newRecord = {
-      id: Date.now(), label, timestamp: new Date().toLocaleString(),
+      id: Date.now(),
+      label,
+      timestamp: new Date().toLocaleString(),
       state: { year, month, holidaysText, staffs, schedule: currentSchedule, colors }
     };
+
     setHistoryList(prev => {
       const updated = [newRecord, ...prev].slice(0, 10);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -335,14 +416,18 @@ export default function App() {
 
   const loadHistory = (record) => {
     const { state } = record;
-    setYear(state.year); setMonth(state.month); setHolidaysText(state.holidaysText);
-    setStaffs(normalizeStaffGroup(state.staffs)); setSchedule(state.schedule);
-    if(state.colors) setColors(state.colors);
-    setShowHistoryModal(false); setShowDraftPrompt(false);
+    setYear(state.year);
+    setMonth(state.month);
+    setHolidaysText(state.holidaysText);
+    setStaffs(normalizeStaffGroup(state.staffs));
+    setSchedule(state.schedule);
+    if (state.colors) setColors(state.colors);
+    setShowHistoryModal(false);
+    setShowDraftPrompt(false);
   };
 
   const clearHistory = () => {
-    if(window.confirm("確定要清空所有歷史紀錄嗎？")) {
+    if (window.confirm("確定要清空所有歷史紀錄嗎？")) {
       localStorage.removeItem(STORAGE_KEY);
       setHistoryList([]);
     }
@@ -350,7 +435,8 @@ export default function App() {
 
   const handleCellChange = (staffId, dateStr, value) => {
     setSchedule(prev => ({
-      ...prev, [staffId]: { ...prev[staffId], [dateStr]: value ? { value, source: 'manual' } : null }
+      ...prev,
+      [staffId]: { ...prev[staffId], [dateStr]: value ? { value, source: 'manual' } : null }
     }));
   };
 
@@ -360,11 +446,19 @@ export default function App() {
     setSchedule(prev => ({ ...prev, [newId]: {} }));
   };
 
-  const removeStaff = (id) => {
-    if(window.confirm("確定刪除此人員？")) {
-      setStaffs(staffs.filter(s => s.id !== id));
-      const newSchedule = { ...schedule }; delete newSchedule[id]; setSchedule(newSchedule);
-    }
+  const removeLastStaffFromGroup = (group) => {
+    const groupStaffs = staffs.filter(s => (s.group || '白班') === group);
+    if (groupStaffs.length === 0) return;
+
+    const target = groupStaffs[groupStaffs.length - 1];
+    if (!window.confirm(`確定刪減 ${group} 的最後一位人員嗎？`)) return;
+
+    setStaffs(prev => prev.filter(s => s.id !== target.id));
+    setSchedule(prev => {
+      const next = { ...prev };
+      delete next[target.id];
+      return next;
+    });
   };
 
   const moveStaffInGroup = (staffId, direction) => {
@@ -402,10 +496,13 @@ export default function App() {
         .animate-pulse-once { animation: pulse-once 0.5s ease-out forwards; }
         .animate-fade-in-down { animation: fade-in-down 0.3s ease-out forwards; }
       `}</style>
-      
+
       {showDraftPrompt && (
         <div className="max-w-[95vw] mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
-          <div className="flex items-center gap-2"><Clock size={18} className="text-amber-600"/><span className="text-sm font-bold">偵測到先前暫存紀錄。</span></div>
+          <div className="flex items-center gap-2">
+            <Clock size={18} className="text-amber-600" />
+            <span className="text-sm font-bold">偵測到先前暫存紀錄。</span>
+          </div>
           <div className="flex gap-2">
             <button onClick={() => loadHistory(historyList[0])} className="text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition font-bold">載入最新</button>
             <button onClick={() => setShowDraftPrompt(false)} className="text-sm text-amber-700 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition">忽略</button>
@@ -416,20 +513,33 @@ export default function App() {
       <div className="max-w-[95vw] mx-auto mb-6">
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">智能排班系統 PRO｜智慧排班開發版 <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span></h1>
+            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+              智能排班系統 PRO｜智慧排班開發版
+              <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
+            </h1>
             <p className="text-slate-500 text-xs mt-1 italic">開發版開發使用</p>
           </div>
-          
+
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm"><Save size={16} /> 暫存</button>
-            <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm"><Clock size={16} /> 歷史</button>
+            <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+              <Save size={16} /> 暫存
+            </button>
+            <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+              <Clock size={16} /> 歷史
+            </button>
 
             <div className="relative">
-              <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-2 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm"><Download size={16} /> 匯出</button>
+              <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-2 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm">
+                <Download size={16} /> 匯出
+              </button>
               {showExportMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in-down">
-                  <button onClick={exportToExcel} className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-green-50 hover:text-green-700 flex items-center gap-2 transition-colors border-b"><FileSpreadsheet size={16}/> 高品質 Excel</button>
-                  <button onClick={exportToWord} className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"><FileText size={16}/> 橫向 Word (列印)</button>
+                  <button onClick={exportToExcel} className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-green-50 hover:text-green-700 flex items-center gap-2 transition-colors border-b">
+                    <FileSpreadsheet size={16} /> 高品質 Excel
+                  </button>
+                  <button onClick={exportToWord} className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors">
+                    <FileText size={16} /> 橫向 Word (列印)
+                  </button>
                 </div>
               )}
             </div>
@@ -437,58 +547,93 @@ export default function App() {
             <div className="w-px h-8 bg-slate-200 mx-2 hidden sm:block"></div>
 
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <button onClick={() => handleAiAutoSchedule(false)} disabled={isAiLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
-                  {isAiLoading ? <Loader2 className="animate-spin" size={14}/> : <Sparkles size={14} />} 全月補空
-                </button>
-                <button onClick={() => setShowAiControl(!showAiControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showAiControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
-                    <Calendar size={14} /> 指定排班
-                </button>
+              <button onClick={() => handleAiAutoSchedule(false)} disabled={isAiLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
+                {isAiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 全月補空
+              </button>
+              <button onClick={() => setShowAiControl(!showAiControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showAiControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
+                <Calendar size={14} /> 指定排班
+              </button>
             </div>
           </div>
         </div>
-        {aiFeedback && <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2"><Check size={16} className="text-green-600"/>{aiFeedback}</div>}
+        {aiFeedback && (
+          <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
+            <Check size={16} className="text-green-600" />
+            {aiFeedback}
+          </div>
+        )}
       </div>
 
       {showAiControl && (
         <div className="max-w-[95vw] mx-auto mb-6 bg-blue-50 border border-blue-200 p-6 rounded-2xl shadow-sm animate-fade-in-down">
-            <h3 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Sparkles size={18}/> 指定區域排班設定</h3>
-            <div className="grid lg:grid-cols-4 gap-6">
-                <div>
-                    <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">1. 選擇人員</label>
-                    <div className="flex flex-wrap gap-2">
-                        {staffs.map(s => (
-                            <button key={s.id} 
-                                onClick={() => {
-                                    const next = aiConfig.selectedStaffs.includes(s.id) ? aiConfig.selectedStaffs.filter(id => id !== s.id) : [...aiConfig.selectedStaffs, s.id];
-                                    setAiConfig({...aiConfig, selectedStaffs: next});
-                                }}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${aiConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-100'}`}
-                            > {s.name}（{s.group || '白班'}） </button>
-                        ))}
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">2. 日期範圍 ({aiConfig.dateRange.start} ~ {aiConfig.dateRange.end} 號)</label>
-                    <div className="flex items-center gap-2">
-                        <input type="number" min="1" max="31" value={aiConfig.dateRange.start} onChange={(e)=>setAiConfig({...aiConfig, dateRange: {...aiConfig.dateRange, start: parseInt(e.target.value) || 1}})} className="w-full border-blue-200 border p-2 rounded-lg text-sm text-center font-bold"/>
-                        <span>至</span>
-                        <input type="number" min="1" max="31" value={aiConfig.dateRange.end} onChange={(e)=>setAiConfig({...aiConfig, dateRange: {...aiConfig.dateRange, end: parseInt(e.target.value) || 31}})} className="w-full border-blue-200 border p-2 rounded-lg text-sm text-center font-bold"/>
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">3. 指定班別 (非必填)</label>
-                    <select value={aiConfig.targetShift} onChange={(e)=>setAiConfig({...aiConfig, targetShift: e.target.value})} className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white">
-                        <option value="">由 AI 自由規劃</option>
-                        {DICT.SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
-                        <option value="off">休假 (off)</option>
-                    </select>
-                </div>
-                <div className="flex items-end">
-                    <button disabled={isAiLoading || aiConfig.selectedStaffs.length === 0} onClick={() => handleAiAutoSchedule(true)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2">
-                        {isAiLoading ? <Loader2 className="animate-spin" size={18}/> : <Check size={18}/>} 套用並補空
-                    </button>
-                </div>
+          <h3 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Sparkles size={18} /> 指定區域排班設定</h3>
+          <div className="grid lg:grid-cols-4 gap-6">
+            <div>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">1. 選擇人員</label>
+              <div className="flex flex-wrap gap-2">
+                {staffs.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      const next = aiConfig.selectedStaffs.includes(s.id)
+                        ? aiConfig.selectedStaffs.filter(id => id !== s.id)
+                        : [...aiConfig.selectedStaffs, s.id];
+                      setAiConfig({ ...aiConfig, selectedStaffs: next });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${aiConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-100'}`}
+                  >
+                    {s.name}（{s.group || '白班'}）
+                  </button>
+                ))}
+              </div>
             </div>
+
+            <div>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">2. 日期範圍 ({aiConfig.dateRange.start} ~ {aiConfig.dateRange.end} 號)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={aiConfig.dateRange.start}
+                  onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
+                  className="w-full border-blue-200 border p-2 rounded-lg text-sm text-center font-bold"
+                />
+                <span>至</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={aiConfig.dateRange.end}
+                  onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
+                  className="w-full border-blue-200 border p-2 rounded-lg text-sm text-center font-bold"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">3. 指定班別 (非必填)</label>
+              <select
+                value={aiConfig.targetShift}
+                onChange={(e) => setAiConfig({ ...aiConfig, targetShift: e.target.value })}
+                className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
+              >
+                <option value="">由 AI 自由規劃</option>
+                {DICT.SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
+                <option value="off">休假 (off)</option>
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                disabled={isAiLoading || aiConfig.selectedStaffs.length === 0}
+                onClick={() => handleAiAutoSchedule(true)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
+              >
+                {isAiLoading ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} 套用並補空
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -496,29 +641,44 @@ export default function App() {
         <div className="lg:col-span-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
           <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-24 border rounded-lg p-2 text-center font-bold" />
           <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-20 border rounded-lg p-2 text-center font-bold">
-            {[...Array(12).keys()].map(m => <option key={m+1} value={m+1}>{m+1}月</option>)}
+            {[...Array(12).keys()].map(m => <option key={m + 1} value={m + 1}>{m + 1}月</option>)}
           </select>
         </div>
+
         <div className="lg:col-span-3 bg-blue-600 p-4 rounded-xl shadow-md text-white flex flex-col justify-center">
           <span className="text-xs opacity-80 uppercase tracking-wider">本月應休天數</span>
           <span className="text-2xl font-black">{requiredLeaves} <small className="text-sm font-normal">DAYS</small></span>
         </div>
+
         <div className="lg:col-span-5 flex items-center justify-end gap-2">
-          <button onClick={() => setShowSettings(!showSettings)} className="bg-white border p-3 rounded-xl hover:bg-slate-50 transition-colors"><Settings size={20} className="text-slate-600" /></button>
+          <button onClick={() => setShowSettings(!showSettings)} className="bg-white border p-3 rounded-xl hover:bg-slate-50 transition-colors">
+            <Settings size={20} className="text-slate-600" />
+          </button>
         </div>
       </div>
 
       {showSettings && (
         <div className="max-w-[95vw] mx-auto mb-6 bg-white p-6 rounded-2xl border-2 border-dashed border-slate-200 animate-fade-in-down">
-          <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700"><Settings size={18}/> 條件設置</h3>
+          <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700"><Settings size={18} /> 條件設置</h3>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-bold text-slate-600 mb-2">國定假日清單:</label>
-              <textarea value={holidaysText} onChange={(e) => setHolidaysText(e.target.value)} className="w-full border rounded-xl p-3 text-sm focus:ring-4 focus:ring-blue-100 transition-all outline-none" rows="3" />
+              <textarea
+                value={holidaysText}
+                onChange={(e) => setHolidaysText(e.target.value)}
+                className="w-full border rounded-xl p-3 text-sm focus:ring-4 focus:ring-blue-100 transition-all outline-none"
+                rows="3"
+              />
             </div>
             <div className="flex gap-4">
-              <div><label className="block text-sm font-bold text-slate-600 mb-2">週末底色</label><input type="color" value={colors.weekend} onChange={(e) => setColors({...colors, weekend: e.target.value})} className="h-10 w-20 rounded cursor-pointer" /></div>
-              <div><label className="block text-sm font-bold text-slate-600 mb-2">假日底色</label><input type="color" value={colors.holiday} onChange={(e) => setColors({...colors, holiday: e.target.value})} className="h-10 w-20 rounded cursor-pointer" /></div>
+              <div>
+                <label className="block text-sm font-bold text-slate-600 mb-2">週末底色</label>
+                <input type="color" value={colors.weekend} onChange={(e) => setColors({ ...colors, weekend: e.target.value })} className="h-10 w-20 rounded cursor-pointer" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-600 mb-2">假日底色</label>
+                <input type="color" value={colors.holiday} onChange={(e) => setColors({ ...colors, holiday: e.target.value })} className="h-10 w-20 rounded cursor-pointer" />
+              </div>
             </div>
           </div>
         </div>
@@ -532,7 +692,11 @@ export default function App() {
                 <th className="sticky left-0 bg-slate-200 z-30 p-4 border-r font-black text-slate-700 w-24 min-w-[96px]">班別</th>
                 <th className="sticky left-[96px] bg-slate-200 z-30 p-4 border-r font-black text-slate-700 w-36 min-w-[144px]">日期/姓名</th>
                 {daysInMonth.map(d => (
-                  <th key={d.day} className="p-2 border-r min-w-[48px] text-center" style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}>
+                  <th
+                    key={d.day}
+                    className="p-2 border-r min-w-[48px] text-center"
+                    style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}
+                  >
                     <div className="text-[10px] opacity-60 uppercase">{d.weekStr}</div>
                     <div className="text-lg font-black">{d.day}</div>
                   </th>
@@ -540,10 +704,13 @@ export default function App() {
                 <th className="p-4 border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold">上班</th>
                 <th className="p-4 border-r min-w-[60px] bg-green-50 text-green-700 font-bold">假日休</th>
                 <th className="p-4 border-r min-w-[60px] bg-red-50 text-red-700 font-bold">總休</th>
-                {DICT.LEAVES.map(l => <th key={l} className="p-2 border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">{l}</th>)}
+                {DICT.LEAVES.map(l => (
+                  <th key={l} className="p-2 border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">{l}</th>
+                ))}
                 <th className="p-4 bg-slate-100 w-24">操作</th>
               </tr>
             </thead>
+
             <tbody>
               {groupedStaffs.map(({ group, staffs: groupStaffList }) => (
                 <React.Fragment key={group}>
@@ -555,10 +722,7 @@ export default function App() {
                     return (
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
-                          <td
-                            rowSpan={groupCount}
-                            className="sticky left-0 bg-white z-20 border-r p-3 text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]"
-                          >
+                          <td rowSpan={groupCount} className="sticky left-0 bg-white z-20 border-r p-3 text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
                             <div className="flex items-center justify-center h-full min-h-[80px]">
                               <span className="text-3xl font-black text-slate-800 leading-tight tracking-[0.2em] [writing-mode:vertical-rl]">
                                 {group}
@@ -585,11 +749,23 @@ export default function App() {
                           const cellData = schedule[staff.id]?.[d.date];
                           const val = typeof cellData === 'object' && cellData !== null ? (cellData?.value || '') : (cellData || '');
                           return (
-                            <td key={d.date} className="border-r p-0" style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}>
-                              <select value={val} onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)} className={`w-full h-10 text-center bg-transparent border-none cursor-pointer text-sm font-bold appearance-none hover:bg-black/5 ${DICT.LEAVES.includes(val) ? 'text-red-500' : 'text-slate-800'}`}>
+                            <td
+                              key={d.date}
+                              className="border-r p-0"
+                              style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
+                            >
+                              <select
+                                value={val}
+                                onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
+                                className={`w-full h-10 text-center bg-transparent border-none cursor-pointer text-sm font-bold appearance-none hover:bg-black/5 ${DICT.LEAVES.includes(val) ? 'text-red-500' : 'text-slate-800'}`}
+                              >
                                 <option value=""></option>
-                                <optgroup label="上班">{DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}</optgroup>
-                                <optgroup label="休假">{DICT.LEAVES.map(l => <option key={l} value={l}>{l}</option>)}</optgroup>
+                                <optgroup label="上班">
+                                  {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                </optgroup>
+                                <optgroup label="休假">
+                                  {DICT.LEAVES.map(l => <option key={l} value={l}>{l}</option>)}
+                                </optgroup>
                               </select>
                             </td>
                           );
@@ -598,17 +774,27 @@ export default function App() {
                         <td className="border-r text-center font-black text-blue-600 bg-blue-50/30">{stats.work}</td>
                         <td className="border-r text-center font-black text-green-600 bg-green-50/30">{stats.holidayLeave}</td>
                         <td className="border-r text-center font-black text-red-600 bg-red-50/30">{stats.totalLeave}</td>
-                        {DICT.LEAVES.map(l => <td key={l} className="border-r text-center text-[10px] text-slate-500 bg-slate-50/20">{stats.leaveDetails[l] || ''}</td>)}
+                        {DICT.LEAVES.map(l => (
+                          <td key={l} className="border-r text-center text-[10px] text-slate-500 bg-slate-50/20">
+                            {stats.leaveDetails[l] || ''}
+                          </td>
+                        ))}
+
                         <td className="p-2">
                           <div className="flex justify-center gap-1">
-                            <button onClick={() => moveStaffInGroup(staff.id, 'up')} disabled={groupIndex === 0} className="text-slate-400 hover:text-blue-500 disabled:opacity-10">
-                              <ArrowUp size={14}/>
+                            <button
+                              onClick={() => moveStaffInGroup(staff.id, 'up')}
+                              disabled={groupIndex === 0}
+                              className="text-slate-400 hover:text-blue-500 disabled:opacity-10"
+                            >
+                              <ArrowUp size={14} />
                             </button>
-                            <button onClick={() => moveStaffInGroup(staff.id, 'down')} disabled={groupIndex === groupStaffList.length - 1} className="text-slate-400 hover:text-blue-500 disabled:opacity-10">
-                              <ArrowDown size={14}/>
-                            </button>
-                            <button onClick={() => removeStaff(staff.id)} className="text-slate-400 hover:text-red-500">
-                              <Minus size={14}/>
+                            <button
+                              onClick={() => moveStaffInGroup(staff.id, 'down')}
+                              disabled={groupIndex === groupStaffList.length - 1}
+                              className="text-slate-400 hover:text-blue-500 disabled:opacity-10"
+                            >
+                              <ArrowDown size={14} />
                             </button>
                           </div>
                         </td>
@@ -618,12 +804,20 @@ export default function App() {
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
                     <td className="sticky left-[96px] bg-white z-10 border-r p-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
-                      <button
-                        onClick={() => addStaff(group)}
-                        className="bg-blue-600 text-white px-3 py-2 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 font-bold text-sm mx-auto"
-                      >
-                        <Plus size={16}/> 新增人員
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => addStaff(group)}
+                          className="bg-blue-600 text-white px-3 py-2 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 font-bold text-sm"
+                        >
+                          <Plus size={16} /> 新增人員
+                        </button>
+                        <button
+                          onClick={() => removeLastStaffFromGroup(group)}
+                          className="bg-white text-slate-700 border border-slate-300 px-3 py-2 rounded-xl hover:bg-slate-100 transition-colors font-bold text-sm"
+                        >
+                          刪減人員
+                        </button>
+                      </div>
                     </td>
 
                     {daysInMonth.map(d => (
@@ -639,6 +833,7 @@ export default function App() {
                 </React.Fragment>
               ))}
             </tbody>
+
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
               {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
@@ -648,7 +843,11 @@ export default function App() {
                   </td>
                   {daysInMonth.map(d => {
                     const count = getDailyStats(d.date)[rowKey];
-                    return <td key={d.date} className="border-r p-2 text-center text-sm font-black text-slate-700">{count || ''}</td>;
+                    return (
+                      <td key={d.date} className="border-r p-2 text-center text-sm font-black text-slate-700">
+                        {count || ''}
+                      </td>
+                    );
                   })}
                   <td colSpan={3 + DICT.LEAVES.length + 1}></td>
                 </tr>
@@ -663,22 +862,35 @@ export default function App() {
           <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-pulse-once">
             <div className="p-6 border-b flex justify-between items-center bg-slate-50">
               <h3 className="font-black text-slate-800 flex items-center gap-2"><Clock /> 歷史存檔紀錄</h3>
-              <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X/></button>
+              <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X />
+              </button>
             </div>
+
             <div className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
-              {historyList.length === 0 ? <p className="text-center py-10 text-slate-400 font-bold">目前尚無存檔紀錄</p> : historyList.map(record => (
-                <div key={record.id} className="flex items-center justify-between p-4 border rounded-2xl hover:border-blue-400 hover:bg-blue-50/30 transition-all group">
-                  <div>
-                    <div className="font-black text-slate-800">{record.label} <span className="text-xs font-normal text-slate-400 ml-2">{record.state.year}/{record.state.month}</span></div>
-                    <div className="text-xs text-slate-500">{record.timestamp}</div>
+              {historyList.length === 0 ? (
+                <p className="text-center py-10 text-slate-400 font-bold">目前尚無存檔紀錄</p>
+              ) : (
+                historyList.map(record => (
+                  <div key={record.id} className="flex items-center justify-between p-4 border rounded-2xl hover:border-blue-400 hover:bg-blue-50/30 transition-all group">
+                    <div>
+                      <div className="font-black text-slate-800">
+                        {record.label}
+                        <span className="text-xs font-normal text-slate-400 ml-2">{record.state.year}/{record.state.month}</span>
+                      </div>
+                      <div className="text-xs text-slate-500">{record.timestamp}</div>
+                    </div>
+                    <button onClick={() => loadHistory(record)} className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-600 hover:text-white transition-all">
+                      載入
+                    </button>
                   </div>
-                  <button onClick={() => loadHistory(record)} className="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-600 hover:text-white transition-all">載入</button>
-                </div>
-              ))}
+                ))
+              )}
             </div>
+
             <div className="p-4 bg-slate-50 border-t flex gap-3">
-               <button onClick={clearHistory} className="flex-1 py-3 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors">清空所有紀錄</button>
-               <button onClick={() => setShowHistoryModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-600 bg-white border rounded-xl hover:bg-slate-100 transition-colors">關閉</button>
+              <button onClick={clearHistory} className="flex-1 py-3 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors">清空所有紀錄</button>
+              <button onClick={() => setShowHistoryModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-600 bg-white border rounded-xl hover:bg-slate-100 transition-colors">關閉</button>
             </div>
           </div>
         </div>
