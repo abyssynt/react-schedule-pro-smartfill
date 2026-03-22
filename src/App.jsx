@@ -1,9 +1,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Plus, Minus, AlertCircle, Settings, Sparkles, Loader2,
+  Plus, Settings, Sparkles, Loader2,
   ArrowUp, ArrowDown, Save, History as Clock, Download,
-  FileSpreadsheet, FileText, X, Check, Calendar
+  FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
+  User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
+  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2
 } from 'lucide-react';
 
 // ==========================================
@@ -51,13 +53,12 @@ const normalizeStaffGroup = (staffList = []) => {
   }));
 };
 
-export default function App() {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(3);
-  const [holidaysText, setHolidaysText] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   const [colors, setColors] = useState({ weekend: '#dcfce7', holiday: '#fca5a5' });
@@ -73,7 +74,6 @@ export default function App() {
     s11: {}, s12: {}, s13: {}, s14: {}, s15: {}
   });
 
-  const [showSettings, setShowSettings] = useState(false);
   const [showAiControl, setShowAiControl] = useState(false);
   const [aiFeedback, setAiFeedback] = useState("");
 
@@ -107,17 +107,11 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    const autoHolidays = HOLIDAY_MAP[year] || null;
-    if (autoHolidays) {
-      setHolidaysText(autoHolidays.join(', '));
-    }
-  }, [year]);
-
-  const holidays = useMemo(
-    () => holidaysText.split(',').map(s => s.trim()).filter(Boolean),
-    [holidaysText]
-  );
+  const holidays = useMemo(() => {
+    const systemHolidays = HOLIDAY_MAP[year] || [];
+    const customForYear = customHolidays.filter((date) => date.startsWith(`${year}-`));
+    return Array.from(new Set([...systemHolidays, ...customForYear]));
+  }, [year, customHolidays]);
 
   const daysInMonth = useMemo(() => {
     const days = [];
@@ -405,7 +399,7 @@ export default function App() {
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: { year, month, holidaysText, staffs, schedule: currentSchedule, colors }
+      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays }
     };
 
     setHistoryList(prev => {
@@ -419,7 +413,7 @@ export default function App() {
     const { state } = record;
     setYear(state.year);
     setMonth(state.month);
-    setHolidaysText(state.holidaysText);
+    setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
     setStaffs(normalizeStaffGroup(state.staffs));
     setSchedule(state.schedule);
     if (state.colors) setColors(state.colors);
@@ -510,7 +504,7 @@ export default function App() {
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-              智能排班系統 PRO｜智慧排班開發版
+              智能排班｜智慧排班開發版
               <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
             </h1>
             <p className="text-slate-500 text-xs mt-1 italic">開發版開發使用</p>
@@ -647,38 +641,14 @@ export default function App() {
         </div>
 
         <div className="lg:col-span-5 flex items-center justify-end gap-2">
-          <button onClick={() => setShowSettings(!showSettings)} className="bg-white border p-3 rounded-xl hover:bg-slate-50 transition-colors">
-            <Settings size={20} className="text-slate-600" />
+          <button onClick={() => changeScreen('entry')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+            <ArrowLeft size={18} className="text-slate-600" /> 回入口頁
+          </button>
+          <button onClick={() => changeScreen('settings')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+            <Settings size={18} className="text-slate-600" /> 系統設定
           </button>
         </div>
       </div>
-
-      {showSettings && (
-        <div className="max-w-[95vw] mx-auto mb-6 bg-white p-6 rounded-2xl border-2 border-dashed border-slate-200 animate-fade-in-down">
-          <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-700"><Settings size={18} /> 條件設置</h3>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-slate-600 mb-2">國定假日清單:</label>
-              <textarea
-                value={holidaysText}
-                onChange={(e) => setHolidaysText(e.target.value)}
-                className="w-full border rounded-xl p-3 text-sm focus:ring-4 focus:ring-blue-100 transition-all outline-none"
-                rows="3"
-              />
-            </div>
-            <div className="flex gap-4">
-              <div>
-                <label className="block text-sm font-bold text-slate-600 mb-2">週末底色</label>
-                <input type="color" value={colors.weekend} onChange={(e) => setColors({ ...colors, weekend: e.target.value })} className="h-10 w-20 rounded cursor-pointer" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-600 mb-2">假日底色</label>
-                <input type="color" value={colors.holiday} onChange={(e) => setColors({ ...colors, holiday: e.target.value })} className="h-10 w-20 rounded cursor-pointer" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="max-w-[95vw] mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto pb-4">
@@ -893,4 +863,109 @@ export default function App() {
       )}
     </div>
   );
+}
+
+
+function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', iconColor = 'text-blue-600' }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="px-6 py-6 bg-gray-50/80 border-b lg:border-b-0 lg:border-r border-gray-200">
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-xl ${iconBg}`}><Icon className={`w-5 h-5 ${iconColor}`} /></div>
+            <div><h3 className="font-bold text-gray-800">{title}</h3><p className="text-sm text-gray-500 mt-1 leading-relaxed">{desc}</p></div>
+          </div>
+        </div>
+        <div className="px-6 py-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays }) {
+  const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
+  const addCustomHoliday = () => {
+    const y = holidayInput.year.trim();
+    const m = holidayInput.month.trim();
+    const d = holidayInput.day.trim();
+    if (!y || !m || !d) return;
+    const dateStr = `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    if (customHolidays.includes(dateStr)) return;
+    setCustomHolidays(prev => [...prev, dateStr].sort());
+    setHolidayInput({ year: '', month: '', day: '' });
+  };
+  const removeCustomHoliday = (dateStr) => setCustomHolidays(prev => prev.filter(item => item !== dateStr));
+  const fixedGroups = [
+    { icon: ShieldCheck, title: '排班核心規則', items: ['每日至少一位主管級別值班', '夜班後必須接續至少 24 小時休息', '特定危險單位需雙人以上配置'] },
+    { icon: Clock, title: '班別接續限制', items: ['禁止「花班」：白班不得直接接續大夜', '小夜轉白班間隔需大於 12 小時', '連班上限不得超過 6 天'] },
+    { icon: UserCheck, title: '請假與休假限制', items: ['法定假日優先排休計算', '年度特休不得低於勞基法標準', '病假/喪假排位權重調整限制'] },
+    { icon: Database, title: '核心資料格式', items: ['員工編號固定為 8 位數字', '班表週期固定為 1 個自然月', '資料匯出格式限定為 .xlsx / .pdf'] }
+  ];
+  const extGroups = [
+    { title: '權限控管', desc: '各級主管登入權限', icon: ShieldCheck },
+    { title: '雲端同步', desc: '即時異地備份機制', icon: Database },
+    { title: '單位自訂規則', desc: '細化至科別的規則', icon: Plus },
+    { title: '進階 AI 條件', desc: '複雜人員偏好學習', icon: Cpu }
+  ];
+  return (
+    <div className="min-h-screen bg-gray-50 text-slate-800 font-sans selection:bg-blue-100">
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-8 py-4 flex justify-between items-center shadow-sm">
+        <div><div className="flex items-center gap-2 mb-0.5"><Settings className="w-6 h-6 text-blue-600" /><h1 className="text-xl font-bold tracking-tight text-gray-900">系統設定</h1></div><p className="text-sm text-gray-500">可調整使用者設定，核心規則由系統固定管理</p></div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => changeScreen('entry')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="w-4 h-4" />返回入口頁</button>
+          <button onClick={() => changeScreen('schedule')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><Calendar className="w-4 h-4" />返回排班頁</button>
+          <button onClick={() => changeScreen('schedule')} className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md shadow-blue-100"><Save className="w-4 h-4" />儲存設定</button>
+        </div>
+      </header>
+      <main className="max-w-7xl mx-auto p-8 space-y-10">
+        <section className="space-y-6">
+          <div className="flex items-center gap-2"><div className="w-1 h-6 bg-blue-600 rounded-full"></div><h2 className="text-lg font-bold text-gray-800">使用者偏好設定</h2></div>
+          <div className="space-y-5">
+            <SettingRow icon={Monitor} title="外觀與顯示" desc="調整班表顏色、顯示大小與統計欄位呈現。">
+              <div className="space-y-6">
+                <div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">色彩標示</label><div className="grid grid-cols-1 md:grid-cols-2 gap-3"><div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">週末顏色</span><input type="color" value={colors.weekend} onChange={(e) => setColors(prev => ({ ...prev, weekend: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div><div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">假日顏色</span><input type="color" value={colors.holiday} onChange={(e) => setColors(prev => ({ ...prev, holiday: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div></div></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="flex items-center justify-between"><span className="text-sm font-medium">表格顯示大小</span><select className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option>標準 (預設)</option><option>緊湊</option><option>寬鬆</option></select></div><div className="flex items-center justify-between"><span className="text-sm font-medium">顯示統計欄位</span><div className="w-10 h-5 bg-blue-600 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div></div></div></div>
+              </div>
+            </SettingRow>
+            <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼、班別呈現順序與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
+              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label><div className="flex flex-wrap gap-2">{['V','PL','S','O'].map(code => <span key={code} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}</span>)}<button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><Plus className="w-4 h-4" /></button></div></div><div><label className="text-sm font-medium block mb-2">班別顯示順序</label><div className="text-xs text-gray-500 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">拖放排序功能開發中</div></div><div className="pt-3 border-t border-gray-100"><button className="text-sm text-blue-600 font-medium flex items-center gap-1 hover:underline"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</button></div></div>
+            </SettingRow>
+            <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
+              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
+            </SettingRow>
+            <SettingRow icon={Grid} title="補空優先" desc="設定補空排序偏好，作為後續智慧補班的參考方向。" iconBg="bg-teal-50" iconColor="text-teal-600">
+              <div className="space-y-3">{[{ label: '優先補缺額最多的班別', active: true }, { label: '優先達成個人班數平均', active: true }, { label: '優先減少跨天連班', active: false }, { label: '優先分配假日班補空', active: true }].map((item, idx) => <div key={idx} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${item.active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`}>{item.active && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div><span className="text-sm text-gray-700">{item.label}</span></div>)}<div className="pt-3 border-t border-gray-100"><button className="text-sm text-blue-600 font-medium flex items-center gap-1 hover:underline"><Plus className="w-3.5 h-3.5" /> 新增自訂偏好</button></div></div>
+            </SettingRow>
+          </div>
+        </section>
+        <section className="space-y-6">
+          <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-1 h-6 bg-amber-500 rounded-full"></div><h2 className="text-lg font-bold text-gray-800">系統固定規則</h2></div><div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-100"><Lock className="w-3.5 h-3.5" /><span className="text-xs font-bold uppercase tracking-tight">唯讀模式 / 使用者不可修改</span></div></div>
+          <div className="bg-slate-50 border border-slate-200 rounded-3xl overflow-hidden shadow-inner"><div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">{fixedGroups.map((group, i) => <div key={i} className="bg-white p-6 hover:bg-slate-50 transition-colors"><div className="flex items-center gap-3 mb-4"><group.icon className="w-5 h-5 text-slate-400" /><h4 className="font-bold text-slate-700">{group.title}</h4></div><ul className="space-y-3">{group.items.map((item, j) => <li key={j} className="flex items-start gap-3"><CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" /><span className="text-sm text-slate-600 leading-relaxed">{item}</span></li>)}</ul></div>)}<div className="md:col-span-2 bg-slate-900 text-white p-8"><div className="flex items-center gap-3 mb-6"><div className="p-2 bg-blue-500/20 rounded-xl border border-blue-400/30"><Cpu className="w-5 h-5 text-blue-400" /></div><div><h4 className="font-bold text-lg">AI 智能補班基礎限制 (核心邏輯)</h4><p className="text-xs text-slate-400 uppercase tracking-widest mt-0.5">Core Intelligent Logic Constraints</p></div></div><div className="grid grid-cols-1 md:grid-cols-3 gap-8"><div className="space-y-2"><div className="text-blue-400 text-xs font-bold">權重演算限制</div><p className="text-sm text-slate-300">AI 禁止將權重設為負值，所有補空邏輯皆需符合人員適任性評分，系統會鎖定基底適任性分數不被手動覆蓋。</p></div><div className="space-y-2"><div className="text-blue-400 text-xs font-bold">覆蓋衝突限制</div><p className="text-sm text-slate-300">手動排班具有 100% 絕對優先權。AI 補空演算時自動迴避「手動鎖定」儲存格，且不主動修改現有固定排程。</p></div><div className="space-y-2"><div className="text-blue-400 text-xs font-bold">合規性校準</div><p className="text-sm text-slate-300">補空結果產出前需通過內部「三重合規檢驗」，若違反勞基法工時限制，AI 將拒絕輸出該時段排程。</p></div></div></div></div></div>
+        </section>
+        <section className="space-y-6"><div className="flex items-center gap-2"><div className="w-1 h-6 bg-purple-600 rounded-full"></div><h2 className="text-lg font-bold text-gray-800">未來擴充功能</h2></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{extGroups.map((ext, idx) => <div key={idx} className="group p-5 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-purple-200 transition-all cursor-not-allowed opacity-75"><div className="mb-4 p-2 w-fit bg-purple-50 rounded-xl group-hover:bg-purple-100 transition-colors"><ext.icon className="w-5 h-5 text-purple-600" /></div><h4 className="font-bold text-gray-800 mb-1">{ext.title}</h4><p className="text-xs text-gray-500 mb-4">{ext.desc}</p><div className="flex items-center text-[10px] font-bold text-purple-400 uppercase tracking-tighter"><span className="bg-purple-50 px-2 py-0.5 rounded">Coming Soon</span></div></div>)}</div></section>
+      </main>
+      <footer className="max-w-7xl mx-auto px-8 py-12 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-4"><div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div><span className="text-sm font-semibold text-gray-700">系統核心版本: v2.5.0-PRO</span></div><span className="text-gray-300">|</span><span className="text-sm text-gray-500">智慧排班引擎開發測試版</span></div><div className="text-sm text-gray-400">© 2024 Intelligent Scheduling System PRO. All rights reserved.</div></footer>
+    </div>
+  );
+}
+
+function EntryView({ changeScreen }) {
+  const [account, setAccount] = useState('');
+  const [password, setPassword] = useState('');
+  const handleLogin = (e) => { e.preventDefault(); changeScreen('schedule'); };
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans text-slate-800">
+      <div className="mb-10 text-center"><div className="flex items-center justify-center gap-3 mb-4"><div className="bg-blue-600 p-2.5 rounded-xl shadow-md shadow-blue-200/50"><CalendarDays className="w-8 h-8 text-white" /></div><div className="text-left"><h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center">智能排班｜智慧排班開發版<span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">PRO v1.6.0</span></h1><p className="text-slate-500 text-xs font-medium tracking-wide mt-1">開發版開發使用</p></div></div></div>
+      <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] border border-slate-200/60 overflow-hidden"><div className="p-10"><div className="mb-10"><h2 className="text-xl font-bold text-slate-900 mb-2">歡迎使用智能排班系統</h2><p className="text-sm text-slate-500 leading-relaxed">您可以直接進入排班系統、開啟最近編輯過的班表，或前往調整系統設定參數。</p></div><form onSubmit={handleLogin} className="space-y-6 mb-10"><div className="space-y-2"><label className="block text-sm font-semibold text-slate-700">帳號</label><div className="relative group"><div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><User className="h-4.5 w-4.5 text-slate-400" /></div><input type="text" className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 outline-none placeholder:text-slate-400" placeholder="請輸入您的管理帳號" value={account} onChange={(e)=>setAccount(e.target.value)} /></div></div><div className="space-y-2"><label className="block text-sm font-semibold text-slate-700">密碼</label><div className="relative group"><div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Lock className="h-4.5 w-4.5 text-slate-400" /></div><input type="password" className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 outline-none placeholder:text-slate-400" placeholder="••••••••" value={password} onChange={(e)=>setPassword(e.target.value)} /></div></div><div className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex items-start gap-3"><Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" /><p className="text-xs text-slate-500 leading-normal">目前為開發版入口頁，登入功能尚未正式啟用。點擊下方按鈕即可直接進入系統環境。</p></div></form><div className="space-y-4"><button type="button" onClick={() => changeScreen('schedule')} className="w-full flex justify-center items-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700"><ShieldCheck className="w-4.5 h-4.5" />進入排班系統</button><div className="grid grid-cols-2 gap-4"><button type="button" onClick={() => changeScreen('schedule')} className="flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"><Clock className="w-4 h-4 text-slate-500" />最近班表</button><button type="button" onClick={() => changeScreen('settings')} className="flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"><Settings className="w-4 h-4 text-slate-500" />系統設定</button></div></div></div><div className="bg-slate-50/80 px-10 py-5 border-t border-slate-100 flex justify-between items-center"><button className="text-xs text-slate-500 hover:text-blue-600 font-bold flex items-center gap-1 transition-colors group">開發版說明<ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" /></button><button className="text-xs text-slate-500 hover:text-blue-600 font-bold transition-colors">查看版本資訊</button></div></div><div className="mt-12 text-center"><p className="text-xs text-slate-400 font-medium tracking-[0.1em] uppercase">&copy; {new Date().getFullYear()} 智能排班系統 PRO. ALL RIGHTS RESERVED.</p></div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [screen, setScreen] = useState('entry');
+  const [colors, setColors] = useState({ weekend: '#dcfce7', holiday: '#fca5a5' });
+  const [customHolidays, setCustomHolidays] = useState([]);
+  if (screen === 'schedule') return <ScheduleView changeScreen={setScreen} colors={colors} setColors={setColors} customHolidays={customHolidays} setCustomHolidays={setCustomHolidays} />;
+  if (screen === 'settings') return <SettingsView changeScreen={setScreen} colors={colors} setColors={setColors} customHolidays={customHolidays} setCustomHolidays={setCustomHolidays} />;
+  return <EntryView changeScreen={setScreen} />;
 }
