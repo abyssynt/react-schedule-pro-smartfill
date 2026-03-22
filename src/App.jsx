@@ -61,8 +61,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [month, setMonth] = useState(3);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const [colors, setColors] = useState({ weekend: '#dcfce7', holiday: '#fca5a5' });
-
   const [staffs, setStaffs] = useState(normalizeStaffGroup([
     { id: 's1', name: '新成員' }, { id: 's2', name: '新成員' }, { id: 's3', name: '新成員' }, { id: 's4', name: '新成員' }, { id: 's5', name: '新成員' },
     { id: 's6', name: '新成員' }, { id: 's7', name: '新成員' }, { id: 's8', name: '新成員' }, { id: 's9', name: '新成員' }, { id: 's10', name: '新成員' },
