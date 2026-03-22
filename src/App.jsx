@@ -45,6 +45,23 @@ const CHINESE_DAY_MAP = {
   '廿一': 21, '廿二': 22, '廿三': 23, '廿四': 24, '廿五': 25, '廿六': 26, '廿七': 27, '廿八': 28, '廿九': 29, '三十': 30
 };
 
+const normalizeLunarMonth = (label = '') => {
+  const cleaned = String(label).trim().replace(/^閏/, '').replace(/月$/, '');
+  if (CHINESE_MONTH_MAP[String(label).trim().replace(/^閏/, '')]) {
+    return CHINESE_MONTH_MAP[String(label).trim().replace(/^閏/, '')];
+  }
+  if (/^\d+$/.test(cleaned)) return Number(cleaned);
+  if (CHINESE_MONTH_MAP[`${cleaned}月`]) return CHINESE_MONTH_MAP[`${cleaned}月`];
+  return null;
+};
+
+const normalizeLunarDay = (label = '') => {
+  const cleaned = String(label).trim();
+  if (CHINESE_DAY_MAP[cleaned]) return CHINESE_DAY_MAP[cleaned];
+  if (/^\d+$/.test(cleaned)) return Number(cleaned);
+  return null;
+};
+
 const apiKey = "";
 
 const formatDateKey = (date) => {
@@ -79,19 +96,22 @@ const getChineseCalendarInfo = (date) => {
   const yearPart = parts.find((part) => part.type === 'relatedYear');
   const monthPart = parts.find((part) => part.type === 'month');
   const dayPart = parts.find((part) => part.type === 'day');
-  const rawMonth = monthPart?.value || '';
+  const rawMonth = String(monthPart?.value || '').trim();
+  const rawDay = String(dayPart?.value || '').trim();
 
   return {
     relatedYear: Number(yearPart?.value || date.getFullYear()),
     leapMonth: rawMonth.startsWith('閏'),
     monthLabel: rawMonth.replace(/^閏/, ''),
-    dayLabel: dayPart?.value || ''
+    dayLabel: rawDay,
+    monthNumber: normalizeLunarMonth(rawMonth),
+    dayNumber: normalizeLunarDay(rawDay)
   };
 };
 
 const matchesLunarDate = (date, lunarMonth, lunarDay, options = {}) => {
   const info = getChineseCalendarInfo(date);
-  return CHINESE_MONTH_MAP[info.monthLabel] === lunarMonth && CHINESE_DAY_MAP[info.dayLabel] === lunarDay && Boolean(info.leapMonth) === Boolean(options.leap);
+  return info.monthNumber === lunarMonth && info.dayNumber === lunarDay && Boolean(info.leapMonth) === Boolean(options.leap);
 };
 
 const findGregorianDateByLunarInYear = (year, lunarMonth, lunarDay, options = {}) => {
