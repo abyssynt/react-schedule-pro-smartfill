@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Plus, Settings, Sparkles, Loader2,
+  Plus, Minus, Settings, Sparkles, Loader2,
   ArrowUp, ArrowDown, Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
@@ -53,7 +53,7 @@ const normalizeStaffGroup = (staffList = []) => {
   }));
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -104,6 +104,28 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!loadLatestOnEnter) return;
+
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      onLatestLoaded?.();
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed && parsed.length > 0) {
+        setHistoryList(parsed);
+        loadHistory(parsed[0]);
+      }
+    } catch (e) {
+      console.error("自動載入最新歷史紀錄失敗");
+    } finally {
+      onLatestLoaded?.();
+    }
+  }, [loadLatestOnEnter]);
 
   const holidays = useMemo(() => {
     const systemHolidays = HOLIDAY_MAP[year] || [];
@@ -947,14 +969,14 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
   );
 }
 
-function EntryView({ changeScreen }) {
+function EntryView({ changeScreen, goToLatestHistory }) {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const handleLogin = (e) => { e.preventDefault(); changeScreen('schedule'); };
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans text-slate-800">
       <div className="mb-10 text-center"><div className="flex items-center justify-center gap-3 mb-4"><div className="bg-blue-600 p-2.5 rounded-xl shadow-md shadow-blue-200/50"><CalendarDays className="w-8 h-8 text-white" /></div><div className="text-left"><h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center">智能排班｜智慧排班開發版<span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">PRO v1.6.0</span></h1><p className="text-slate-500 text-xs font-medium tracking-wide mt-1">開發版開發使用</p></div></div></div>
-      <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] border border-slate-200/60 overflow-hidden"><div className="p-10"><div className="mb-10"><h2 className="text-xl font-bold text-slate-900 mb-2">歡迎使用智能排班系統</h2><p className="text-sm text-slate-500 leading-relaxed">您可以直接進入排班系統、開啟最近編輯過的班表，或前往調整系統設定參數。</p></div><form onSubmit={handleLogin} className="space-y-6 mb-10"><div className="space-y-2"><label className="block text-sm font-semibold text-slate-700">帳號</label><div className="relative group"><div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><User className="h-4.5 w-4.5 text-slate-400" /></div><input type="text" className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 outline-none placeholder:text-slate-400" placeholder="請輸入您的管理帳號" value={account} onChange={(e)=>setAccount(e.target.value)} /></div></div><div className="space-y-2"><label className="block text-sm font-semibold text-slate-700">密碼</label><div className="relative group"><div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Lock className="h-4.5 w-4.5 text-slate-400" /></div><input type="password" className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 outline-none placeholder:text-slate-400" placeholder="••••••••" value={password} onChange={(e)=>setPassword(e.target.value)} /></div></div><div className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex items-start gap-3"><Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" /><p className="text-xs text-slate-500 leading-normal">目前為開發版入口頁，登入功能尚未正式啟用。點擊下方按鈕即可直接進入系統環境。</p></div></form><div className="space-y-4"><button type="button" onClick={() => changeScreen('schedule')} className="w-full flex justify-center items-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700"><ShieldCheck className="w-4.5 h-4.5" />進入排班系統</button><div className="grid grid-cols-2 gap-4"><button type="button" onClick={() => changeScreen('schedule')} className="flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"><Clock className="w-4 h-4 text-slate-500" />最近班表</button><button type="button" onClick={() => changeScreen('settings')} className="flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"><Settings className="w-4 h-4 text-slate-500" />系統設定</button></div></div></div><div className="bg-slate-50/80 px-10 py-5 border-t border-slate-100 flex justify-between items-center"><button className="text-xs text-slate-500 hover:text-blue-600 font-bold flex items-center gap-1 transition-colors group">開發版說明<ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" /></button><button className="text-xs text-slate-500 hover:text-blue-600 font-bold transition-colors">查看版本資訊</button></div></div><div className="mt-12 text-center"><p className="text-xs text-slate-400 font-medium tracking-[0.1em] uppercase">&copy; {new Date().getFullYear()} 智能排班系統 PRO. ALL RIGHTS RESERVED.</p></div>
+      <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] border border-slate-200/60 overflow-hidden"><div className="p-10"><div className="mb-10"><h2 className="text-xl font-bold text-slate-900 mb-2">歡迎使用智能排班系統</h2><p className="text-sm text-slate-500 leading-relaxed">您可以直接進入排班系統、開啟最近編輯過的班表，或前往調整系統設定參數。</p></div><form onSubmit={handleLogin} className="space-y-6 mb-10"><div className="space-y-2"><label className="block text-sm font-semibold text-slate-700">帳號</label><div className="relative group"><div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><User className="h-4.5 w-4.5 text-slate-400" /></div><input type="text" className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 outline-none placeholder:text-slate-400" placeholder="請輸入您的管理帳號" value={account} onChange={(e)=>setAccount(e.target.value)} /></div></div><div className="space-y-2"><label className="block text-sm font-semibold text-slate-700">密碼</label><div className="relative group"><div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Lock className="h-4.5 w-4.5 text-slate-400" /></div><input type="password" className="block w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 outline-none placeholder:text-slate-400" placeholder="••••••••" value={password} onChange={(e)=>setPassword(e.target.value)} /></div></div><div className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex items-start gap-3"><Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" /><p className="text-xs text-slate-500 leading-normal">目前為開發版入口頁，登入功能尚未正式啟用。點擊下方按鈕即可直接進入系統環境。</p></div></form><div className="space-y-4"><button type="button" onClick={() => changeScreen('schedule')} className="w-full flex justify-center items-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700"><ShieldCheck className="w-4.5 h-4.5" />進入排班系統</button><div className="grid grid-cols-2 gap-4"><button type="button" onClick={goToLatestHistory} className="flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"><Clock className="w-4 h-4 text-slate-500" />最近班表</button><button type="button" onClick={() => changeScreen('settings')} className="flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"><Settings className="w-4 h-4 text-slate-500" />系統設定</button></div></div></div><div className="bg-slate-50/80 px-10 py-5 border-t border-slate-100 flex justify-between items-center"><button className="text-xs text-slate-500 hover:text-blue-600 font-bold flex items-center gap-1 transition-colors group">開發版說明<ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" /></button><button className="text-xs text-slate-500 hover:text-blue-600 font-bold transition-colors">查看版本資訊</button></div></div><div className="mt-12 text-center"><p className="text-xs text-slate-400 font-medium tracking-[0.1em] uppercase">&copy; {new Date().getFullYear()} 智能排班系統 PRO. ALL RIGHTS RESERVED.</p></div>
     </div>
   );
 }
@@ -963,7 +985,51 @@ export default function App() {
   const [screen, setScreen] = useState('entry');
   const [colors, setColors] = useState({ weekend: '#dcfce7', holiday: '#fca5a5' });
   const [customHolidays, setCustomHolidays] = useState([]);
-  if (screen === 'schedule') return <ScheduleView changeScreen={setScreen} colors={colors} setColors={setColors} customHolidays={customHolidays} setCustomHolidays={setCustomHolidays} />;
-  if (screen === 'settings') return <SettingsView changeScreen={setScreen} colors={colors} setColors={setColors} customHolidays={customHolidays} setCustomHolidays={setCustomHolidays} />;
-  return <EntryView changeScreen={setScreen} />;
+  const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
+
+  const goToSchedule = () => {
+    setLoadLatestOnEnter(false);
+    setScreen('schedule');
+  };
+
+  const goToLatestHistory = () => {
+    setLoadLatestOnEnter(true);
+    setScreen('schedule');
+  };
+
+  if (screen === 'schedule') {
+    return (
+      <ScheduleView
+        changeScreen={setScreen}
+        colors={colors}
+        setColors={setColors}
+        customHolidays={customHolidays}
+        setCustomHolidays={setCustomHolidays}
+        loadLatestOnEnter={loadLatestOnEnter}
+        onLatestLoaded={() => setLoadLatestOnEnter(false)}
+      />
+    );
+  }
+
+  if (screen === 'settings') {
+    return (
+      <SettingsView
+        changeScreen={setScreen}
+        colors={colors}
+        setColors={setColors}
+        customHolidays={customHolidays}
+        setCustomHolidays={setCustomHolidays}
+      />
+    );
+  }
+
+  return (
+    <EntryView
+      changeScreen={(target) => {
+        if (target === 'schedule') goToSchedule();
+        else setScreen(target);
+      }}
+      goToLatestHistory={goToLatestHistory}
+    />
+  );
 }
