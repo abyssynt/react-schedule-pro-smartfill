@@ -18,13 +18,206 @@ const DICT = {
 
 const SHIFT_GROUPS = ['白班', '小夜', '大夜'];
 
-const HOLIDAY_MAP = {
-  2024: ['2024-01-01', '2024-02-08', '2024-02-09', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-28', '2024-04-04', '2024-04-05', '2024-06-10', '2024-09-17', '2024-10-10'],
-  2025: ['2025-01-01', '2025-01-27', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-28', '2025-04-03', '2025-04-04', '2025-05-31', '2025-10-06', '2025-10-10'],
-  2026: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-28', '2026-04-04', '2026-04-05', '2026-06-19', '2026-09-25', '2026-10-10']
+const ANNOUNCED_CALENDAR_OVERRIDES = {
+  2024: {
+    holidays: ['2024-01-01', '2024-02-08', '2024-02-09', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-28', '2024-04-04', '2024-04-05', '2024-06-10', '2024-09-17', '2024-10-10'],
+    workdays: []
+  },
+  2025: {
+    holidays: ['2025-01-01', '2025-01-27', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-28', '2025-04-03', '2025-04-04', '2025-05-31', '2025-10-06', '2025-10-10'],
+    workdays: []
+  },
+  2026: {
+    holidays: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-28', '2026-04-04', '2026-04-05', '2026-06-19', '2026-09-25', '2026-10-10'],
+    workdays: []
+  }
+};
+
+const CHINESE_MONTH_MAP = {
+  '正月': 1, '一月': 1, '二月': 2, '三月': 3, '四月': 4, '五月': 5, '六月': 6,
+  '七月': 7, '八月': 8, '九月': 9, '十月': 10, '十一月': 11, '十二月': 12,
+  '臘月': 12
+};
+
+const CHINESE_DAY_MAP = {
+  '初一': 1, '初二': 2, '初三': 3, '初四': 4, '初五': 5, '初六': 6, '初七': 7, '初八': 8, '初九': 9, '初十': 10,
+  '十一': 11, '十二': 12, '十三': 13, '十四': 14, '十五': 15, '十六': 16, '十七': 17, '十八': 18, '十九': 19, '二十': 20,
+  '廿一': 21, '廿二': 22, '廿三': 23, '廿四': 24, '廿五': 25, '廿六': 26, '廿七': 27, '廿八': 28, '廿九': 29, '三十': 30
 };
 
 const apiKey = "";
+
+const formatDateKey = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const parseDateKey = (dateKey) => {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const addDays = (date, amount) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+};
+
+const isWeekendDate = (date) => date.getDay() === 0 || date.getDay() === 6;
+
+const uniqueSortedDates = (dates = []) => Array.from(new Set(dates)).sort();
+
+const getChineseCalendarInfo = (date) => {
+  const formatter = new Intl.DateTimeFormat('zh-TW-u-ca-chinese', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  const parts = formatter.formatToParts(date);
+  const yearPart = parts.find((part) => part.type === 'relatedYear');
+  const monthPart = parts.find((part) => part.type === 'month');
+  const dayPart = parts.find((part) => part.type === 'day');
+  const rawMonth = monthPart?.value || '';
+
+  return {
+    relatedYear: Number(yearPart?.value || date.getFullYear()),
+    leapMonth: rawMonth.startsWith('閏'),
+    monthLabel: rawMonth.replace(/^閏/, ''),
+    dayLabel: dayPart?.value || ''
+  };
+};
+
+const matchesLunarDate = (date, lunarMonth, lunarDay, options = {}) => {
+  const info = getChineseCalendarInfo(date);
+  return CHINESE_MONTH_MAP[info.monthLabel] === lunarMonth && CHINESE_DAY_MAP[info.dayLabel] === lunarDay && Boolean(info.leapMonth) === Boolean(options.leap);
+};
+
+const findGregorianDateByLunarInYear = (year, lunarMonth, lunarDay, options = {}) => {
+  const start = new Date(year, 0, 1);
+  const end = new Date(year, 11, 31);
+  for (let cursor = new Date(start); cursor <= end; cursor = addDays(cursor, 1)) {
+    if (matchesLunarDate(cursor, lunarMonth, lunarDay, options)) return new Date(cursor);
+  }
+  return null;
+};
+
+const getQingmingDate = (year) => {
+  if (year >= 2000 && year <= 2099) {
+    const y = year % 100;
+    const day = Math.floor(y * 0.2422 + 4.81) - Math.floor((y - 1) / 4);
+    return new Date(year, 3, day);
+  }
+  return new Date(year, 3, 4);
+};
+
+const getFixedSolarHolidayDates = (year) => {
+  const fixed = [
+    [1, 1],   // 開國紀念日
+    [2, 28],  // 和平紀念日
+    [4, 4],   // 兒童節
+    [5, 1],   // 勞動節
+    [9, 28],  // 孔子誕辰紀念日 / 教師節
+    [10, 10], // 國慶日
+    [10, 25], // 臺灣光復暨金門古寧頭大捷紀念日
+    [12, 25], // 行憲紀念日
+  ];
+  return fixed.map(([month, day]) => formatDateKey(new Date(year, month - 1, day)));
+};
+
+const getRuleBasedHolidayDates = (year) => {
+  const holidaySet = new Set(getFixedSolarHolidayDates(year));
+
+  const qingming = getQingmingDate(year);
+  holidaySet.add(formatDateKey(qingming));
+
+  const dragonBoat = findGregorianDateByLunarInYear(year, 5, 5);
+  if (dragonBoat) holidaySet.add(formatDateKey(dragonBoat));
+
+  const midAutumn = findGregorianDateByLunarInYear(year, 8, 15);
+  if (midAutumn) holidaySet.add(formatDateKey(midAutumn));
+
+  const lunarNewYearDay = findGregorianDateByLunarInYear(year, 1, 1);
+  if (lunarNewYearDay) {
+    const springHoliday = [
+      addDays(lunarNewYearDay, -2),
+      addDays(lunarNewYearDay, -1),
+      lunarNewYearDay,
+      addDays(lunarNewYearDay, 1),
+      addDays(lunarNewYearDay, 2)
+    ];
+    springHoliday
+      .filter((date) => date.getFullYear() === year)
+      .forEach((date) => holidaySet.add(formatDateKey(date)));
+  }
+
+  const childrensDayKey = formatDateKey(new Date(year, 3, 4));
+  const qingmingKey = formatDateKey(qingming);
+  if (childrensDayKey === qingmingKey) {
+    const qingmingWeekday = qingming.getDay();
+    const extraHoliday = qingmingWeekday === 4 ? addDays(qingming, 1) : addDays(qingming, -1);
+    holidaySet.add(formatDateKey(extraHoliday));
+  }
+
+  return uniqueSortedDates([...holidaySet]);
+};
+
+const findNearestWorkday = (startDate, direction, occupiedHolidays, workdayOverrides) => {
+  let cursor = addDays(startDate, direction);
+  while (true) {
+    const key = formatDateKey(cursor);
+    const weekend = isWeekendDate(cursor);
+    const isWorkday = (!weekend || workdayOverrides.has(key)) && !occupiedHolidays.has(key);
+    if (isWorkday) return key;
+    cursor = addDays(cursor, direction);
+  }
+};
+
+const applyCompensatoryHolidays = (holidayDates, workdayDates = []) => {
+  const holidaySet = new Set(uniqueSortedDates(holidayDates));
+  const workdaySet = new Set(uniqueSortedDates(workdayDates));
+
+  const baseDates = [...holidaySet].sort();
+  baseDates.forEach((dateKey) => {
+    const date = parseDateKey(dateKey);
+    if (date.getDay() === 6) {
+      holidaySet.add(findNearestWorkday(date, -1, holidaySet, workdaySet));
+    } else if (date.getDay() === 0) {
+      holidaySet.add(findNearestWorkday(date, 1, holidaySet, workdaySet));
+    }
+  });
+
+  return uniqueSortedDates([...holidaySet]);
+};
+
+const getSystemHolidayCalendar = (year, options = {}) => {
+  const {
+    customHolidays = [],
+    announcedOverrides = ANNOUNCED_CALENDAR_OVERRIDES,
+    specialWorkdays = [],
+    unitAdjustments = { holidays: [], workdays: [] }
+  } = options;
+
+  const announced = announcedOverrides[year];
+  const overrideHolidays = announced?.holidays || [];
+  const overrideWorkdays = announced?.workdays || [];
+
+  const unitHolidayDates = (unitAdjustments.holidays || []).filter((date) => date.startsWith(`${year}-`));
+  const unitWorkdayDates = (unitAdjustments.workdays || []).filter((date) => date.startsWith(`${year}-`));
+  const customHolidayDates = customHolidays.filter((date) => date.startsWith(`${year}-`));
+  const specialWorkdayDates = specialWorkdays.filter((date) => date.startsWith(`${year}-`));
+
+  let holidayDates = overrideHolidays.length > 0 ? overrideHolidays : applyCompensatoryHolidays(getRuleBasedHolidayDates(year), [...overrideWorkdays, ...specialWorkdayDates, ...unitWorkdayDates]);
+  let workdayDates = uniqueSortedDates([...overrideWorkdays, ...specialWorkdayDates, ...unitWorkdayDates]);
+
+  holidayDates = uniqueSortedDates([...holidayDates, ...customHolidayDates, ...unitHolidayDates]).filter((date) => !workdayDates.includes(date));
+
+  return {
+    holidays: holidayDates,
+    workdays: workdayDates
+  };
+};
 const STORAGE_KEY = 'schedule_app_history';
 
 // 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
@@ -53,7 +246,7 @@ const normalizeStaffGroup = (staffList = []) => {
   }));
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, loadLatestOnEnter, onLatestLoaded }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -71,6 +264,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     s6: {}, s7: {}, s8: {}, s9: {}, s10: {},
     s11: {}, s12: {}, s13: {}, s14: {}, s15: {}
   });
+
+  const [unitAdjustmentDraft, setUnitAdjustmentDraft] = useState({ holidays: [], workdays: [] });
 
   const [showAiControl, setShowAiControl] = useState(false);
   const [aiFeedback, setAiFeedback] = useState("");
@@ -127,30 +322,40 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
   }, [loadLatestOnEnter]);
 
-  const holidays = useMemo(() => {
-    const systemHolidays = HOLIDAY_MAP[year] || [];
-    const customForYear = customHolidays.filter((date) => date.startsWith(`${year}-`));
-    return Array.from(new Set([...systemHolidays, ...customForYear]));
-  }, [year, customHolidays]);
+  const holidayCalendar = useMemo(() => {
+    return getSystemHolidayCalendar(year, {
+      customHolidays,
+      specialWorkdays,
+      unitAdjustments: medicalCalendarAdjustments
+    });
+  }, [year, customHolidays, specialWorkdays, medicalCalendarAdjustments]);
+
+  const holidays = holidayCalendar.holidays;
+  const workdays = holidayCalendar.workdays;
 
   const daysInMonth = useMemo(() => {
     const days = [];
     const daysCount = new Date(year, month, 0).getDate();
     const weekNames = ['日', '一', '二', '三', '四', '五', '六'];
+    const holidaySet = new Set(holidays);
+    const workdaySet = new Set(workdays);
 
     for (let i = 1; i <= daysCount; i++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       const weekNum = new Date(year, month - 1, i).getDay();
+      const rawWeekend = weekNum === 0 || weekNum === 6;
+      const isAdjustedWorkday = workdaySet.has(dateStr);
       days.push({
         day: i,
         date: dateStr,
         weekStr: weekNames[weekNum],
-        isWeekend: weekNum === 0 || weekNum === 6,
-        isHoliday: holidays.includes(dateStr)
+        isWeekend: rawWeekend && !isAdjustedWorkday,
+        isHoliday: holidaySet.has(dateStr),
+        isAdjustedWorkday
       });
     }
     return days;
-  }, [year, month, holidays]);
+  }, [year, month, holidays, workdays]);
 
   const requiredLeaves = useMemo(
     () => daysInMonth.filter(d => d.isWeekend || d.isHoliday).length,
@@ -419,7 +624,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays }
+      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments }
     };
 
     setHistoryList(prev => {
@@ -434,6 +639,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setYear(state.year);
     setMonth(state.month);
     setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
+    setSpecialWorkdays(Array.isArray(state.specialWorkdays) ? state.specialWorkdays : []);
+    setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
     setStaffs(normalizeStaffGroup(state.staffs));
     setSchedule(state.schedule);
     if (state.colors) setColors(state.colors);
@@ -902,7 +1109,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays }) {
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const addCustomHoliday = () => {
     const y = holidayInput.year.trim();
@@ -948,7 +1155,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
               </div>
             </SettingRow>
             <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼、班別呈現順序與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
-              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label><div className="flex flex-wrap gap-2">{['V','PL','S','O'].map(code => <span key={code} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}</span>)}<button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><Plus className="w-4 h-4" /></button></div></div><div><label className="text-sm font-medium block mb-2">班別顯示順序</label><div className="text-xs text-gray-500 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">拖放排序功能開發中</div></div><div className="pt-3 border-t border-gray-100"><button className="text-sm text-blue-600 font-medium flex items-center gap-1 hover:underline"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</button></div></div>
+              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label><div className="flex flex-wrap gap-2">{['V','PL','S','O'].map(code => <span key={code} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}</span>)}<button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><Plus className="w-4 h-4" /></button></div></div><div><label className="text-sm font-medium block mb-2">班別顯示順序</label><div className="text-xs text-gray-500 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">拖放排序功能開發中</div></div><div className="pt-3 border-t border-gray-100"><button className="text-sm text-blue-600 font-medium flex items-center gap-1 hover:underline"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</button></div><div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">系統已支援固定國曆假日、補假規則、清明/端午/中秋/除夕與春節推算；2024–2026 仍優先採官方公告日曆，未來可再擴充特殊補班與輪班單位調移。</div></div>
             </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
               <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
@@ -985,6 +1192,8 @@ export default function App() {
   const [screen, setScreen] = useState('entry');
   const [colors, setColors] = useState({ weekend: '#dcfce7', holiday: '#fca5a5' });
   const [customHolidays, setCustomHolidays] = useState([]);
+  const [specialWorkdays, setSpecialWorkdays] = useState([]);
+  const [medicalCalendarAdjustments, setMedicalCalendarAdjustments] = useState({ holidays: [], workdays: [] });
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
 
   const goToSchedule = () => {
@@ -1005,6 +1214,10 @@ export default function App() {
         setColors={setColors}
         customHolidays={customHolidays}
         setCustomHolidays={setCustomHolidays}
+        specialWorkdays={specialWorkdays}
+        setSpecialWorkdays={setSpecialWorkdays}
+        medicalCalendarAdjustments={medicalCalendarAdjustments}
+        setMedicalCalendarAdjustments={setMedicalCalendarAdjustments}
         loadLatestOnEnter={loadLatestOnEnter}
         onLatestLoaded={() => setLoadLatestOnEnter(false)}
       />
@@ -1019,6 +1232,10 @@ export default function App() {
         setColors={setColors}
         customHolidays={customHolidays}
         setCustomHolidays={setCustomHolidays}
+        specialWorkdays={specialWorkdays}
+        setSpecialWorkdays={setSpecialWorkdays}
+        medicalCalendarAdjustments={medicalCalendarAdjustments}
+        setMedicalCalendarAdjustments={setMedicalCalendarAdjustments}
       />
     );
   }
