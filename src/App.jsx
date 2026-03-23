@@ -12,8 +12,26 @@ import {
 // 1. 系統代碼字典
 // ==========================================
 const DICT = {
-  SHIFTS: ['D', 'E', 'N', '8-8'],
-  LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產']
+  SHIFTS: ['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16'],
+  LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
+};
+
+const SMART_RULES = {
+  maxConsecutiveWorkDays: 5,
+  allowCrossGroupAssignment: false,
+  disallowedNextShiftMap: {
+    N: ['D', 'E'],
+    E: ['N', 'D'],
+    '白8-8': ['D', 'N'],
+    '夜8-8': ['E', 'N']
+  },
+  blockedLeavePrefixes: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM'],
+  pregnancyRestrictedShifts: ['N', '夜8-8'],
+  fillPriorityWeights: {
+    sameShiftCount: 3,
+    totalShiftCount: 2,
+    sameGroup: 1
+  }
 };
 
 const SHIFT_GROUPS = ['白班', '小夜', '大夜'];
@@ -262,11 +280,57 @@ const normalizeStaffGroup = (staffList = []) => {
 
   return staffList.map((staff, index) => ({
     ...staff,
+    pregnant: Boolean(staff.pregnant),
     group: SHIFT_GROUPS.includes(staff.group) ? staff.group : (fallbackGroups[index] || '白班')
   }));
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, loadLatestOnEnter, onLatestLoaded }) {
+
+const getCodePrefix = (rawCode = '') => {
+  const code = String(rawCode || '').trim();
+  if (!code) return '';
+  if (code === 'off') return 'off';
+  const direct = SMART_RULES.blockedLeavePrefixes.find((prefix) => code === prefix || code.startsWith(prefix));
+  if (direct) return direct;
+  return code;
+};
+
+const getShiftGroupByCode = (code = '') => {
+  if (['D', '白8-8', '8-12', '12-16'].includes(code)) return '白班';
+  if (['E', '夜8-8'].includes(code)) return '小夜';
+  if (['N'].includes(code)) return '大夜';
+  return null;
+};
+
+const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
+const isShiftCode = (code = '') => DICT.SHIFTS.includes(code);
+
+const GROUP_TO_DEMAND_KEY = {
+  '白班': 'white',
+  '小夜': 'evening',
+  '大夜': 'night'
+};
+
+const DEFAULT_SHIFT_BY_GROUP = {
+  '白班': 'D',
+  '小夜': 'E',
+  '大夜': 'N'
+};
+
+const HOSPITAL_LEVEL_LABELS = {
+  medical: '醫學中心',
+  regional: '區域醫院',
+  local: '地區醫院'
+};
+
+const HOSPITAL_RATIO_HINTS = {
+  medical: { white: '1:6', evening: '1:9', night: '1:11' },
+  regional: { white: '1:7', evening: '1:11', night: '1:13' },
+  local: { white: '1:10', evening: '1:13', night: '1:15' }
+};
+
+
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -294,6 +358,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [historyList, setHistoryList] = useState([]);
   const [showDraftPrompt, setShowDraftPrompt] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [selectedFillCell, setSelectedFillCell] = useState(null);
+  const [fillCandidates, setFillCandidates] = useState([]);
+  const [showFillModal, setShowFillModal] = useState(false);
 
   // AI 指定排班設定
   const [aiConfig, setAiConfig] = useState({
@@ -529,54 +596,149 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // ==========================================
   const handleAiAutoSchedule = async (isPartial = false) => {
     setIsAiLoading(true);
-    setAiFeedback(isPartial ? "✨ AI 正在根據指定區域填寫班表..." : "✨ AI 正在規劃全月空缺...");
-
-    const systemPrompt = `你是一個專業護理排班專家。請為未排班的日期填寫代碼。可用班別: ${DICT.SHIFTS.join(', ')}，可用休假: ${DICT.LEAVES.join(', ')}。${isPartial && aiConfig.targetShift ? `優先填寫指定班別: ${aiConfig.targetShift}` : ''} 格式要求: {"schedule": {"staffId": {"YYYY-MM-DD": "CODE"}}}`;
-
-    const currentScheduleForAi = {};
-    staffs.forEach(s => {
-      currentScheduleForAi[s.id] = {};
-      Object.keys(schedule[s.id] || {}).forEach(date => {
-        const cell = schedule[s.id][date];
-        if (cell && (cell.value || typeof cell === 'string')) currentScheduleForAi[s.id][date] = cell.value || cell;
-      });
-    });
-
-    const userPrompt = `年: ${year}, 月: ${month}, 人員對象: ${JSON.stringify(isPartial ? aiConfig.selectedStaffs : staffs.map(s => s.id))}, 日期區間: ${isPartial ? `${aiConfig.dateRange.start}號到${aiConfig.dateRange.end}號` : '全月'}, 既有排班數據: ${JSON.stringify(currentScheduleForAi)}。注意：絕對不可覆蓋已有的手動排班內容。`;
+    setAiFeedback(isPartial ? "🧩 系統正在依指定範圍補空..." : "🧩 系統正在依人力需求補全整月空白...");
 
     try {
-      const result = await callGemini(userPrompt, systemPrompt);
-      if (result.schedule) {
-        const mergedSchedule = { ...schedule };
-        Object.keys(result.schedule).forEach(staffId => {
-          if (isPartial && !aiConfig.selectedStaffs.includes(staffId)) return;
-          if (!mergedSchedule[staffId]) mergedSchedule[staffId] = {};
-          Object.keys(result.schedule[staffId]).forEach(dateStr => {
-            const dayNum = parseInt(dateStr.split('-')[2], 10);
-            if (isPartial && (dayNum < aiConfig.dateRange.start || dayNum > aiConfig.dateRange.end)) return;
-            const aiCode = result.schedule[staffId][dateStr];
-            const existingCell = mergedSchedule[staffId][dateStr];
-            if (existingCell && existingCell.source === 'manual') return;
+      const mergedSchedule = JSON.parse(JSON.stringify(schedule));
+      const targetStaffIds = isPartial && aiConfig.selectedStaffs.length > 0
+        ? new Set(aiConfig.selectedStaffs)
+        : new Set(staffs.map(s => s.id));
 
-            if (aiCode) {
-              let finalValue = aiCode;
-              if (isPartial && aiConfig.targetShift && !DICT.LEAVES.includes(aiCode)) finalValue = aiConfig.targetShift;
-              mergedSchedule[staffId][dateStr] = { value: finalValue, source: 'ai' };
-            }
+      const targetDays = daysInMonth.filter(d => {
+        if (!isPartial) return true;
+        return d.day >= aiConfig.dateRange.start && d.day <= aiConfig.dateRange.end;
+      });
+
+      const restrictedGroup = aiConfig.targetShift ? getShiftGroupByCode(aiConfig.targetShift) : null;
+      const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
+
+      const getScheduleCode = (snapshot, staffId, dateStr) => {
+        const cellData = snapshot[staffId]?.[dateStr];
+        return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+      };
+
+      const setScheduleCode = (snapshot, staffId, dateStr, value) => {
+        if (!snapshot[staffId]) snapshot[staffId] = {};
+        snapshot[staffId][dateStr] = value ? { value, source: 'auto' } : null;
+      };
+
+      const getDemandType = (day) => (day.isWeekend || day.isHoliday) ? 'holiday' : 'weekday';
+      const getDemandForGroup = (day, group) => {
+        const bucket = getDemandType(day);
+        const key = GROUP_TO_DEMAND_KEY[group];
+        return Number(staffingConfig?.requiredStaffing?.[bucket]?.[key] || 0);
+      };
+
+      const getAssignedCountByGroup = (snapshot, dateStr, group) => {
+        return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
+          const code = getScheduleCode(snapshot, s.id, dateStr);
+          return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
+        }, 0);
+      };
+
+      const countConsecutiveBeforeFromSnapshot = (snapshot, staffId, dateStr) => {
+        let count = 0;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        while (true) {
+          const key = formatDateKey(cursor);
+          const code = getScheduleCode(snapshot, staffId, key);
+          if (!isShiftCode(code)) break;
+          count += 1;
+          cursor = addDays(cursor, -1);
+        }
+        return count;
+      };
+
+      const canAssignWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
+        const reasons = [];
+        const currentCode = getScheduleCode(snapshot, staff.id, dateStr);
+        if (currentCode) reasons.push('該格已有排班或休假代碼');
+        const prefix = getCodePrefix(currentCode);
+        if (prefix && SMART_RULES.blockedLeavePrefixes.includes(prefix)) reasons.push('該格已有休假，不可再排班');
+        const staffGroup = staff.group || '白班';
+        const shiftGroup = getShiftGroupByCode(shiftCode);
+        if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) reasons.push('不可跨群組排班');
+        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+        const prevCode = getScheduleCode(snapshot, staff.id, prevKey);
+        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+        if (disallowed.includes(shiftCode)) reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+        const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff.id, dateStr);
+        if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+        if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) reasons.push('懷孕標記人員不可排 N / 夜8-8');
+        return { allowed: reasons.length === 0, reasons };
+      };
+
+      const getWorkCountFromSnapshot = (snapshot, staffId) => {
+        return daysInMonth.reduce((sum, d) => sum + (isShiftCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
+      };
+
+      const getShiftCountFromSnapshot = (snapshot, staffId, shiftCode) => {
+        return daysInMonth.reduce((sum, d) => sum + (getScheduleCode(snapshot, staffId, d.date) === shiftCode ? 1 : 0), 0);
+      };
+
+      const scoreCandidateWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
+        let score = 0;
+        score += (999 - getShiftCountFromSnapshot(snapshot, staff.id, shiftCode)) * SMART_RULES.fillPriorityWeights.sameShiftCount;
+        score += (999 - getWorkCountFromSnapshot(snapshot, staff.id)) * SMART_RULES.fillPriorityWeights.totalShiftCount;
+        if (getShiftGroupByCode(shiftCode) === (staff.group || '白班')) score += 100 * SMART_RULES.fillPriorityWeights.sameGroup;
+        return score;
+      };
+
+      for (const day of targetDays) {
+        for (const group of SHIFT_GROUPS) {
+          if (restrictedGroup && restrictedGroup !== group) continue;
+
+          const shiftCode = aiConfig.targetShift && getShiftGroupByCode(aiConfig.targetShift) === group
+            ? aiConfig.targetShift
+            : DEFAULT_SHIFT_BY_GROUP[group];
+
+          const demand = getDemandForGroup(day, group);
+          const alreadyAssigned = getAssignedCountByGroup(mergedSchedule, day.date, group);
+          const needed = Math.max(0, demand - alreadyAssigned);
+
+          const groupStaffs = staffs.filter(s => (s.group || '白班') === group && targetStaffIds.has(s.id));
+
+          const assignableCandidates = groupStaffs
+            .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
+            .map(staff => {
+              const result = canAssignWithSnapshot(mergedSchedule, staff, day.date, shiftCode);
+              return {
+                staff,
+                allowed: result.allowed,
+                score: result.allowed ? scoreCandidateWithSnapshot(mergedSchedule, staff, day.date, shiftCode) : -1
+              };
+            })
+            .filter(item => item.allowed)
+            .sort((a, b) => b.score - a.score);
+
+          const picked = assignableCandidates.slice(0, needed);
+          picked.forEach(item => {
+            setScheduleCode(mergedSchedule, item.staff.id, day.date, shiftCode);
+            summary.workFilled += 1;
           });
-        });
-        setSchedule(mergedSchedule);
-        saveToHistory(isPartial ? 'AI區域排班' : 'AI全月排班', mergedSchedule);
-        setAiFeedback(`✅ ${isPartial ? '區域' : '全月'}補空完成！`);
+
+          if (picked.length < needed) summary.skipped += (needed - picked.length);
+
+          const remainingBlanks = groupStaffs.filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date));
+          remainingBlanks.forEach(staff => {
+            setScheduleCode(mergedSchedule, staff.id, day.date, 'off');
+            summary.leaveFilled += 1;
+          });
+        }
       }
+
+      setSchedule(mergedSchedule);
+      saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
+      setAiFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
     } catch (error) {
-      setAiFeedback("❌ AI 排班失敗，請檢查網路。");
+      console.error(error);
+      setAiFeedback("❌ 規則補空失敗，請檢查設定。");
     } finally {
       setIsAiLoading(false);
     }
   };
 
-  const callGemini = async (prompt, systemInstruction = "") => {
+const callGemini = async (prompt, systemInstruction = "") => {
     let delay = 1000;
     for (let i = 0; i < 5; i++) {
       try {
@@ -628,7 +790,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const getDailyStats = (dateStr) => {
-    const stats = { D: 0, E: 0, N: 0, '8-8': 0, totalLeave: 0 };
+    const stats = { D: 0, E: 0, N: 0, '白8-8': 0, '夜8-8': 0, '8-12': 0, '12-16': 0, totalLeave: 0 };
     staffs.forEach(staff => {
       const cellData = schedule[staff.id]?.[dateStr];
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
@@ -644,7 +806,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments }
+      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig }
     };
 
     setHistoryList(prev => {
@@ -661,6 +823,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
     setSpecialWorkdays(Array.isArray(state.specialWorkdays) ? state.specialWorkdays : []);
     setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
+    if (state.staffingConfig) setStaffingConfig(state.staffingConfig);
     setStaffs(normalizeStaffGroup(state.staffs));
     setSchedule(state.schedule);
     if (state.colors) setColors(state.colors);
@@ -680,6 +843,105 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       ...prev,
       [staffId]: { ...prev[staffId], [dateStr]: value ? { value, source: 'manual' } : null }
     }));
+  };
+
+  const getCellCode = (staffId, dateStr) => {
+    const cellData = schedule[staffId]?.[dateStr];
+    return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+  };
+
+  const countConsecutiveWorkDaysBefore = (staffId, dateStr) => {
+    let count = 0;
+    let cursor = addDays(parseDateKey(dateStr), -1);
+    while (true) {
+      const key = formatDateKey(cursor);
+      const code = getCellCode(staffId, key);
+      if (!isShiftCode(code)) break;
+      count += 1;
+      cursor = addDays(cursor, -1);
+    }
+    return count;
+  };
+
+  const canAssign = (staff, dateStr, shiftCode) => {
+    const reasons = [];
+    const currentCode = getCellCode(staff.id, dateStr);
+    if (currentCode) {
+      reasons.push('該格已有排班或休假代碼');
+    }
+
+    const prefix = getCodePrefix(currentCode);
+    if (prefix && SMART_RULES.blockedLeavePrefixes.includes(prefix)) {
+      reasons.push('該格已有休假，不可再排班');
+    }
+
+    const staffGroup = staff.group || '白班';
+    const shiftGroup = getShiftGroupByCode(shiftCode);
+    if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
+      reasons.push('不可跨群組排班');
+    }
+
+    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+    const prevCode = getCellCode(staff.id, prevKey);
+    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+    if (disallowed.includes(shiftCode)) {
+      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+    }
+
+    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
+    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
+      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+    }
+
+    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
+      reasons.push('懷孕標記人員不可排 N / 夜8-8');
+    }
+
+    return { allowed: reasons.length === 0, reasons };
+  };
+
+  const getShiftCountForStaff = (staffId, shiftCode) => {
+    return daysInMonth.reduce((sum, d) => sum + (getCellCode(staffId, d.date) === shiftCode ? 1 : 0), 0);
+  };
+
+  const scoreCandidate = (staff, dateStr, shiftCode) => {
+    let score = 0;
+    const stats = getStaffStats(staff.id);
+    score += (999 - getShiftCountForStaff(staff.id, shiftCode)) * SMART_RULES.fillPriorityWeights.sameShiftCount;
+    score += (999 - stats.work) * SMART_RULES.fillPriorityWeights.totalShiftCount;
+    if (getShiftGroupByCode(shiftCode) === (staff.group || '白班')) {
+      score += 100 * SMART_RULES.fillPriorityWeights.sameGroup;
+    }
+    return score;
+  };
+
+  const openFillModal = (staff, dateStr) => {
+    const groupShiftOptions = DICT.SHIFTS.filter((shift) => getShiftGroupByCode(shift) === (staff.group || '白班'));
+    const candidates = groupShiftOptions.map((shiftCode) => {
+      const result = canAssign(staff, dateStr, shiftCode);
+      return {
+        type: 'self-shift',
+        staffId: staff.id,
+        staffName: staff.name,
+        group: staff.group,
+        shiftCode,
+        allowed: result.allowed,
+        reasons: result.reasons,
+        score: result.allowed ? scoreCandidate(staff, dateStr, shiftCode) : -1
+      };
+    }).filter((item) => item.allowed).sort((a, b) => b.score - a.score);
+
+    setSelectedFillCell({ staffId: staff.id, staffName: staff.name, dateStr, group: staff.group });
+    setFillCandidates(candidates);
+    setShowFillModal(true);
+  };
+
+  const applyFillCandidate = (candidate) => {
+    if (!selectedFillCell) return;
+    handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode);
+    setShowFillModal(false);
+    setSelectedFillCell(null);
+    setFillCandidates([]);
   };
 
   const addStaff = (group = '白班') => {
@@ -788,7 +1050,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 {isAiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 全月補空
               </button>
               <button onClick={() => setShowAiControl(!showAiControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showAiControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
-                <Calendar size={14} /> 指定排班
+                <Calendar size={14} /> 指定補空
               </button>
             </div>
           </div>
@@ -803,10 +1065,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       {showAiControl && (
         <div className="max-w-[95vw] mx-auto mb-6 bg-blue-50 border border-blue-200 p-6 rounded-2xl shadow-sm animate-fade-in-down">
-          <h3 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Sparkles size={18} /> 指定區域排班設定</h3>
+          <h3 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Sparkles size={18} /> 指定補空設定</h3>
           <div className="grid lg:grid-cols-4 gap-6">
             <div>
-              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">1. 選擇人員</label>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">1. 選擇人員（補空範圍）</label>
               <div className="flex flex-wrap gap-2">
                 {staffs.map(s => (
                   <button
@@ -849,13 +1111,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">3. 指定班別 (非必填)</label>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">3. 指定班別（選填）</label>
               <select
                 value={aiConfig.targetShift}
                 onChange={(e) => setAiConfig({ ...aiConfig, targetShift: e.target.value })}
                 className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
               >
-                <option value="">由 AI 自由規劃</option>
+                <option value="">依群組需求自動補空</option>
                 {DICT.SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
                 <option value="off">休假 (off)</option>
               </select>
@@ -992,19 +1254,30 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                               className="border-r p-0"
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                             >
-                              <select
-                                value={val}
-                                onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
-                                className={`w-full h-10 text-center bg-transparent border-none cursor-pointer text-sm font-bold appearance-none hover:bg-black/5 ${DICT.LEAVES.includes(val) ? 'text-red-500' : 'text-slate-800'}`}
-                              >
-                                <option value=""></option>
-                                <optgroup label="上班">
-                                  {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
-                                </optgroup>
-                                <optgroup label="休假">
-                                  {DICT.LEAVES.map(l => <option key={l} value={l}>{l}</option>)}
-                                </optgroup>
-                              </select>
+                              <div className="relative">
+                                <select
+                                  value={val}
+                                  onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
+                                  className={`w-full h-10 text-center bg-transparent border-none cursor-pointer text-sm font-bold appearance-none hover:bg-black/5 ${DICT.LEAVES.map(getCodePrefix).includes(getCodePrefix(val)) ? 'text-red-500' : 'text-slate-800'}`}
+                                >
+                                  <option value=""></option>
+                                  <optgroup label="上班">
+                                    {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                  </optgroup>
+                                  <optgroup label="休假">
+                                    {DICT.LEAVES.map(l => <option key={l} value={l}>{l}</option>)}
+                                  </optgroup>
+                                </select>
+                                {!val && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); openFillModal(staff, d.date); }}
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white hover:bg-blue-700"
+                                  >
+                                    補
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           );
                         })}
@@ -1048,7 +1321,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             </tbody>
 
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
-              {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
+              {['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
                   <td className="sticky left-0 bg-slate-200 z-10 border-r p-3 w-24 min-w-[96px]"></td>
                   <td className="sticky left-[96px] bg-slate-200 z-10 border-r p-3 text-right text-xs font-bold text-slate-600 min-w-[144px]">
@@ -1069,6 +1342,38 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           </table>
         </div>
       </div>
+
+
+      {showFillModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-pulse-once">
+            <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+              <div>
+                <h3 className="font-black text-slate-800">補此格</h3>
+                <p className="text-sm text-slate-500 mt-1">{selectedFillCell?.staffName}｜{selectedFillCell?.dateStr}</p>
+              </div>
+              <button onClick={() => { setShowFillModal(false); setSelectedFillCell(null); setFillCandidates([]); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X />
+              </button>
+            </div>
+            <div className="p-4 max-h-[60vh] overflow-y-auto space-y-3">
+              {fillCandidates.length === 0 ? (
+                <div className="p-6 text-center text-slate-500">目前沒有可直接建議的班別。</div>
+              ) : fillCandidates.map((candidate, index) => (
+                <div key={`${candidate.staffId}-${candidate.shiftCode}`} className="border rounded-2xl p-4 flex items-center justify-between gap-4 hover:border-blue-400 hover:bg-blue-50/40 transition-all">
+                  <div>
+                    <div className="font-black text-slate-800">{candidate.staffName} → {candidate.shiftCode}</div>
+                    <div className="text-xs text-slate-500 mt-1">群組：{candidate.group}｜排序分數：{candidate.score}</div>
+                  </div>
+                  <button onClick={() => applyFillCandidate(candidate)} className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700">
+                    {index === 0 ? '選擇推薦' : '選擇'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -1129,7 +1434,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments }) {
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const addCustomHoliday = () => {
     const y = holidayInput.year.trim();
@@ -1177,6 +1482,104 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
             <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼、班別呈現順序與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
               <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label><div className="flex flex-wrap gap-2">{['V','PL','S','O'].map(code => <span key={code} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}</span>)}<button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><Plus className="w-4 h-4" /></button></div></div><div><label className="text-sm font-medium block mb-2">班別顯示順序</label><div className="text-xs text-gray-500 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">拖放排序功能開發中</div></div><div className="pt-3 border-t border-gray-100"><button className="text-sm text-blue-600 font-medium flex items-center gap-1 hover:underline"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</button></div><div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">系統已支援固定國曆假日、補假規則、清明/端午/中秋/除夕與春節推算；2024–2026 仍優先採官方公告日曆，未來可再擴充特殊補班與輪班單位調移。</div></div>
             </SettingRow>
+            <SettingRow icon={UserCheck} title="人力需求設定" desc="獨立設定平日 / 假日各班需求，作為全月補空與指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">醫院層級</label>
+                    <select
+                      value={staffingConfig.hospitalLevel}
+                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, hospitalLevel: e.target.value }))}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"
+                    >
+                      <option value="medical">醫學中心</option>
+                      <option value="regional">區域醫院</option>
+                      <option value="local">地區醫院</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">總床數</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={staffingConfig.totalBeds}
+                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, totalBeds: parseInt(e.target.value, 10) || 0 }))}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">護理師總數</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={staffingConfig.totalNurses}
+                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, totalNurses: parseInt(e.target.value, 10) || 0 }))}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-sky-50 border border-sky-100 px-4 py-3 text-xs text-sky-700">
+                  參考護病比：{HOSPITAL_LEVEL_LABELS[staffingConfig.hospitalLevel]}｜白班 {HOSPITAL_RATIO_HINTS[staffingConfig.hospitalLevel].white}、小夜 {HOSPITAL_RATIO_HINTS[staffingConfig.hospitalLevel].evening}、大夜 {HOSPITAL_RATIO_HINTS[staffingConfig.hospitalLevel].night}
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                  <div className="font-semibold text-gray-800 mb-1">目前補空依據</div>
+                  <div>平日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.night}</span> 人</div>
+                  <div>假日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.night}</span> 人</div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
+                    <h4 className="font-bold text-gray-800 mb-4">平日需求</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">白班</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.white}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, white: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">小夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.evening}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, evening: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">大夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.night}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, night: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
+                    <h4 className="font-bold text-gray-800 mb-4">假日需求</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">白班</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.white}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, white: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">小夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.evening}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, evening: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">大夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.night}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, night: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
               <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
             </SettingRow>
@@ -1214,6 +1617,15 @@ export default function App() {
   const [customHolidays, setCustomHolidays] = useState([]);
   const [specialWorkdays, setSpecialWorkdays] = useState([]);
   const [medicalCalendarAdjustments, setMedicalCalendarAdjustments] = useState({ holidays: [], workdays: [] });
+  const [staffingConfig, setStaffingConfig] = useState({
+    hospitalLevel: 'regional',
+    totalBeds: 60,
+    totalNurses: 20,
+    requiredStaffing: {
+      weekday: { white: 6, evening: 3, night: 2 },
+      holiday: { white: 4, evening: 2, night: 2 }
+    }
+  });
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
 
   const goToSchedule = () => {
@@ -1238,6 +1650,8 @@ export default function App() {
         setSpecialWorkdays={setSpecialWorkdays}
         medicalCalendarAdjustments={medicalCalendarAdjustments}
         setMedicalCalendarAdjustments={setMedicalCalendarAdjustments}
+        staffingConfig={staffingConfig}
+        setStaffingConfig={setStaffingConfig}
         loadLatestOnEnter={loadLatestOnEnter}
         onLatestLoaded={() => setLoadLatestOnEnter(false)}
       />
@@ -1256,6 +1670,8 @@ export default function App() {
         setSpecialWorkdays={setSpecialWorkdays}
         medicalCalendarAdjustments={medicalCalendarAdjustments}
         setMedicalCalendarAdjustments={setMedicalCalendarAdjustments}
+        staffingConfig={staffingConfig}
+        setStaffingConfig={setStaffingConfig}
       />
     );
   }
