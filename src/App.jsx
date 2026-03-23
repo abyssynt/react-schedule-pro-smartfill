@@ -305,7 +305,7 @@ const getShiftGroupByCode = (code = '') => {
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
 const isShiftCode = (code = '') => DICT.SHIFTS.includes(code);
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, loadLatestOnEnter, onLatestLoaded }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -1352,7 +1352,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments }) {
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const addCustomHoliday = () => {
     const y = holidayInput.year.trim();
@@ -1400,6 +1400,167 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
             <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼、班別呈現順序與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
               <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label><div className="flex flex-wrap gap-2">{['V','PL','S','O'].map(code => <span key={code} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}</span>)}<button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><Plus className="w-4 h-4" /></button></div></div><div><label className="text-sm font-medium block mb-2">班別顯示順序</label><div className="text-xs text-gray-500 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">拖放排序功能開發中</div></div><div className="pt-3 border-t border-gray-100"><button className="text-sm text-blue-600 font-medium flex items-center gap-1 hover:underline"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</button></div><div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">系統已支援固定國曆假日、補假規則、清明/端午/中秋/除夕與春節推算；2024–2026 仍優先採官方公告日曆，未來可再擴充特殊補班與輪班單位調移。</div></div>
             </SettingRow>
+            <SettingRow icon={UserCheck} title="人力需求設定" desc="設定補空時真正使用的人力需求基準；護病比僅供參考。">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">醫院層級</label>
+                    <select
+                      value={staffingConfig.hospitalLevel}
+                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, hospitalLevel: e.target.value }))}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value="medical-center">醫學中心</option>
+                      <option value="regional">區域醫院</option>
+                      <option value="local">地區醫院</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">總床數</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={staffingConfig.totalBeds}
+                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, totalBeds: Number(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">護理師總數</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={staffingConfig.totalNurses}
+                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, totalNurses: Number(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">護病比參考</div>
+                  <div className="text-sm text-slate-700 leading-7">
+                    {staffingConfig.hospitalLevel === 'medical-center' && '醫學中心：白班 1:6 / 小夜 1:9 / 大夜 1:11'}
+                    {staffingConfig.hospitalLevel === 'regional' && '區域醫院：白班 1:7 / 小夜 1:11 / 大夜 1:13'}
+                    {staffingConfig.hospitalLevel === 'local' && '地區醫院：白班 1:10 / 小夜 1:13 / 大夜 1:15'}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <div className="text-sm font-bold text-slate-800 mb-4">平日需求</div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">白班</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={staffingConfig.requiredStaffing.weekday.white}
+                          onChange={(e) => setStaffingConfig(prev => ({
+                            ...prev,
+                            requiredStaffing: {
+                              ...prev.requiredStaffing,
+                              weekday: { ...prev.requiredStaffing.weekday, white: Number(e.target.value) || 0 }
+                            }
+                          }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">小夜</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={staffingConfig.requiredStaffing.weekday.evening}
+                          onChange={(e) => setStaffingConfig(prev => ({
+                            ...prev,
+                            requiredStaffing: {
+                              ...prev.requiredStaffing,
+                              weekday: { ...prev.requiredStaffing.weekday, evening: Number(e.target.value) || 0 }
+                            }
+                          }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">大夜</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={staffingConfig.requiredStaffing.weekday.night}
+                          onChange={(e) => setStaffingConfig(prev => ({
+                            ...prev,
+                            requiredStaffing: {
+                              ...prev.requiredStaffing,
+                              weekday: { ...prev.requiredStaffing.weekday, night: Number(e.target.value) || 0 }
+                            }
+                          }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <div className="text-sm font-bold text-slate-800 mb-4">假日需求</div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">白班</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={staffingConfig.requiredStaffing.holiday.white}
+                          onChange={(e) => setStaffingConfig(prev => ({
+                            ...prev,
+                            requiredStaffing: {
+                              ...prev.requiredStaffing,
+                              holiday: { ...prev.requiredStaffing.holiday, white: Number(e.target.value) || 0 }
+                            }
+                          }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">小夜</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={staffingConfig.requiredStaffing.holiday.evening}
+                          onChange={(e) => setStaffingConfig(prev => ({
+                            ...prev,
+                            requiredStaffing: {
+                              ...prev.requiredStaffing,
+                              holiday: { ...prev.requiredStaffing.holiday, evening: Number(e.target.value) || 0 }
+                            }
+                          }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">大夜</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={staffingConfig.requiredStaffing.holiday.night}
+                          onChange={(e) => setStaffingConfig(prev => ({
+                            ...prev,
+                            requiredStaffing: {
+                              ...prev.requiredStaffing,
+                              holiday: { ...prev.requiredStaffing.holiday, night: Number(e.target.value) || 0 }
+                            }
+                          }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
+                  補空時將依平日 / 假日需求作為主要補班依據；護病比僅作參考說明，不會自動用病人數或佔床率推算。
+                </div>
+              </div>
+            </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
               <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
             </SettingRow>
@@ -1437,6 +1598,15 @@ export default function App() {
   const [customHolidays, setCustomHolidays] = useState([]);
   const [specialWorkdays, setSpecialWorkdays] = useState([]);
   const [medicalCalendarAdjustments, setMedicalCalendarAdjustments] = useState({ holidays: [], workdays: [] });
+  const [staffingConfig, setStaffingConfig] = useState({
+    hospitalLevel: 'regional',
+    totalBeds: 0,
+    totalNurses: 12,
+    requiredStaffing: {
+      weekday: { white: 4, evening: 2, night: 2 },
+      holiday: { white: 3, evening: 2, night: 2 }
+    }
+  });
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
 
   const goToSchedule = () => {
@@ -1461,6 +1631,8 @@ export default function App() {
         setSpecialWorkdays={setSpecialWorkdays}
         medicalCalendarAdjustments={medicalCalendarAdjustments}
         setMedicalCalendarAdjustments={setMedicalCalendarAdjustments}
+        staffingConfig={staffingConfig}
+        setStaffingConfig={setStaffingConfig}
         loadLatestOnEnter={loadLatestOnEnter}
         onLatestLoaded={() => setLoadLatestOnEnter(false)}
       />
@@ -1479,6 +1651,8 @@ export default function App() {
         setSpecialWorkdays={setSpecialWorkdays}
         medicalCalendarAdjustments={medicalCalendarAdjustments}
         setMedicalCalendarAdjustments={setMedicalCalendarAdjustments}
+        staffingConfig={staffingConfig}
+        setStaffingConfig={setStaffingConfig}
       />
     );
   }
