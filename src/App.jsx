@@ -361,6 +361,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [selectedFillCell, setSelectedFillCell] = useState(null);
   const [fillCandidates, setFillCandidates] = useState([]);
   const [showFillModal, setShowFillModal] = useState(false);
+  const [selectedCellForFill, setSelectedCellForFill] = useState(null);
 
   // AI 指定排班設定
   const [aiConfig, setAiConfig] = useState({
@@ -790,13 +791,21 @@ const callGemini = async (prompt, systemInstruction = "") => {
   };
 
   const getDailyStats = (dateStr) => {
-    const stats = { D: 0, E: 0, N: 0, '白8-8': 0, '夜8-8': 0, '8-12': 0, '12-16': 0, totalLeave: 0 };
+    const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
     staffs.forEach(staff => {
       const cellData = schedule[staff.id]?.[dateStr];
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
-      if (DICT.SHIFTS.includes(code)) stats[code] += 1;
-      else if (DICT.LEAVES.includes(code)) stats.totalLeave += 1;
+
+      if (['D', '白8-8', '8-12', '12-16'].includes(code)) {
+        stats.D += 1;
+      } else if (['E', '夜8-8'].includes(code)) {
+        stats.E += 1;
+      } else if (code === 'N') {
+        stats.N += 1;
+      } else if (DICT.LEAVES.includes(code)) {
+        stats.totalLeave += 1;
+      }
     });
     return stats;
   };
@@ -936,11 +945,17 @@ const callGemini = async (prompt, systemInstruction = "") => {
     setShowFillModal(true);
   };
 
+  const openSelectedCellFillModal = () => {
+    if (!selectedCellForFill) return;
+    openFillModal(selectedCellForFill.staff, selectedCellForFill.dateStr);
+  };
+
   const applyFillCandidate = (candidate) => {
     if (!selectedFillCell) return;
     handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode);
     setShowFillModal(false);
     setSelectedFillCell(null);
+    setSelectedCellForFill(null);
     setFillCandidates([]);
   };
 
@@ -1052,6 +1067,18 @@ const callGemini = async (prompt, systemInstruction = "") => {
               <button onClick={() => setShowAiControl(!showAiControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showAiControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
                 <Calendar size={14} /> 指定補空
               </button>
+              <button
+                type="button"
+                onClick={openSelectedCellFillModal}
+                disabled={!selectedCellForFill}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${
+                  selectedCellForFill
+                    ? 'text-slate-700 hover:bg-slate-200 bg-white border border-slate-300 shadow-sm'
+                    : 'text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                <Check size={14} /> 補此格
+              </button>
             </div>
           </div>
         </div>
@@ -1059,6 +1086,25 @@ const callGemini = async (prompt, systemInstruction = "") => {
           <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
             <Check size={16} className="text-green-600" />
             {aiFeedback}
+          </div>
+        )}
+
+        {selectedCellForFill && (
+          <div className="mt-4 bg-blue-50 border-2 border-blue-200 p-4 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3 animate-pulse-once">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-blue-600 shadow-[0_0_0_4px_rgba(37,99,235,0.15)]"></div>
+              <div>
+                <div className="font-black">已選取補班儲存格</div>
+                <div className="text-xs text-blue-700 mt-0.5">{selectedCellForFill.staff.name}｜{selectedCellForFill.dateStr}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedCellForFill(null)}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-blue-200 hover:bg-blue-100 transition-colors"
+            >
+              取消選取
+            </button>
           </div>
         )}
       </div>
@@ -1248,16 +1294,36 @@ const callGemini = async (prompt, systemInstruction = "") => {
                         {daysInMonth.map(d => {
                           const cellData = schedule[staff.id]?.[d.date];
                           const val = typeof cellData === 'object' && cellData !== null ? (cellData?.value || '') : (cellData || '');
+                          const isSelected = selectedCellForFill?.staff?.id === staff.id && selectedCellForFill?.dateStr === d.date;
                           return (
                             <td
                               key={d.date}
-                              className="border-r p-0"
-                              style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
+                              className={`border-r p-0 cursor-pointer relative ${isSelected ? 'z-10' : ''}`}
+                              style={{
+                                backgroundColor: isSelected
+                                  ? '#dbeafe'
+                                  : (d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent')),
+                                opacity: d.isHoliday || d.isWeekend || isSelected ? 0.95 : 1,
+                                boxShadow: isSelected ? 'inset 0 0 0 3px #2563eb, inset 0 0 0 6px rgba(255,255,255,0.85)' : 'none'
+                              }}
+                              onClick={() => {
+                                if (!val) {
+                                  setSelectedCellForFill({ staff, dateStr: d.date });
+                                } else {
+                                  setSelectedCellForFill(null);
+                                }
+                              }}
                             >
+                              {isSelected && (
+                                <div className="absolute inset-0 pointer-events-none">
+                                  <div className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-blue-600 ring-4 ring-blue-200"></div>
+                                </div>
+                              )}
                               <div className="relative">
                                 <select
                                   value={val}
                                   onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
                                   className={`w-full h-10 text-center bg-transparent border-none cursor-pointer text-sm font-bold appearance-none hover:bg-black/5 ${DICT.LEAVES.map(getCodePrefix).includes(getCodePrefix(val)) ? 'text-red-500' : 'text-slate-800'}`}
                                 >
                                   <option value=""></option>
@@ -1268,15 +1334,6 @@ const callGemini = async (prompt, systemInstruction = "") => {
                                     {DICT.LEAVES.map(l => <option key={l} value={l}>{l}</option>)}
                                   </optgroup>
                                 </select>
-                                {!val && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); openFillModal(staff, d.date); }}
-                                    className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white hover:bg-blue-700"
-                                  >
-                                    補
-                                  </button>
-                                )}
                               </div>
                             </td>
                           );
@@ -1321,7 +1378,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
             </tbody>
 
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
-              {['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16', 'totalLeave'].map((rowKey) => (
+              {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
                   <td className="sticky left-0 bg-slate-200 z-10 border-r p-3 w-24 min-w-[96px]"></td>
                   <td className="sticky left-[96px] bg-slate-200 z-10 border-r p-3 text-right text-xs font-bold text-slate-600 min-w-[144px]">
