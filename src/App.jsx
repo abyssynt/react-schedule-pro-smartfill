@@ -908,7 +908,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }));
   };
 
-  const getCellCode = (staffId, dateStr) => {
+  const getScheduleCellCode = (staffId, dateStr) => {
     const cellData = schedule[staffId]?.[dateStr];
     return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
   };
@@ -918,7 +918,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     let cursor = addDays(parseDateKey(dateStr), -1);
     while (true) {
       const key = formatDateKey(cursor);
-      const code = getCellCode(staffId, key);
+      const code = getScheduleCellCode(staffId, key);
       if (!isShiftCode(code)) break;
       count += 1;
       cursor = addDays(cursor, -1);
@@ -928,7 +928,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const canAssign = (staff, dateStr, shiftCode) => {
     const reasons = [];
-    const currentCode = getCellCode(staff.id, dateStr);
+    const currentCode = getScheduleCellCode(staff.id, dateStr);
     if (currentCode) {
       reasons.push('該格已有排班或休假代碼');
     }
@@ -945,7 +945,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
 
     const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-    const prevCode = getCellCode(staff.id, prevKey);
+    const prevCode = getScheduleCellCode(staff.id, prevKey);
     const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
     if (disallowed.includes(shiftCode)) {
       reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
@@ -964,7 +964,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const getShiftCountForStaff = (staffId, shiftCode) => {
-    return daysInMonth.reduce((sum, d) => sum + (getCellCode(staffId, d.date) === shiftCode ? 1 : 0), 0);
+    return daysInMonth.reduce((sum, d) => sum + (getScheduleCellCode(staffId, d.date) === shiftCode ? 1 : 0), 0);
   };
 
   const scoreCandidate = (staff, dateStr, shiftCode) => {
