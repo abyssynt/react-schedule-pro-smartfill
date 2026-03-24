@@ -1373,15 +1373,13 @@ const callGemini = async (prompt, systemInstruction = "") => {
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 cursor-pointer ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
+                              className={`border-r p-0 ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
-                              onClick={() => setSelectedGridCell({ staff, dateStr: d.date })}
                             >
                               <div className="relative">
                                 <select
                                   value={val}
                                   onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
                                   className={`w-full h-10 text-center bg-transparent border-none cursor-pointer text-sm font-bold appearance-none hover:bg-black/5 ${DICT.LEAVES.map(getCodePrefix).includes(getCodePrefix(val)) ? 'text-red-500' : 'text-slate-800'}`}
                                 >
                                   <option value=""></option>
@@ -1392,9 +1390,19 @@ const callGemini = async (prompt, systemInstruction = "") => {
                                     {DICT.LEAVES.map(l => <option key={l} value={l}>{l}</option>)}
                                   </optgroup>
                                 </select>
-                                {!val && (
-                                  <div className="absolute right-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-blue-400/70 pointer-events-none"></div>
-                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedGridCell({ staff, dateStr: d.date });
+                                  }}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-3.5 h-3.5 flex items-center justify-center"
+                                  aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
+                                  title={`選取 ${staff.name} ${d.date} 儲存格`}
+                                >
+                                  <span className={`w-2.5 h-2.5 rounded-full transition-all ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
+                                </button>
                               </div>
                             </td>
                           );
