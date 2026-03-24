@@ -317,6 +317,8 @@ const DEFAULT_SHIFT_BY_GROUP = {
   '大夜': 'N'
 };
 
+const AI_MAIN_SHIFTS = ['D', 'E', 'N'];
+
 const HOSPITAL_LEVEL_LABELS = {
   medical: '醫學中心',
   regional: '區域醫院',
@@ -611,7 +613,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return d.day >= aiConfig.dateRange.start && d.day <= aiConfig.dateRange.end;
       });
 
-      const restrictedGroup = aiConfig.targetShift ? getShiftGroupByCode(aiConfig.targetShift) : null;
+      const normalizedTargetShift = AI_MAIN_SHIFTS.includes(aiConfig.targetShift) ? aiConfig.targetShift : '';
+      const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
       const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
 
       const getScheduleCode = (snapshot, staffId, dateStr) => {
@@ -619,9 +622,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
       };
 
-      const setScheduleCode = (snapshot, staffId, dateStr, value) => {
+      const setScheduleCode = (snapshot, staffId, dateStr, value, source = 'auto') => {
         if (!snapshot[staffId]) snapshot[staffId] = {};
-        snapshot[staffId][dateStr] = value ? { value, source: 'auto' } : null;
+        snapshot[staffId][dateStr] = value ? { value, source } : null;
       };
 
       const getDemandType = (day) => (day.isWeekend || day.isHoliday) ? 'holiday' : 'weekday';
@@ -686,7 +689,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return daysInMonth.reduce((sum, d) => sum + (!getScheduleCode(snapshot, staffId, d.date) ? 1 : 0), 0);
       };
 
-      const canStillMeetRequiredLeavesAfterAssign = (snapshot, staffId, dateStr) => {
+      const canStillMeetRequiredLeavesAfterAssign = (snapshot, staffId) => {
+        const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
+        const remainingBlanks = getBlankCountFromSnapshot(snapshot, staffId);
+        const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
+        return remainingBlanks >= remainingLeavesNeeded;
+      };
+
+      const canStillMeetRequiredLeavesIfAssignShift = (snapshot, staffId) => {
         const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
         const remainingBlanks = getBlankCountFromSnapshot(snapshot, staffId);
         const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
@@ -704,6 +714,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return count;
       };
 
+      const getRecentLeavePressure = (snapshot, staffId, dateStr, lookback = 4) => {
+        let count = 0;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        for (let i = 0; i < lookback; i += 1) {
+          const code = getScheduleCode(snapshot, staffId, formatDateKey(cursor));
+          if (isLeaveCode(code)) count += 1;
+          cursor = addDays(cursor, -1);
+        }
+        return count;
+      };
+
       const getGroupLeaveLoad = (snapshot, dateStr, group) => {
         return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
           const code = getScheduleCode(snapshot, s.id, dateStr);
@@ -716,7 +737,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         score += (999 - getShiftCountFromSnapshot(snapshot, staff.id, shiftCode)) * SMART_RULES.fillPriorityWeights.sameShiftCount;
         score += (999 - getWorkCountFromSnapshot(snapshot, staff.id)) * SMART_RULES.fillPriorityWeights.totalShiftCount;
         if (getShiftGroupByCode(shiftCode) === (staff.group || '白班')) score += 100 * SMART_RULES.fillPriorityWeights.sameGroup;
-        score -= getRecentWorkPressure(snapshot, staff.id, dateStr) * 12;
+        score -= getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 18;
         return score;
       };
 
@@ -725,11 +746,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const workCount = getWorkCountFromSnapshot(snapshot, staff.id);
         const group = staff.group || '白班';
         const sameDayLeaveLoad = getGroupLeaveLoad(snapshot, dateStr, group);
+        const recentLeavePressure = getRecentLeavePressure(snapshot, staff.id, dateStr, 4);
         let score = 0;
         score += leaveDeficit * 100;
         score += workCount * 5;
-        score += getRecentWorkPressure(snapshot, staff.id, dateStr) * 20;
-        score -= sameDayLeaveLoad * 15;
+        score += getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 20;
+        score -= sameDayLeaveLoad * 25;
+        score -= recentLeavePressure * 12;
         return score;
       };
 
@@ -737,8 +760,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         for (const group of SHIFT_GROUPS) {
           if (restrictedGroup && restrictedGroup !== group) continue;
 
-          const shiftCode = aiConfig.targetShift && getShiftGroupByCode(aiConfig.targetShift) === group
-            ? aiConfig.targetShift
+          const shiftCode = normalizedTargetShift && getShiftGroupByCode(normalizedTargetShift) === group
+            ? normalizedTargetShift
             : DEFAULT_SHIFT_BY_GROUP[group];
 
           const demand = getDemandForGroup(day, group);
@@ -746,48 +769,52 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           const needed = Math.max(0, demand - alreadyAssigned);
 
           const groupStaffs = staffs.filter(s => (s.group || '白班') === group && targetStaffIds.has(s.id));
+          const groupStaffIds = new Set(groupStaffs.map(s => s.id));
 
-          const assignableCandidates = groupStaffs
-            .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
-            .map(staff => {
-              const result = canAssignWithSnapshot(mergedSchedule, staff, day.date, shiftCode);
-              const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesAfterAssign(mergedSchedule, staff.id, day.date) : false;
-              return {
-                staff,
-                allowed: result.allowed && canKeepLeaveTarget,
-                score: result.allowed && canKeepLeaveTarget ? scoreCandidateWithSnapshot(mergedSchedule, staff, day.date, shiftCode) : -1
-              };
-            })
-            .filter(item => item.allowed)
-            .sort((a, b) => b.score - a.score);
+          // 逐格補主班別，補到需求就停
+          for (let slot = 0; slot < needed; slot += 1) {
+            const assignableCandidates = groupStaffs
+              .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
+              .map(staff => {
+                const result = canAssignWithSnapshot(mergedSchedule, staff, day.date, shiftCode);
+                const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesIfAssignShift(mergedSchedule, staff.id) : false;
+                return {
+                  staff,
+                  allowed: result.allowed && canKeepLeaveTarget,
+                  score: result.allowed && canKeepLeaveTarget ? scoreCandidateWithSnapshot(mergedSchedule, staff, day.date, shiftCode) : -1
+                };
+              })
+              .filter(item => item.allowed)
+              .sort((a, b) => b.score - a.score);
 
-          const picked = assignableCandidates.slice(0, needed);
-          picked.forEach(item => {
-            setScheduleCode(mergedSchedule, item.staff.id, day.date, shiftCode);
+            if (assignableCandidates.length === 0) {
+              summary.skipped += 1;
+              continue;
+            }
+
+            const picked = assignableCandidates[0];
+            setScheduleCode(mergedSchedule, picked.staff.id, day.date, shiftCode, 'auto');
             summary.workFilled += 1;
-          });
+          }
 
-          if (picked.length < needed) summary.skipped += (needed - picked.length);
-
-          const remainingBlanks = groupStaffs.filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date));
-          const groupSize = Math.max(1, groupStaffs.length);
-          const maxLeaveForDay = Math.max(1, Math.floor(groupSize / 2));
-          const leaveCandidates = remainingBlanks
+          // 需求已滿後，只替休假不足者補 off；其他空白保留
+          const leaveCandidates = groupStaffs
+            .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
             .filter(staff => getLeaveCountFromSnapshot(mergedSchedule, staff.id) < requiredLeaves)
-            .map(staff => ({
-              staff,
-              score: scoreLeaveCandidateWithSnapshot(mergedSchedule, staff, day.date)
-            }))
+            .map(staff => ({ staff, score: scoreLeaveCandidateWithSnapshot(mergedSchedule, staff, day.date) }))
             .sort((a, b) => b.score - a.score);
 
-          leaveCandidates.forEach(item => {
+          if (leaveCandidates.length > 0) {
             const currentLeaveLoad = getGroupLeaveLoad(mergedSchedule, day.date, group);
-            if (currentLeaveLoad >= maxLeaveForDay) return;
-            if (getScheduleCode(mergedSchedule, item.staff.id, day.date)) return;
-            if (getLeaveCountFromSnapshot(mergedSchedule, item.staff.id) >= requiredLeaves) return;
-            setScheduleCode(mergedSchedule, item.staff.id, day.date, 'off');
-            summary.leaveFilled += 1;
-          });
+            const maxLeaveForDay = Math.max(1, Math.floor(Math.max(1, groupStaffIds.size) / 2));
+            if (currentLeaveLoad < maxLeaveForDay) {
+              const bestLeaveCandidate = leaveCandidates[0];
+              if (bestLeaveCandidate && canStillMeetRequiredLeavesAfterAssign(mergedSchedule, bestLeaveCandidate.staff.id)) {
+                setScheduleCode(mergedSchedule, bestLeaveCandidate.staff.id, day.date, 'off', 'auto');
+                summary.leaveFilled += 1;
+              }
+            }
+          }
         }
       }
 
@@ -985,39 +1012,6 @@ const callGemini = async (prompt, systemInstruction = "") => {
     return daysInMonth.reduce((sum, d) => sum + (getCellCode(staffId, d.date) === shiftCode ? 1 : 0), 0);
   };
 
-  const getLeaveCountForStaff = (staffId) => {
-    return daysInMonth.reduce((sum, d) => sum + (isLeaveCode(getCellCode(staffId, d.date)) ? 1 : 0), 0);
-  };
-
-  const getBlankCountForStaff = (staffId) => {
-    return daysInMonth.reduce((sum, d) => sum + (!getCellCode(staffId, d.date) ? 1 : 0), 0);
-  };
-
-  const canStillMeetRequiredLeavesAfterAssign = (staffId) => {
-    const currentLeaves = getLeaveCountForStaff(staffId);
-    const remainingBlanks = getBlankCountForStaff(staffId);
-    const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
-    return (remainingBlanks - 1) >= remainingLeavesNeeded;
-  };
-
-  const getRecentWorkPressure = (staffId, dateStr, lookback = 3) => {
-    let count = 0;
-    let cursor = addDays(parseDateKey(dateStr), -1);
-    for (let i = 0; i < lookback; i += 1) {
-      const code = getCellCode(staffId, formatDateKey(cursor));
-      if (isShiftCode(code)) count += 1;
-      cursor = addDays(cursor, -1);
-    }
-    return count;
-  };
-
-  const getGroupLeaveLoad = (dateStr, group) => {
-    return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
-      const code = getCellCode(s.id, dateStr);
-      return sum + (isLeaveCode(code) ? 1 : 0);
-    }, 0);
-  };
-
   const scoreCandidate = (staff, dateStr, shiftCode) => {
     let score = 0;
     const stats = getStaffStats(staff.id);
@@ -1026,42 +1020,78 @@ const callGemini = async (prompt, systemInstruction = "") => {
     if (getShiftGroupByCode(shiftCode) === (staff.group || '白班')) {
       score += 100 * SMART_RULES.fillPriorityWeights.sameGroup;
     }
-    score -= getRecentWorkPressure(staff.id, dateStr) * 12;
     return score;
   };
 
   const openFillModal = (staff, dateStr) => {
-    const shiftCode = DEFAULT_SHIFT_BY_GROUP[staff.group || '白班'];
-    const result = canAssign(staff, dateStr, shiftCode);
-    const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesAfterAssign(staff.id) : false;
+    const group = staff.group || '白班';
+    const shiftCode = DEFAULT_SHIFT_BY_GROUP[group];
+    const dayInfo = daysInMonth.find(d => d.date === dateStr);
+    const demand = dayInfo ? Number(staffingConfig?.requiredStaffing?.[(dayInfo.isWeekend || dayInfo.isHoliday) ? 'holiday' : 'weekday']?.[GROUP_TO_DEMAND_KEY[group]] || 0) : 0;
+    const alreadyAssigned = staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
+      const code = getCellCode(s.id, dateStr);
+      return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
+    }, 0);
+    const leaveCount = daysInMonth.reduce((sum, d) => sum + (isLeaveCode(getCellCode(staff.id, d.date)) ? 1 : 0), 0);
+    const leaveDeficit = Math.max(0, requiredLeaves - leaveCount);
 
-    const candidates = result.allowed && canKeepLeaveTarget
-      ? [{
-          type: 'self-shift',
-          staffId: staff.id,
-          staffName: staff.name,
-          group: staff.group,
-          shiftCode,
-          allowed: true,
-          reasons: [],
-          score: scoreCandidate(staff, dateStr, shiftCode)
-        }]
-      : [];
+    const shiftResult = canAssign(staff, dateStr, shiftCode);
+    const currentLeaves = leaveCount;
+    const remainingBlanks = daysInMonth.reduce((sum, d) => sum + (!getCellCode(staff.id, d.date) ? 1 : 0), 0);
+    const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
+    const canKeepLeaveTarget = (remainingBlanks - 1) >= remainingLeavesNeeded;
+
+    const candidates = [];
+
+    if (alreadyAssigned < demand && shiftResult.allowed && canKeepLeaveTarget) {
+      const reasonBits = [
+        `${group}缺額尚未補滿`,
+        `${shiftCode} 為此群組主班別`
+      ];
+      candidates.push({
+        type: 'self-shift',
+        staffId: staff.id,
+        staffName: staff.name,
+        group,
+        shiftCode,
+        allowed: true,
+        score: scoreCandidate(staff, dateStr, shiftCode),
+        reasons: reasonBits
+      });
+    }
+
+    if (alreadyAssigned >= demand && leaveDeficit > 0) {
+      const sameDayLeaveLoad = staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => sum + (isLeaveCode(getCellCode(s.id, dateStr)) ? 1 : 0), 0);
+      const recentWorkPressure = (() => {
+        let count = 0;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        for (let i = 0; i < 3; i += 1) {
+          if (isShiftCode(getCellCode(staff.id, formatDateKey(cursor)))) count += 1;
+          cursor = addDays(cursor, -1);
+        }
+        return count;
+      })();
+      const offScore = leaveDeficit * 100 + recentWorkPressure * 20 - sameDayLeaveLoad * 25;
+      candidates.push({
+        type: 'self-leave',
+        staffId: staff.id,
+        staffName: staff.name,
+        group,
+        shiftCode: 'off',
+        allowed: true,
+        score: offScore,
+        reasons: ['本月休假尚未達標', '當日群組需求已滿，優先補休']
+      });
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
 
     setSelectedFillCell({ staffId: staff.id, staffName: staff.name, dateStr, group: staff.group });
     setFillCandidates(candidates);
     setShowFillModal(true);
-
-    if (!result.allowed) {
-      setAiFeedback(`⚠️ ${staff.name} 在 ${dateStr} 無法補 ${shiftCode}：${result.reasons.join('、')}`);
-    } else if (!canKeepLeaveTarget) {
-      setAiFeedback(`⚠️ ${staff.name} 在 ${dateStr} 若再補班，將無法達成本月應休天數`);
-    } else {
-      setAiFeedback(`🧩 已選取 ${staff.name} ${dateStr}，系統建議補 ${shiftCode}`);
-    }
   };
 
-  const openSelectedCellFillModal = () => {
+const openSelectedCellFillModal = () => {
     if (!selectedGridCell) return;
     openFillModal(selectedGridCell.staff, selectedGridCell.dateStr);
   };
@@ -1325,8 +1355,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
                 className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
               >
                 <option value="">依群組需求自動補空</option>
-                {DICT.SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
-                <option value="off">休假 (off)</option>
+                {AI_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
               </select>
             </div>
 
@@ -1596,6 +1625,9 @@ const callGemini = async (prompt, systemInstruction = "") => {
                   <div>
                     <div className="font-black text-slate-800">{candidate.staffName} → {candidate.shiftCode}</div>
                     <div className="text-xs text-slate-500 mt-1">群組：{candidate.group}｜排序分數：{candidate.score}</div>
+                    {candidate.reasons?.length > 0 && (
+                      <div className="text-xs text-slate-500 mt-1">{candidate.reasons.join('｜')}</div>
+                    )}
                   </div>
                   <button onClick={() => applyFillCandidate(candidate)} className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700">
                     {index === 0 ? '選擇推薦' : '選擇'}
