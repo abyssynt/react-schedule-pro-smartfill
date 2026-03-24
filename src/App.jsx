@@ -619,9 +619,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
       };
 
-      const setScheduleCode = (snapshot, staffId, dateStr, value) => {
+      const setScheduleCode = (snapshot, staffId, dateStr, value, source = 'auto') => {
         if (!snapshot[staffId]) snapshot[staffId] = {};
-        snapshot[staffId][dateStr] = value ? { value, source: 'auto' } : null;
+        snapshot[staffId][dateStr] = value ? { value, source } : null;
       };
 
       const getDemandType = (day) => (day.isWeekend || day.isHoliday) ? 'holiday' : 'weekday';
@@ -631,10 +631,22 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return Number(staffingConfig?.requiredStaffing?.[bucket]?.[key] || 0);
       };
 
+      const isLeaveCodeLocal = (code) => {
+        const prefix = getCodePrefix(code);
+        return !!prefix && SMART_RULES.blockedLeavePrefixes.includes(prefix);
+      };
+
       const getAssignedCountByGroup = (snapshot, dateStr, group) => {
         return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
           const code = getScheduleCode(snapshot, s.id, dateStr);
           return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
+        }, 0);
+      };
+
+      const getGroupLeaveLoad = (snapshot, dateStr, group) => {
+        return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
+          const code = getScheduleCode(snapshot, s.id, dateStr);
+          return sum + (isLeaveCodeLocal(code) ? 1 : 0);
         }, 0);
       };
 
@@ -649,6 +661,32 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           cursor = addDays(cursor, -1);
         }
         return count;
+      };
+
+      const getWorkCountFromSnapshot = (snapshot, staffId) => {
+        return daysInMonth.reduce((sum, d) => sum + (isShiftCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
+      };
+
+      const getShiftCountFromSnapshot = (snapshot, staffId, shiftCode) => {
+        return daysInMonth.reduce((sum, d) => sum + (getScheduleCode(snapshot, staffId, d.date) === shiftCode ? 1 : 0), 0);
+      };
+
+      const getLeaveCountFromSnapshot = (snapshot, staffId) => {
+        return daysInMonth.reduce((sum, d) => sum + (isLeaveCodeLocal(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
+      };
+
+      const getRemainingBlankCountFromSnapshot = (snapshot, staffId, excludeDateStr = null) => {
+        return daysInMonth.reduce((sum, d) => {
+          if (excludeDateStr && d.date === excludeDateStr) return sum;
+          return sum + (!getScheduleCode(snapshot, staffId, d.date) ? 1 : 0);
+        }, 0);
+      };
+
+      const canStillMeetRequiredLeavesAfterAssign = (snapshot, staffId, dateStr) => {
+        const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
+        const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
+        const remainingBlankAfterAssign = getRemainingBlankCountFromSnapshot(snapshot, staffId, dateStr);
+        return remainingBlankAfterAssign >= remainingLeavesNeeded;
       };
 
       const canAssignWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
@@ -667,15 +705,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff.id, dateStr);
         if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
         if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) reasons.push('懷孕標記人員不可排 N / 夜8-8');
+        if (!canStillMeetRequiredLeavesAfterAssign(snapshot, staff.id, dateStr)) reasons.push('若再補上班，將無法達到本月應休天數');
         return { allowed: reasons.length === 0, reasons };
       };
 
-      const getWorkCountFromSnapshot = (snapshot, staffId) => {
-        return daysInMonth.reduce((sum, d) => sum + (isShiftCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
-      };
-
-      const getShiftCountFromSnapshot = (snapshot, staffId, shiftCode) => {
-        return daysInMonth.reduce((sum, d) => sum + (getScheduleCode(snapshot, staffId, d.date) === shiftCode ? 1 : 0), 0);
+      const getRecentWorkPressure = (snapshot, staffId, dateStr) => {
+        return countConsecutiveBeforeFromSnapshot(snapshot, staffId, dateStr);
       };
 
       const scoreCandidateWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
@@ -683,6 +718,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         score += (999 - getShiftCountFromSnapshot(snapshot, staff.id, shiftCode)) * SMART_RULES.fillPriorityWeights.sameShiftCount;
         score += (999 - getWorkCountFromSnapshot(snapshot, staff.id)) * SMART_RULES.fillPriorityWeights.totalShiftCount;
         if (getShiftGroupByCode(shiftCode) === (staff.group || '白班')) score += 100 * SMART_RULES.fillPriorityWeights.sameGroup;
+
+        const recentPressure = getRecentWorkPressure(snapshot, staff.id, dateStr);
+        score -= recentPressure * 12;
+        return score;
+      };
+
+      const scoreLeaveCandidateWithSnapshot = (snapshot, staff, dateStr) => {
+        const currentLeaves = getLeaveCountFromSnapshot(snapshot, staff.id);
+        const currentWork = getWorkCountFromSnapshot(snapshot, staff.id);
+        const group = staff.group || '白班';
+        const groupLeaveLoad = getGroupLeaveLoad(snapshot, dateStr, group);
+        let score = 0;
+        score += (999 - currentLeaves) * 5;
+        score += currentWork * 2;
+        score -= groupLeaveLoad * 8;
         return score;
       };
 
@@ -715,15 +765,30 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
           const picked = assignableCandidates.slice(0, needed);
           picked.forEach(item => {
-            setScheduleCode(mergedSchedule, item.staff.id, day.date, shiftCode);
+            setScheduleCode(mergedSchedule, item.staff.id, day.date, shiftCode, 'auto');
             summary.workFilled += 1;
           });
 
           if (picked.length < needed) summary.skipped += (needed - picked.length);
+        }
+      }
 
-          const remainingBlanks = groupStaffs.filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date));
-          remainingBlanks.forEach(staff => {
-            setScheduleCode(mergedSchedule, staff.id, day.date, 'off');
+      // 第二階段：僅為休假不足者補 off，不將所有剩餘空白全部補滿
+      for (const day of targetDays) {
+        for (const group of SHIFT_GROUPS) {
+          if (restrictedGroup && restrictedGroup !== group) continue;
+
+          const groupStaffs = staffs.filter(s => (s.group || '白班') === group && targetStaffIds.has(s.id));
+          const leaveCandidates = groupStaffs
+            .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
+            .filter(staff => getLeaveCountFromSnapshot(mergedSchedule, staff.id) < requiredLeaves)
+            .map(staff => ({ staff, score: scoreLeaveCandidateWithSnapshot(mergedSchedule, staff, day.date) }))
+            .sort((a, b) => b.score - a.score);
+
+          leaveCandidates.forEach(item => {
+            if (getScheduleCode(mergedSchedule, item.staff.id, day.date)) return;
+            if (getLeaveCountFromSnapshot(mergedSchedule, item.staff.id) >= requiredLeaves) return;
+            setScheduleCode(mergedSchedule, item.staff.id, day.date, 'off', 'auto');
             summary.leaveFilled += 1;
           });
         }
