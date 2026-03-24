@@ -725,6 +725,28 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return count;
       };
 
+      const getNearbyLeavePressure = (snapshot, staffId, dateStr, radius = 2) => {
+        let count = 0;
+        const center = parseDateKey(dateStr);
+        for (let offset = -radius; offset <= radius; offset += 1) {
+          if (offset === 0) continue;
+          const key = formatDateKey(addDays(center, offset));
+          const code = getScheduleCode(snapshot, staffId, key);
+          if (isLeaveCode(code)) count += 1;
+        }
+        return count;
+      };
+
+      const getDaysSinceLastLeave = (snapshot, staffId, dateStr, maxLookback = 10) => {
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        for (let i = 1; i <= maxLookback; i += 1) {
+          const code = getScheduleCode(snapshot, staffId, formatDateKey(cursor));
+          if (isLeaveCode(code)) return i;
+          cursor = addDays(cursor, -1);
+        }
+        return maxLookback + 1;
+      };
+
       const getGroupLeaveLoad = (snapshot, dateStr, group) => {
         return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
           const code = getScheduleCode(snapshot, s.id, dateStr);
@@ -747,12 +769,16 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const group = staff.group || '白班';
         const sameDayLeaveLoad = getGroupLeaveLoad(snapshot, dateStr, group);
         const recentLeavePressure = getRecentLeavePressure(snapshot, staff.id, dateStr, 4);
+        const nearbyLeavePressure = getNearbyLeavePressure(snapshot, staff.id, dateStr, 2);
+        const daysSinceLastLeave = getDaysSinceLastLeave(snapshot, staff.id, dateStr, 10);
         let score = 0;
-        score += leaveDeficit * 100;
+        score += leaveDeficit * 120;
         score += workCount * 5;
-        score += getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 20;
-        score -= sameDayLeaveLoad * 25;
-        score -= recentLeavePressure * 12;
+        score += getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 18;
+        score += Math.min(daysSinceLastLeave, 10) * 8;
+        score -= sameDayLeaveLoad * 30;
+        score -= recentLeavePressure * 18;
+        score -= nearbyLeavePressure * 28;
         return score;
       };
 
@@ -806,7 +832,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
           if (leaveCandidates.length > 0) {
             const currentLeaveLoad = getGroupLeaveLoad(mergedSchedule, day.date, group);
-            const maxLeaveForDay = Math.max(1, Math.floor(Math.max(1, groupStaffIds.size) / 2));
+            const maxLeaveForDay = Math.max(0, groupStaffIds.size - demand);
             if (currentLeaveLoad < maxLeaveForDay) {
               const bestLeaveCandidate = leaveCandidates[0];
               if (bestLeaveCandidate && canStillMeetRequiredLeavesAfterAssign(mergedSchedule, bestLeaveCandidate.staff.id)) {
