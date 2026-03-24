@@ -1327,7 +1327,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
                           </td>
                         )}
 
-                        <td className="sticky left-[80px] bg-white z-10 border-r px-2 py-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
+                        <td className="sticky left-[80px] bg-white z-30 border-r px-2 py-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
                           <div className="flex items-center gap-2">
                             <div className="flex flex-col items-center justify-center shrink-0 w-6">
                               <button
@@ -1373,7 +1373,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
+                              className={`border-r p-0 relative overflow-hidden ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                             >
                               <div className="relative">
@@ -1397,7 +1397,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
                                     e.stopPropagation();
                                     setSelectedGridCell({ staff, dateStr: d.date });
                                   }}
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-3.5 h-3.5 flex items-center justify-center"
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
                                   aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
                                   title={`選取 ${staff.name} ${d.date} 儲存格`}
                                 >
@@ -1421,7 +1421,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
                   })}
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
-                    <td className="sticky left-[80px] bg-white z-10 border-r px-2 py-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
+                    <td className="sticky left-[80px] bg-white z-30 border-r px-2 py-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
