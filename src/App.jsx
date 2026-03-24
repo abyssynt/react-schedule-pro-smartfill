@@ -985,6 +985,39 @@ const callGemini = async (prompt, systemInstruction = "") => {
     return daysInMonth.reduce((sum, d) => sum + (getCellCode(staffId, d.date) === shiftCode ? 1 : 0), 0);
   };
 
+  const getLeaveCountForStaff = (staffId) => {
+    return daysInMonth.reduce((sum, d) => sum + (isLeaveCode(getCellCode(staffId, d.date)) ? 1 : 0), 0);
+  };
+
+  const getBlankCountForStaff = (staffId) => {
+    return daysInMonth.reduce((sum, d) => sum + (!getCellCode(staffId, d.date) ? 1 : 0), 0);
+  };
+
+  const canStillMeetRequiredLeavesAfterAssign = (staffId) => {
+    const currentLeaves = getLeaveCountForStaff(staffId);
+    const remainingBlanks = getBlankCountForStaff(staffId);
+    const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
+    return (remainingBlanks - 1) >= remainingLeavesNeeded;
+  };
+
+  const getRecentWorkPressure = (staffId, dateStr, lookback = 3) => {
+    let count = 0;
+    let cursor = addDays(parseDateKey(dateStr), -1);
+    for (let i = 0; i < lookback; i += 1) {
+      const code = getCellCode(staffId, formatDateKey(cursor));
+      if (isShiftCode(code)) count += 1;
+      cursor = addDays(cursor, -1);
+    }
+    return count;
+  };
+
+  const getGroupLeaveLoad = (dateStr, group) => {
+    return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
+      const code = getCellCode(s.id, dateStr);
+      return sum + (isLeaveCode(code) ? 1 : 0);
+    }, 0);
+  };
+
   const scoreCandidate = (staff, dateStr, shiftCode) => {
     let score = 0;
     const stats = getStaffStats(staff.id);
@@ -993,28 +1026,39 @@ const callGemini = async (prompt, systemInstruction = "") => {
     if (getShiftGroupByCode(shiftCode) === (staff.group || '白班')) {
       score += 100 * SMART_RULES.fillPriorityWeights.sameGroup;
     }
+    score -= getRecentWorkPressure(staff.id, dateStr) * 12;
     return score;
   };
 
   const openFillModal = (staff, dateStr) => {
-    const groupShiftOptions = DICT.SHIFTS.filter((shift) => getShiftGroupByCode(shift) === (staff.group || '白班'));
-    const candidates = groupShiftOptions.map((shiftCode) => {
-      const result = canAssign(staff, dateStr, shiftCode);
-      return {
-        type: 'self-shift',
-        staffId: staff.id,
-        staffName: staff.name,
-        group: staff.group,
-        shiftCode,
-        allowed: result.allowed,
-        reasons: result.reasons,
-        score: result.allowed ? scoreCandidate(staff, dateStr, shiftCode) : -1
-      };
-    }).filter((item) => item.allowed).sort((a, b) => b.score - a.score);
+    const shiftCode = DEFAULT_SHIFT_BY_GROUP[staff.group || '白班'];
+    const result = canAssign(staff, dateStr, shiftCode);
+    const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesAfterAssign(staff.id) : false;
+
+    const candidates = result.allowed && canKeepLeaveTarget
+      ? [{
+          type: 'self-shift',
+          staffId: staff.id,
+          staffName: staff.name,
+          group: staff.group,
+          shiftCode,
+          allowed: true,
+          reasons: [],
+          score: scoreCandidate(staff, dateStr, shiftCode)
+        }]
+      : [];
 
     setSelectedFillCell({ staffId: staff.id, staffName: staff.name, dateStr, group: staff.group });
     setFillCandidates(candidates);
     setShowFillModal(true);
+
+    if (!result.allowed) {
+      setAiFeedback(`⚠️ ${staff.name} 在 ${dateStr} 無法補 ${shiftCode}：${result.reasons.join('、')}`);
+    } else if (!canKeepLeaveTarget) {
+      setAiFeedback(`⚠️ ${staff.name} 在 ${dateStr} 若再補班，將無法達成本月應休天數`);
+    } else {
+      setAiFeedback(`🧩 已選取 ${staff.name} ${dateStr}，系統建議補 ${shiftCode}`);
+    }
   };
 
   const openSelectedCellFillModal = () => {
