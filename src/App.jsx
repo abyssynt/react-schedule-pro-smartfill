@@ -792,14 +792,24 @@ const callGemini = async (prompt, systemInstruction = "") => {
   };
 
   const getDailyStats = (dateStr) => {
-    const stats = { D: 0, E: 0, N: 0, '白8-8': 0, '夜8-8': 0, '8-12': 0, '12-16': 0, totalLeave: 0 };
+    const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
+
     staffs.forEach(staff => {
       const cellData = schedule[staff.id]?.[dateStr];
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
-      if (DICT.SHIFTS.includes(code)) stats[code] += 1;
-      else if (DICT.LEAVES.includes(code)) stats.totalLeave += 1;
+
+      if (['D', '白8-8', '8-12', '12-16'].includes(code)) {
+        stats.D += 1;
+      } else if (['E', '夜8-8'].includes(code)) {
+        stats.E += 1;
+      } else if (code === 'N') {
+        stats.N += 1;
+      } else if (DICT.LEAVES.includes(code)) {
+        stats.totalLeave += 1;
+      }
     });
+
     return stats;
   };
 
@@ -1429,7 +1439,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
             </tbody>
 
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
-              {['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16', 'totalLeave'].map((rowKey) => (
+              {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
                   <td className="sticky left-0 bg-slate-200 z-10 border-r p-3 w-24 min-w-[96px]"></td>
                   <td className="sticky left-[96px] bg-slate-200 z-10 border-r p-3 text-right text-xs font-bold text-slate-600 min-w-[144px]">
