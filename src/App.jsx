@@ -5,7 +5,7 @@ import {
   ArrowUp, ArrowDown, Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
-  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2
+  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2
 } from 'lucide-react';
 
 // ==========================================
@@ -361,6 +361,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [selectedFillCell, setSelectedFillCell] = useState(null);
   const [fillCandidates, setFillCandidates] = useState([]);
   const [showFillModal, setShowFillModal] = useState(false);
+  const [selectedGridCell, setSelectedGridCell] = useState(null);
+  const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
 
   // AI 指定排班設定
   const [aiConfig, setAiConfig] = useState({
@@ -850,6 +852,13 @@ const callGemini = async (prompt, systemInstruction = "") => {
     return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
   };
 
+  const getCellSource = (staffId, dateStr) => {
+    const cellData = schedule[staffId]?.[dateStr];
+    if (!cellData) return '';
+    if (typeof cellData === 'object' && cellData !== null) return cellData.source || 'manual';
+    return 'manual';
+  };
+
   const countConsecutiveWorkDaysBefore = (staffId, dateStr) => {
     let count = 0;
     let cursor = addDays(parseDateKey(dateStr), -1);
@@ -936,12 +945,66 @@ const callGemini = async (prompt, systemInstruction = "") => {
     setShowFillModal(true);
   };
 
+  const openSelectedCellFillModal = () => {
+    if (!selectedGridCell) return;
+    openFillModal(selectedGridCell.staff, selectedGridCell.dateStr);
+  };
+
+  const clearSelectedCell = () => {
+    if (!selectedGridCell) return;
+    const { staff, dateStr } = selectedGridCell;
+    const currentCode = getCellCode(staff.id, dateStr);
+    if (!currentCode) return;
+    if (!window.confirm(`確定清除此格內容？\n${staff.name}｜${dateStr}｜${currentCode}`)) return;
+
+    setSchedule(prev => ({
+      ...prev,
+      [staff.id]: { ...prev[staff.id], [dateStr]: null }
+    }));
+    setSelectedGridCell(null);
+    setAiFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
+  };
+
+  const clearRangeCells = () => {
+    if (aiConfig.selectedStaffs.length === 0) {
+      setAiFeedback('⚠️ 請先選擇要清除的人員');
+      return;
+    }
+
+    const start = Number(aiConfig.dateRange.start || 1);
+    const end = Number(aiConfig.dateRange.end || 31);
+    const targetStaffIds = new Set(aiConfig.selectedStaffs);
+
+    let cleared = 0;
+    setSchedule(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      staffs.forEach(staff => {
+        if (!targetStaffIds.has(staff.id)) return;
+        daysInMonth.forEach(day => {
+          if (day.day < start || day.day > end) return;
+          const cellData = next[staff.id]?.[day.date];
+          if (!cellData) return;
+
+          const source = typeof cellData === 'object' && cellData !== null ? (cellData.source || 'manual') : 'manual';
+          if (rangeClearMode === 'autoOnly' && source !== 'auto') return;
+
+          next[staff.id][day.date] = null;
+          cleared += 1;
+        });
+      });
+      return next;
+    });
+
+    setAiFeedback(cleared > 0 ? `🧹 已清除 ${cleared} 格內容` : 'ℹ️ 指定範圍內沒有可清除的內容');
+  };
+
   const applyFillCandidate = (candidate) => {
     if (!selectedFillCell) return;
     handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode);
     setShowFillModal(false);
     setSelectedFillCell(null);
     setFillCandidates([]);
+    setSelectedGridCell(null);
   };
 
   const addStaff = (group = '白班') => {
@@ -1045,12 +1108,28 @@ const callGemini = async (prompt, systemInstruction = "") => {
 
             <div className="w-px h-8 bg-slate-200 mx-2 hidden sm:block"></div>
 
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
               <button onClick={() => handleAiAutoSchedule(false)} disabled={isAiLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
                 {isAiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 全月補空
               </button>
               <button onClick={() => setShowAiControl(!showAiControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showAiControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
                 <Calendar size={14} /> 指定補空
+              </button>
+              <button
+                type="button"
+                onClick={openSelectedCellFillModal}
+                disabled={!selectedGridCell}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
+              >
+                <Check size={14} /> 補此格
+              </button>
+              <button
+                type="button"
+                onClick={clearSelectedCell}
+                disabled={!selectedGridCell}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
+              >
+                <Trash2 size={14} /> 清除此格
               </button>
             </div>
           </div>
@@ -1061,143 +1140,108 @@ const callGemini = async (prompt, systemInstruction = "") => {
             {aiFeedback}
           </div>
         )}
+        {selectedGridCell && (
+          <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
+            <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
+            <button
+              type="button"
+              onClick={() => setSelectedGridCell(null)}
+              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
+            >
+              取消選取
+            </button>
+          </div>
+        )}
       </div>
 
       {showAiControl && (
-        <div className="max-w-[88vw] w-full mx-auto mt-4 mb-6">
-          <div className="rounded-3xl border border-blue-200 bg-blue-50/70 shadow-sm overflow-hidden animate-fade-in-down">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-blue-100 bg-white/60">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-blue-600" />
-                <div>
-                  <h3 className="text-lg font-bold text-blue-900">指定補空設定</h3>
-                  <p className="text-sm text-blue-700">先選人員，再設定日期範圍與指定班別</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="text-sm text-slate-600 bg-white border border-blue-100 rounded-xl px-3 py-2">
-                  已選 <span className="font-bold text-blue-700">{aiConfig.selectedStaffs.length}</span> 人
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAiControl(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition"
-                >
-                  收合
-                </button>
+        <div className="max-w-[95vw] mx-auto mb-6 bg-blue-50 border border-blue-200 p-6 rounded-2xl shadow-sm animate-fade-in-down">
+          <h3 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Sparkles size={18} /> 指定補空設定</h3>
+          <div className="grid lg:grid-cols-4 gap-6">
+            <div>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">1. 選擇人員（補空範圍）</label>
+              <div className="flex flex-wrap gap-2">
+                {staffs.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      const next = aiConfig.selectedStaffs.includes(s.id)
+                        ? aiConfig.selectedStaffs.filter(id => id !== s.id)
+                        : [...aiConfig.selectedStaffs, s.id];
+                      setAiConfig({ ...aiConfig, selectedStaffs: next });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${aiConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-100'}`}
+                  >
+                    {s.name}（{s.group || '白班'}）
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="p-6 grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6">
-              <div className="rounded-2xl border border-blue-100 bg-white p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-bold text-blue-800">1. 選擇人員（補空範圍）</h4>
-                  <button
-                    type="button"
-                    onClick={() => setAiConfig({
-                      ...aiConfig,
-                      selectedStaffs: aiConfig.selectedStaffs.length === staffs.length ? [] : staffs.map(s => s.id)
-                    })}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    {aiConfig.selectedStaffs.length === staffs.length ? '全部取消' : '全選'}
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-3">
-                  {staffs.map((s) => {
-                    const isSelected = aiConfig.selectedStaffs.includes(s.id);
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          const next = isSelected
-                            ? aiConfig.selectedStaffs.filter(id => id !== s.id)
-                            : [...aiConfig.selectedStaffs, s.id];
-                          setAiConfig({ ...aiConfig, selectedStaffs: next });
-                        }}
-                        className={`h-11 px-4 rounded-xl border text-sm font-medium text-left transition-all ${
-                          isSelected
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                            : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'
-                        }`}
-                      >
-                        {s.name}（{s.group || '白班'}）
-                      </button>
-                    );
-                  })}
-                </div>
+            <div>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">2. 日期範圍 ({aiConfig.dateRange.start} ~ {aiConfig.dateRange.end} 號)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={aiConfig.dateRange.start}
+                  onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
+                  className="w-full border-blue-200 border p-2 rounded-lg text-sm text-center font-bold"
+                />
+                <span>至</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={aiConfig.dateRange.end}
+                  onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
+                  className="w-full border-blue-200 border p-2 rounded-lg text-sm text-center font-bold"
+                />
               </div>
+            </div>
 
-              <div className="rounded-2xl border border-blue-100 bg-white p-5 space-y-5">
-                <div>
-                  <h4 className="text-sm font-bold text-blue-800 mb-3">2. 日期範圍</h4>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={aiConfig.dateRange.start}
-                      onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
-                      className="w-28 h-12 rounded-xl border border-blue-200 bg-slate-50 px-4 text-center text-lg font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    />
-                    <span className="text-slate-500 font-medium">至</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={aiConfig.dateRange.end}
-                      onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
-                      className="w-28 h-12 rounded-xl border border-blue-200 bg-slate-50 px-4 text-center text-lg font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    />
-                  </div>
-                </div>
+            <div>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">3. 指定班別（選填）</label>
+              <select
+                value={aiConfig.targetShift}
+                onChange={(e) => setAiConfig({ ...aiConfig, targetShift: e.target.value })}
+                className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
+              >
+                <option value="">依群組需求自動補空</option>
+                {DICT.SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
+                <option value="off">休假 (off)</option>
+              </select>
+            </div>
 
-                <div>
-                  <h4 className="text-sm font-bold text-blue-800 mb-3">3. 指定班別（選填）</h4>
-                  <select
-                    value={aiConfig.targetShift}
-                    onChange={(e) => setAiConfig({ ...aiConfig, targetShift: e.target.value })}
-                    className="w-full h-12 rounded-xl border border-blue-200 bg-slate-50 px-4 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  >
-                    <option value="">依群組需求自動補空</option>
-                    {DICT.SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
-                    <option value="off">休假 (off)</option>
-                  </select>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  補空將只處理：
-                  <span className="font-semibold text-slate-800"> 已選人員 </span>
-                  與
-                  <span className="font-semibold text-slate-800"> 指定日期範圍內的空白格 </span>
-                  ，且不覆蓋已手動指定內容。
-                </div>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAiControl(false)}
-                    className="h-12 px-5 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition"
-                  >
-                    取消
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={isAiLoading || aiConfig.selectedStaffs.length === 0}
-                    onClick={() => handleAiAutoSchedule(true)}
-                    className={`h-12 px-6 rounded-xl font-bold transition ${
-                      isAiLoading || aiConfig.selectedStaffs.length === 0
-                        ? 'bg-slate-300 text-white cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
-                    }`}
-                  >
-                    {isAiLoading ? '套用中...' : '套用並補空'}
-                  </button>
-                </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">4. 範圍清除模式</label>
+                <select
+                  value={rangeClearMode}
+                  onChange={(e) => setRangeClearMode(e.target.value)}
+                  className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
+                >
+                  <option value="autoOnly">只清除自動補入內容</option>
+                  <option value="all">清除範圍內全部內容</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  disabled={isAiLoading || aiConfig.selectedStaffs.length === 0}
+                  onClick={() => handleAiAutoSchedule(true)}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
+                >
+                  {isAiLoading ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} 套用並補空
+                </button>
+                <button
+                  type="button"
+                  disabled={aiConfig.selectedStaffs.length === 0}
+                  onClick={clearRangeCells}
+                  className="w-full bg-white border border-red-200 text-red-600 hover:bg-red-50 font-black py-2 rounded-xl transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={18} /> 範圍清除
+                </button>
               </div>
             </div>
           </div>
@@ -1319,13 +1363,15 @@ const callGemini = async (prompt, systemInstruction = "") => {
                           return (
                             <td
                               key={d.date}
-                              className="border-r p-0"
+                              className={`border-r p-0 cursor-pointer ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
+                              onClick={() => setSelectedGridCell({ staff, dateStr: d.date })}
                             >
                               <div className="relative">
                                 <select
                                   value={val}
                                   onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
                                   className={`w-full h-10 text-center bg-transparent border-none cursor-pointer text-sm font-bold appearance-none hover:bg-black/5 ${DICT.LEAVES.map(getCodePrefix).includes(getCodePrefix(val)) ? 'text-red-500' : 'text-slate-800'}`}
                                 >
                                   <option value=""></option>
@@ -1337,13 +1383,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
                                   </optgroup>
                                 </select>
                                 {!val && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); openFillModal(staff, d.date); }}
-                                    className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white hover:bg-blue-700"
-                                  >
-                                    補
-                                  </button>
+                                  <div className="absolute right-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-blue-400/70 pointer-events-none"></div>
                                 )}
                               </div>
                             </td>
@@ -1426,7 +1466,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
             </div>
             <div className="p-4 max-h-[60vh] overflow-y-auto space-y-3">
               {fillCandidates.length === 0 ? (
-                <div className="p-6 text-center text-slate-500">目前沒有可直接建議的班別。</div>
+                <div className="p-6 text-center text-slate-500">目前沒有可直接建議的班別或人員。</div>
               ) : fillCandidates.map((candidate, index) => (
                 <div key={`${candidate.staffId}-${candidate.shiftCode}`} className="border rounded-2xl p-4 flex items-center justify-between gap-4 hover:border-blue-400 hover:bg-blue-50/40 transition-all">
                   <div>
