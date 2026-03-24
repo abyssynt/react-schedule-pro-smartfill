@@ -1071,7 +1071,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
 
       {showDraftPrompt && (
         <div className="max-w-[95vw] mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Clock size={18} className="text-amber-600" />
             <span className="text-sm font-bold">偵測到先前暫存紀錄。</span>
           </div>
@@ -1286,12 +1286,12 @@ const callGemini = async (prompt, systemInstruction = "") => {
           <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200">
-                <th className="sticky left-0 bg-slate-200 z-30 p-4 border-r font-black text-slate-700 w-24 min-w-[96px]">班別</th>
-                <th className="sticky left-[96px] bg-slate-200 z-30 p-4 border-r font-black text-slate-700 w-36 min-w-[144px]">日期/姓名</th>
+                <th className="sticky left-0 bg-slate-200 z-30 px-3 py-4 border-r font-black text-slate-700 w-20 min-w-[80px]">班別</th>
+                <th className="sticky left-[80px] bg-slate-200 z-30 px-3 py-4 border-r font-black text-slate-700 w-32 min-w-[128px]">姓名/日期</th>
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
-                    className="p-2 border-r min-w-[48px] text-center"
+                    className="px-1.5 py-2 border-r min-w-[44px] text-center"
                     style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}
                   >
                     <div className="text-[10px] opacity-60 uppercase">{d.weekStr}</div>
@@ -1318,18 +1318,18 @@ const callGemini = async (prompt, systemInstruction = "") => {
                     return (
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
-                          <td rowSpan={groupCount} className="sticky left-0 bg-white z-20 border-r p-3 text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
+                          <td rowSpan={groupCount} className="sticky left-0 bg-white z-20 border-r px-2 py-3 text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
                             <div className="flex items-center justify-center h-full min-h-[80px]">
-                              <span className="text-3xl font-black text-slate-800 leading-tight tracking-[0.2em] [writing-mode:vertical-rl]">
+                              <span className="text-[2rem] font-black text-slate-800 leading-tight tracking-[0.14em] [writing-mode:vertical-rl]">
                                 {group}
                               </span>
                             </div>
                           </td>
                         )}
 
-                        <td className="sticky left-[96px] bg-white z-10 border-r p-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
+                        <td className="sticky left-[80px] bg-white z-10 border-r px-2 py-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
                           <div className="flex items-center gap-2">
-                            <div className="flex flex-col items-center justify-center shrink-0 w-8">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-6">
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'up')}
                                 disabled={groupIndex === 0}
@@ -1355,12 +1355,12 @@ const callGemini = async (prompt, systemInstruction = "") => {
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className="flex-1 text-center py-2 font-bold text-slate-700 border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent"
+                              className="flex-1 min-w-0 text-center py-1.5 font-bold text-slate-700 border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent"
                             />
 
                             <button
                               onClick={() => removeStaff(staff.id)}
-                              className="text-slate-400 hover:text-red-500 shrink-0 w-8 flex items-center justify-center"
+                              className="text-slate-400 hover:text-red-500 shrink-0 w-6 flex items-center justify-center"
                             >
                               <Minus size={14} />
                             </button>
@@ -1421,7 +1421,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
                   })}
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
-                    <td className="sticky left-[96px] bg-white z-10 border-r p-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
+                    <td className="sticky left-[80px] bg-white z-10 border-r px-2 py-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
