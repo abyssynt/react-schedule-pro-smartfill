@@ -754,6 +754,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }, 0);
       };
 
+      const getConsecutiveLeavePattern = (snapshot, staffId, dateStr) => {
+        const prevCode = getScheduleCode(snapshot, staffId, formatDateKey(addDays(parseDateKey(dateStr), -1)));
+        const nextCode = getScheduleCode(snapshot, staffId, formatDateKey(addDays(parseDateKey(dateStr), 1)));
+        const prevIsLeave = isLeaveCode(prevCode);
+        const nextIsLeave = isLeaveCode(nextCode);
+        return {
+          prevIsLeave,
+          nextIsLeave,
+          adjacentLeaveCount: (prevIsLeave ? 1 : 0) + (nextIsLeave ? 1 : 0)
+        };
+      };
+
       const scoreCandidateWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
         let score = 0;
         score += (999 - getShiftCountFromSnapshot(snapshot, staff.id, shiftCode)) * SMART_RULES.fillPriorityWeights.sameShiftCount;
@@ -771,6 +783,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const recentLeavePressure = getRecentLeavePressure(snapshot, staff.id, dateStr, 4);
         const nearbyLeavePressure = getNearbyLeavePressure(snapshot, staff.id, dateStr, 2);
         const daysSinceLastLeave = getDaysSinceLastLeave(snapshot, staff.id, dateStr, 10);
+        const consecutiveLeavePattern = getConsecutiveLeavePattern(snapshot, staff.id, dateStr);
         let score = 0;
         score += leaveDeficit * 120;
         score += workCount * 5;
@@ -779,6 +792,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         score -= sameDayLeaveLoad * 30;
         score -= recentLeavePressure * 18;
         score -= nearbyLeavePressure * 28;
+        if (consecutiveLeavePattern.adjacentLeaveCount === 1) score += 22;
+        if (consecutiveLeavePattern.adjacentLeaveCount >= 2) score -= 12;
         return score;
       };
 
@@ -1049,6 +1064,18 @@ const callGemini = async (prompt, systemInstruction = "") => {
     return score;
   };
 
+  const getCurrentConsecutiveLeavePattern = (staffId, dateStr) => {
+    const prevCode = getCellCode(staffId, formatDateKey(addDays(parseDateKey(dateStr), -1)));
+    const nextCode = getCellCode(staffId, formatDateKey(addDays(parseDateKey(dateStr), 1)));
+    const prevIsLeave = isLeaveCode(prevCode);
+    const nextIsLeave = isLeaveCode(nextCode);
+    return {
+      prevIsLeave,
+      nextIsLeave,
+      adjacentLeaveCount: (prevIsLeave ? 1 : 0) + (nextIsLeave ? 1 : 0)
+    };
+  };
+
   const openFillModal = (staff, dateStr) => {
     const group = staff.group || '白班';
     const shiftCode = DEFAULT_SHIFT_BY_GROUP[group];
@@ -1097,7 +1124,10 @@ const callGemini = async (prompt, systemInstruction = "") => {
         }
         return count;
       })();
-      const offScore = leaveDeficit * 100 + recentWorkPressure * 20 - sameDayLeaveLoad * 25;
+      const consecutiveLeavePattern = getCurrentConsecutiveLeavePattern(staff.id, dateStr);
+      let offScore = leaveDeficit * 100 + recentWorkPressure * 20 - sameDayLeaveLoad * 25;
+      if (consecutiveLeavePattern.adjacentLeaveCount === 1) offScore += 18;
+      if (consecutiveLeavePattern.adjacentLeaveCount >= 2) offScore -= 10;
       candidates.push({
         type: 'self-leave',
         staffId: staff.id,
