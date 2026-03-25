@@ -1,4 +1,4 @@
-
+}
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Minus, Settings, Sparkles, Loader2,
@@ -340,6 +340,50 @@ const UI_FONT_SIZE_OPTIONS = {
 
 const getUiFontSizeClass = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.className || UI_FONT_SIZE_OPTIONS.medium.className;
 
+const UI_DENSITY_OPTIONS = {
+  compact: {
+    shiftWidth: 68,
+    nameWidth: 116,
+    dayMinWidth: 38,
+    dayHeaderClass: 'px-1 py-1.5',
+    statHeaderClass: 'p-2',
+    leaveHeaderClass: 'p-1.5',
+    cellHeightClass: 'h-9',
+    nameCellPaddingClass: 'px-2 py-1.5',
+    footCellPaddingClass: 'p-2',
+    groupLabelClass: 'text-[1.7rem]',
+    selectorDotClass: 'w-2 h-2'
+  },
+  standard: {
+    shiftWidth: 80,
+    nameWidth: 128,
+    dayMinWidth: 44,
+    dayHeaderClass: 'px-1.5 py-2',
+    statHeaderClass: 'p-4',
+    leaveHeaderClass: 'p-2',
+    cellHeightClass: 'h-10',
+    nameCellPaddingClass: 'px-2 py-2',
+    footCellPaddingClass: 'p-3',
+    groupLabelClass: 'text-[2rem]',
+    selectorDotClass: 'w-2.5 h-2.5'
+  },
+  relaxed: {
+    shiftWidth: 92,
+    nameWidth: 148,
+    dayMinWidth: 52,
+    dayHeaderClass: 'px-2 py-2.5',
+    statHeaderClass: 'p-4',
+    leaveHeaderClass: 'p-2',
+    cellHeightClass: 'h-11',
+    nameCellPaddingClass: 'px-3 py-2.5',
+    footCellPaddingClass: 'p-3',
+    groupLabelClass: 'text-[2.2rem]',
+    selectorDotClass: 'w-3 h-3'
+  }
+};
+
+const getUiDensityConfig = (densityKey = 'standard') => UI_DENSITY_OPTIONS[densityKey] || UI_DENSITY_OPTIONS.standard;
+
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
   // 2. 核心 State 定義
@@ -382,8 +426,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   });
 
   const tableFontSizeClass = getUiFontSizeClass(uiSettings?.tableFontSize);
+  const shiftColumnFontSizeClass = getUiFontSizeClass(uiSettings?.shiftColumnFontSize);
+  const nameDateColumnFontSizeClass = getUiFontSizeClass(uiSettings?.nameDateColumnFontSize);
+  const densityConfig = getUiDensityConfig(uiSettings?.tableDensity);
+
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
+  const shiftColumnFontColor = uiSettings?.shiftColumnFontColor || '#1e293b';
+  const nameDateColumnFontColor = uiSettings?.nameDateColumnFontColor || '#1e293b';
   const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
 
@@ -1492,24 +1542,28 @@ const openSelectedCellFillModal = () => {
           <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200">
-                <th className="sticky left-0 z-30 px-3 py-4 border-r font-black text-slate-700 w-20 min-w-[80px]" style={{ backgroundColor: shiftColumnBgColor }}>班別</th>
-                <th className="sticky left-[80px] z-30 px-3 py-4 border-r font-black text-slate-700 w-32 min-w-[128px]" style={{ backgroundColor: nameDateColumnBgColor }}>姓名/日期</th>
+                <th className={`sticky left-0 z-30 border-r font-black ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
+                <th className={`sticky z-30 border-r font-black ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
-                    className="px-1.5 py-2 border-r min-w-[44px] text-center"
-                    style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}
+                    className={`${densityConfig.dayHeaderClass} border-r text-center`}
+                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
                   </th>
                 ))}
-                <th className="p-4 border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold">上班</th>
-                <th className="p-4 border-r min-w-[60px] bg-green-50 text-green-700 font-bold">假日休</th>
-                <th className="p-4 border-r min-w-[60px] bg-red-50 text-red-700 font-bold">總休</th>
+                {uiSettings?.showStats && (
+                <>
+                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold`}>上班</th>
+                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-green-50 text-green-700 font-bold`}>假日休</th>
+                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold`}>總休</th>
                 {DICT.LEAVES.map(l => (
-                  <th key={l} className="p-2 border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">{l}</th>
+                  <th key={l} className={`${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold`}>{l}</th>
                 ))}
+                </>
+                )}
               </tr>
             </thead>
 
@@ -1524,18 +1578,18 @@ const openSelectedCellFillModal = () => {
                     return (
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
-                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r px-2 py-3 text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ backgroundColor: shiftColumnBgColor }}>
+                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
                             <div className="flex items-center justify-center h-full min-h-[80px]">
-                              <span className="text-[2rem] font-black leading-tight tracking-[0.14em] [writing-mode:vertical-rl]" style={{ color: tableFontColor }}>
+                              <span className={`${densityConfig.groupLabelClass} font-black leading-tight tracking-[0.14em] [writing-mode:vertical-rl] ${shiftColumnFontSizeClass}`} style={{ color: shiftColumnFontColor }}>
                                 {group}
                               </span>
                             </div>
                           </td>
                         )}
 
-                        <td className="sticky left-[80px] z-30 border-r px-2 py-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ backgroundColor: nameDateColumnBgColor }}>
+                        <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                           <div className="flex items-center gap-2">
-                            <div className="flex flex-col items-center justify-center shrink-0 w-6">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-5">
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'up')}
                                 disabled={groupIndex === 0}
@@ -1561,7 +1615,7 @@ const openSelectedCellFillModal = () => {
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className={`flex-1 min-w-0 text-center py-1.5 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${tableFontSizeClass}`} style={{ color: tableFontColor }}
+                              className={`flex-1 min-w-0 text-center py-1.5 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
                             />
 
                             <button
@@ -1586,7 +1640,7 @@ const openSelectedCellFillModal = () => {
                                 <select
                                   value={val}
                                   onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
-                                  className={`w-full h-10 text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`} style={{ color: tableFontColor }}
+                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`} style={{ color: tableFontColor }}
                                 >
                                   <option value=""></option>
                                   <optgroup label="上班">
@@ -1607,13 +1661,15 @@ const openSelectedCellFillModal = () => {
                                   aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
                                   title={`選取 ${staff.name} ${d.date} 儲存格`}
                                 >
-                                  <span className={`w-2.5 h-2.5 rounded-full transition-all ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
+                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
                                 </button>
                               </div>
                             </td>
                           );
                         })}
 
+                        {uiSettings?.showStats && (
+                        <>
                         <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.work}</td>
                         <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.holidayLeave}</td>
                         <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.totalLeave}</td>
@@ -1622,12 +1678,14 @@ const openSelectedCellFillModal = () => {
                             {stats.leaveDetails[l] || ''}
                           </td>
                         ))}
+                        </>
+                        )}
                       </tr>
                     );
                   })}
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
-                    <td className="sticky left-[80px] z-30 border-r px-2 py-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ backgroundColor: nameDateColumnBgColor }}>
+                    <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
@@ -1646,7 +1704,7 @@ const openSelectedCellFillModal = () => {
                       ></td>
                     ))}
 
-                    <td colSpan={3 + DICT.LEAVES.length}></td>
+                    <td colSpan={uiSettings?.showStats ? 3 + DICT.LEAVES.length : 0}></td>
                   </tr>
                 </React.Fragment>
               ))}
@@ -1656,8 +1714,8 @@ const openSelectedCellFillModal = () => {
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
               {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
-                  <td className="sticky left-0 z-10 border-r p-3 w-24 min-w-[96px]" style={{ backgroundColor: shiftColumnBgColor }}></td>
-                  <td className={`sticky left-[96px] z-10 border-r p-3 text-right font-bold min-w-[144px] ${tableFontSizeClass}`} style={{ backgroundColor: nameDateColumnBgColor, color: tableFontColor }}>
+                  <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
+                  <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
                     {rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`}
                   </td>
                   {daysInMonth.map(d => {
@@ -1826,7 +1884,11 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex items-center justify-between"><span className="text-sm font-medium">表格顯示大小</span><select value={uiSettings.tableDensity} onChange={(e) => setUiSettings(prev => ({ ...prev, tableDensity: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="standard">標準 (預設)</option><option value="compact">緊湊</option><option value="relaxed">寬鬆</option></select></div>
                   <div className="flex items-center justify-between"><span className="text-sm font-medium">表格字體大小</span><select value={uiSettings.tableFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">顯示統計欄位</span><button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showStats: !prev.showStats }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showStats ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showStats ? 'right-1' : 'left-1'}`}></div></button></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">班別欄字體大小</span><select value={uiSettings.shiftColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">班別欄字體顏色</span><input type="color" value={uiSettings.shiftColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體大小</span><select value={uiSettings.nameDateColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">顯示統計與休假別統計</span><button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showStats: !prev.showStats }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showStats ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showStats ? 'right-1' : 'left-1'}`}></div></button></div>
                 </div>
               </div>
             </SettingRow>
@@ -1972,6 +2034,10 @@ export default function App() {
     pageBackgroundColor: '#f8fafc',
     tableFontSize: 'medium',
     tableFontColor: '#1f2937',
+    shiftColumnFontSize: 'large',
+    shiftColumnFontColor: '#1e293b',
+    nameDateColumnFontSize: 'medium',
+    nameDateColumnFontColor: '#1e293b',
     shiftColumnBgColor: '#ffffff',
     nameDateColumnBgColor: '#ffffff',
     tableDensity: 'standard',
