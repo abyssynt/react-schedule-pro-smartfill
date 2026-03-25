@@ -1,4 +1,4 @@
-}
+
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Minus, Settings, Sparkles, Loader2,
