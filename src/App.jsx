@@ -2093,7 +2093,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
               </div>
             </SettingRow>
-            <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼、班別呈現順序與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
+            <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
               <div className="space-y-5">
                 <div>
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label>
@@ -2105,10 +2105,6 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   </div>
                   <div className="mt-2 text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium block mb-2">班別顯示順序</label>
-                  <div className="text-xs text-gray-500 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">拖放排序功能開發中</div>
-                </div>
                 <div className="pt-3 border-t border-gray-100 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-blue-600 font-medium flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</span>
@@ -2119,7 +2115,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                       <span key={col} className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 text-violet-700 text-xs font-bold rounded-md border border-violet-200">{col}<button type="button" onClick={() => removeCustomColumn(col)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                     ))}
                   </div>
-                  <div className="text-xs text-gray-500">新增後會同步出現在主頁右側，作為延伸紀錄欄位。</div>
+                  <div className="text-xs text-gray-500">新增後會同步出現在主頁右側，作為延伸紀錄欄位。可用來記錄如門診、支援、教學、行政或其他單位自訂資訊。</div>
                 </div>
                 <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">系統已支援固定國曆假日、補假規則、清明/端午/中秋/除夕與春節推算；2024–2026 仍優先採官方公告日曆，未來可再擴充特殊補班與輪班單位調移。</div>
               </div>
@@ -2293,7 +2289,7 @@ export default function App() {
       holiday: { white: 4, evening: 2, night: 2 }
     }
   });
-  const [customLeaveCodes, setCustomLeaveCodes] = useState(['V', 'PL', 'S', 'O']);
+  const [customLeaveCodes, setCustomLeaveCodes] = useState([]);
   const [customColumns, setCustomColumns] = useState([]);
   const [customColumnValues, setCustomColumnValues] = useState({});
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
