@@ -1277,7 +1277,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
         shiftCode: defaultAutoLeaveCode,
         allowed: true,
         score: offScore,
-        reasons: ['本月休假尚未達標', '當日群組需求已滿，`優先補休（${defaultAutoLeaveCode}）`]
+        reasons: ['本月休假尚未達標', `當日群組需求已滿，優先補休（${defaultAutoLeaveCode}）`]
       });
     }
 
