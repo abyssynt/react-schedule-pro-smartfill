@@ -354,7 +354,8 @@ const UI_DENSITY_OPTIONS = {
     nameCellPaddingClass: 'px-1.5 py-1',
     footCellPaddingClass: 'p-1.5',
     groupLabelClass: '',
-    selectorDotClass: 'w-1.5 h-1.5'
+    selectorDotClass: 'w-1.5 h-1.5',
+    rowMinHeight: 72
   },
   standard: {
     shiftWidth: 76,
@@ -367,7 +368,8 @@ const UI_DENSITY_OPTIONS = {
     nameCellPaddingClass: 'px-2 py-2',
     footCellPaddingClass: 'p-2.5',
     groupLabelClass: '',
-    selectorDotClass: 'w-2 h-2'
+    selectorDotClass: 'w-2 h-2',
+    rowMinHeight: 80
   },
   relaxed: {
     shiftWidth: 100,
@@ -380,11 +382,74 @@ const UI_DENSITY_OPTIONS = {
     nameCellPaddingClass: 'px-3 py-2.5',
     footCellPaddingClass: 'p-3',
     groupLabelClass: '',
-    selectorDotClass: 'w-3 h-3'
+    selectorDotClass: 'w-3 h-3',
+    rowMinHeight: 96
   }
 };
 
 const getUiDensityConfig = (densityKey = 'standard') => UI_DENSITY_OPTIONS[densityKey] || UI_DENSITY_OPTIONS.standard;
+
+
+const UI_THEME_PRESETS = {
+  classic: {
+    pageBackgroundColor: '#f8fafc',
+    weekendColor: '#dcfce7',
+    holidayColor: '#fca5a5',
+    tableFontColor: '#1f2937',
+    shiftColumnBgColor: '#ffffff',
+    nameDateColumnBgColor: '#ffffff',
+    shiftColumnFontColor: '#1e293b',
+    nameDateColumnFontColor: '#1e293b'
+  },
+  soft: {
+    pageBackgroundColor: '#f7faf7',
+    weekendColor: '#e7f7ec',
+    holidayColor: '#f6c7c7',
+    tableFontColor: '#334155',
+    shiftColumnBgColor: '#f7fbf8',
+    nameDateColumnBgColor: '#fcfdfc',
+    shiftColumnFontColor: '#365314',
+    nameDateColumnFontColor: '#334155'
+  },
+  warm: {
+    pageBackgroundColor: '#fffaf5',
+    weekendColor: '#fef3c7',
+    holidayColor: '#fecaca',
+    tableFontColor: '#44403c',
+    shiftColumnBgColor: '#fff7ed',
+    nameDateColumnBgColor: '#fffbeb',
+    shiftColumnFontColor: '#7c2d12',
+    nameDateColumnFontColor: '#44403c'
+  },
+  dark: {
+    pageBackgroundColor: '#0f172a',
+    weekendColor: '#334155',
+    holidayColor: '#7f1d1d',
+    tableFontColor: '#e2e8f0',
+    shiftColumnBgColor: '#1e293b',
+    nameDateColumnBgColor: '#172033',
+    shiftColumnFontColor: '#f8fafc',
+    nameDateColumnFontColor: '#e2e8f0'
+  }
+};
+
+const WIDTH_ADJUST_MAP = { narrow: -12, standard: 0, wide: 12 };
+const HEIGHT_ADJUST_MAP = { compact: -4, standard: 0, roomy: 4 };
+const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
+  const shiftAdjust = WIDTH_ADJUST_MAP[uiSettings.shiftColumnWidthMode || 'standard'] || 0;
+  const nameAdjust = WIDTH_ADJUST_MAP[uiSettings.nameDateColumnWidthMode || 'standard'] || 0;
+  const dayAdjust = WIDTH_ADJUST_MAP[uiSettings.dayColumnWidthMode || 'standard'] || 0;
+  const heightAdjust = HEIGHT_ADJUST_MAP[uiSettings.cellHeightMode || 'standard'] || 0;
+  const dotClassMap = { compact: 'w-1.5 h-1.5', standard: 'w-2 h-2', roomy: 'w-2.5 h-2.5' };
+  return {
+    ...baseConfig,
+    shiftWidth: Math.max(48, baseConfig.shiftWidth + shiftAdjust),
+    nameWidth: Math.max(90, baseConfig.nameWidth + nameAdjust),
+    dayMinWidth: Math.max(28, baseConfig.dayMinWidth + dayAdjust),
+    rowMinHeight: Math.max(72, (baseConfig.rowMinHeight || 80) + heightAdjust * 4),
+    selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
+  };
+};
 
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
@@ -432,7 +497,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const nameDateColumnFontSizeClass = getUiFontSizeClass(uiSettings?.nameDateColumnFontSize);
   const shiftLabelFontSize = getShiftLabelFontSize(uiSettings?.shiftColumnFontSize);
   const shiftCellLabelFontSize = getShiftCellLabelFontSize(uiSettings?.shiftColumnFontSize);
-  const densityConfig = getUiDensityConfig(uiSettings?.tableDensity);
+  const densityConfig = getAdjustedDensityConfig(getUiDensityConfig(uiSettings?.tableDensity), uiSettings);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -440,6 +505,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const nameDateColumnFontColor = uiSettings?.nameDateColumnFontColor || '#1e293b';
   const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
+  const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
+  const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
+  const showBottomStats = uiSettings?.showBottomStats ?? true;
+  const showBlueDots = uiSettings?.showBlueDots ?? true;
+  const showShiftLabels = uiSettings?.showShiftLabels ?? true;
+  const defaultAutoLeaveCode = uiSettings?.defaultAutoLeaveCode || 'off';
+  const selectionMode = uiSettings?.selectionMode || 'dot';
 
   // ==========================================
   // 3. 初始載入與自動帶入
@@ -919,7 +991,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             if (currentLeaveLoad < maxLeaveForDay) {
               const bestLeaveCandidate = leaveCandidates[0];
               if (bestLeaveCandidate && canStillMeetRequiredLeavesAfterAssign(mergedSchedule, bestLeaveCandidate.staff.id)) {
-                setScheduleCode(mergedSchedule, bestLeaveCandidate.staff.id, day.date, 'off', 'auto');
+                setScheduleCode(mergedSchedule, bestLeaveCandidate.staff.id, day.date, defaultAutoLeaveCode, 'auto');
                 summary.leaveFilled += 1;
               }
             }
@@ -1202,10 +1274,10 @@ const callGemini = async (prompt, systemInstruction = "") => {
         staffId: staff.id,
         staffName: staff.name,
         group,
-        shiftCode: 'off',
+        shiftCode: defaultAutoLeaveCode,
         allowed: true,
         score: offScore,
-        reasons: ['本月休假尚未達標', '當日群組需求已滿，優先補休']
+        reasons: ['本月休假尚未達標', '當日群組需求已滿，`優先補休（${defaultAutoLeaveCode}）`]
       });
     }
 
@@ -1558,16 +1630,16 @@ const openSelectedCellFillModal = () => {
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
                   </th>
                 ))}
-                {uiSettings?.showStats && (
+                {showRightStats && (
                 <>
                 <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold`}>上班</th>
                 <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-green-50 text-green-700 font-bold`}>假日休</th>
                 <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold`}>總休</th>
-                {DICT.LEAVES.map(l => (
-                  <th key={l} className={`${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold`}>{l}</th>
-                ))}
                 </>
                 )}
+                {showLeaveStats && DICT.LEAVES.map(l => (
+                  <th key={l} className={`${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold`}>{l}</th>
+                ))}
               </tr>
             </thead>
 
@@ -1583,10 +1655,10 @@ const openSelectedCellFillModal = () => {
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
                           <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
-                            <div className="flex items-center justify-center h-full min-h-[80px]">
-                              <span className={`font-black leading-tight tracking-[0.14em] [writing-mode:vertical-rl]`} style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}>
+                            <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
+                              {showShiftLabels && (<span className={`font-black leading-tight tracking-[0.14em] [writing-mode:vertical-rl]`} style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}>
                                 {group}
-                              </span>
+                              </span>)}
                             </div>
                           </td>
                         )}
@@ -1639,6 +1711,7 @@ const openSelectedCellFillModal = () => {
                               key={d.date}
                               className={`border-r p-0 relative overflow-hidden ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
+                            onClick={() => { if (selectionMode === 'cell') setSelectedGridCell({ staff, dateStr: d.date }); }}
                             >
                               <div className="relative">
                                 <select
@@ -1655,6 +1728,7 @@ const openSelectedCellFillModal = () => {
                                   </optgroup>
                                 </select>
 
+                                {showBlueDots && selectionMode === 'dot' && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1667,23 +1741,24 @@ const openSelectedCellFillModal = () => {
                                 >
                                   <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
                                 </button>
+                                )}
                               </div>
                             </td>
                           );
                         })}
 
-                        {uiSettings?.showStats && (
+                        {showRightStats && (
                         <>
                         <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.work}</td>
                         <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.holidayLeave}</td>
                         <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.totalLeave}</td>
-                        {DICT.LEAVES.map(l => (
+                        </>
+                        )}
+                        {showLeaveStats && DICT.LEAVES.map(l => (
                           <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
                             {stats.leaveDetails[l] || ''}
                           </td>
                         ))}
-                        </>
-                        )}
                       </tr>
                     );
                   })}
@@ -1708,13 +1783,13 @@ const openSelectedCellFillModal = () => {
                       ></td>
                     ))}
 
-                    <td colSpan={uiSettings?.showStats ? 3 + DICT.LEAVES.length : 0}></td>
+                    <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? DICT.LEAVES.length : 0)}></td>
                   </tr>
                 </React.Fragment>
               ))}
             </tbody>
 
-            {uiSettings?.showStats && (
+            {showBottomStats && (
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
               {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
@@ -1892,7 +1967,89 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <div className="flex items-center justify-between"><span className="text-sm font-medium">班別欄字體顏色</span><input type="color" value={uiSettings.shiftColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                   <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體大小</span><select value={uiSettings.nameDateColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
                   <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">顯示統計與休假別統計</span><button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showStats: !prev.showStats }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showStats ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showStats ? 'right-1' : 'left-1'}`}></div></button></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">快速切換全部統計</span><button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showStats: !prev.showStats, showRightStats: !prev.showStats, showLeaveStats: !prev.showStats, showBottomStats: !prev.showStats }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showStats ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showStats ? 'right-1' : 'left-1'}`}></div></button></div>
+                </div>
+              </div>
+
+            </SettingRow>
+            <SettingRow icon={Settings} title="使用偏好" desc="快速切換主題、欄位顯示、操作方式與預設補休代碼。" iconBg="bg-violet-50" iconColor="text-violet-600">
+              <div className="space-y-6">
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">主題預設</label>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {[
+                      ['classic','經典藍白'],
+                      ['soft','柔和綠灰'],
+                      ['warm','米色護理站'],
+                      ['dark','深色模式'],
+                      ['custom','自訂主題']
+                    ].map(([key,label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          if (key === 'custom') {
+                            setUiSettings(prev => ({ ...prev, themePreset: 'custom' }));
+                            return;
+                          }
+                          const preset = UI_THEME_PRESETS[key];
+                          setColors(prev => ({ ...prev, weekend: preset.weekendColor, holiday: preset.holidayColor }));
+                          setUiSettings(prev => ({
+                            ...prev,
+                            themePreset: key,
+                            pageBackgroundColor: preset.pageBackgroundColor,
+                            tableFontColor: preset.tableFontColor,
+                            shiftColumnBgColor: preset.shiftColumnBgColor,
+                            nameDateColumnBgColor: preset.nameDateColumnBgColor,
+                            shiftColumnFontColor: preset.shiftColumnFontColor,
+                            nameDateColumnFontColor: preset.nameDateColumnFontColor
+                          }));
+                        }}
+                        className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄位顯示</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      ['showRightStats','顯示右側統計'],
+                      ['showLeaveStats','顯示休假別統計'],
+                      ['showBottomStats','顯示下方每日統計'],
+                      ['showBlueDots','顯示藍點提示'],
+                      ['showShiftLabels','顯示班別群組大字']
+                    ].map(([key,label]) => (
+                      <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                        <span className="text-sm font-medium">{label}</span>
+                        <button
+                          type="button"
+                          onClick={() => setUiSettings(prev => ({ ...prev, [key]: !prev[key] }))}
+                          className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings[key] ? 'bg-violet-600' : 'bg-gray-300'}`}
+                        >
+                          <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings[key] ? 'right-1' : 'left-1'}`}></div>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄寬與高度</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄寬</span><select value={uiSettings.shiftColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, shiftColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄寬</span><select value={uiSettings.nameDateColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, nameDateColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">日期欄寬</span><select value={uiSettings.dayColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, dayColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">儲存格高度</span><select value={uiSettings.cellHeightMode} onChange={(e)=>setUiSettings(prev=>({...prev, cellHeightMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="compact">緊湊</option><option value="standard">標準</option><option value="roomy">寬鬆</option></select></div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">系統補休預設代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2">{DICT.LEAVES.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">選格操作模式</span><select value={uiSettings.selectionMode} onChange={(e)=>setUiSettings(prev=>({...prev, selectionMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="dot">點藍點選格</option><option value="cell">點格選取</option></select></div>
                 </div>
               </div>
             </SettingRow>
@@ -2045,7 +2202,19 @@ export default function App() {
     shiftColumnBgColor: '#ffffff',
     nameDateColumnBgColor: '#ffffff',
     tableDensity: 'standard',
-    showStats: true
+    showStats: true,
+    themePreset: 'custom',
+    showRightStats: true,
+    showLeaveStats: true,
+    showBottomStats: true,
+    showBlueDots: true,
+    showShiftLabels: true,
+    defaultAutoLeaveCode: 'off',
+    selectionMode: 'dot',
+    shiftColumnWidthMode: 'standard',
+    nameDateColumnWidthMode: 'standard',
+    dayColumnWidthMode: 'standard',
+    cellHeightMode: 'standard'
   });
   const [staffingConfig, setStaffingConfig] = useState({
     hospitalLevel: 'regional',
