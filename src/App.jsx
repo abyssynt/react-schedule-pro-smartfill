@@ -399,7 +399,10 @@ const UI_THEME_PRESETS = {
     shiftColumnBgColor: '#ffffff',
     nameDateColumnBgColor: '#ffffff',
     shiftColumnFontColor: '#1e293b',
-    nameDateColumnFontColor: '#1e293b'
+    nameDateColumnFontColor: '#1e293b',
+    demandUnderColor: '#fecaca',
+    demandMatchColor: '#dcfce7',
+    demandOverColor: '#fde68a'
   },
   soft: {
     pageBackgroundColor: '#f7faf7',
@@ -409,7 +412,10 @@ const UI_THEME_PRESETS = {
     shiftColumnBgColor: '#f7fbf8',
     nameDateColumnBgColor: '#fcfdfc',
     shiftColumnFontColor: '#365314',
-    nameDateColumnFontColor: '#334155'
+    nameDateColumnFontColor: '#334155',
+    demandUnderColor: '#fed7aa',
+    demandMatchColor: '#d9f99d',
+    demandOverColor: '#fde68a'
   },
   warm: {
     pageBackgroundColor: '#fffaf5',
@@ -419,7 +425,10 @@ const UI_THEME_PRESETS = {
     shiftColumnBgColor: '#fff7ed',
     nameDateColumnBgColor: '#fffbeb',
     shiftColumnFontColor: '#7c2d12',
-    nameDateColumnFontColor: '#44403c'
+    nameDateColumnFontColor: '#44403c',
+    demandUnderColor: '#fecaca',
+    demandMatchColor: '#fde68a',
+    demandOverColor: '#fdba74'
   },
   dark: {
     pageBackgroundColor: '#0f172a',
@@ -429,7 +438,10 @@ const UI_THEME_PRESETS = {
     shiftColumnBgColor: '#1e293b',
     nameDateColumnBgColor: '#172033',
     shiftColumnFontColor: '#f8fafc',
-    nameDateColumnFontColor: '#e2e8f0'
+    nameDateColumnFontColor: '#e2e8f0',
+    demandUnderColor: '#7f1d1d',
+    demandMatchColor: '#14532d',
+    demandOverColor: '#78350f'
   }
 };
 
@@ -505,6 +517,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const nameDateColumnFontColor = uiSettings?.nameDateColumnFontColor || '#1e293b';
   const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
+  const showDemandHighlight = uiSettings?.showDemandHighlight ?? true;
+  const demandUnderColor = uiSettings?.demandUnderColor || '#fecaca';
+  const demandMatchColor = uiSettings?.demandMatchColor || '#dcfce7';
+  const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
   const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
   const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
   const showBottomStats = uiSettings?.showBottomStats ?? true;
@@ -1087,6 +1103,25 @@ const callGemini = async (prompt, systemInstruction = "") => {
     });
 
     return stats;
+  };
+
+  const getRequiredCountForDate = (dateStr, rowKey) => {
+    const dayInfo = daysInMonth.find(d => d.date === dateStr);
+    if (!dayInfo) return null;
+    const bucket = (dayInfo.isWeekend || dayInfo.isHoliday) ? 'holiday' : 'weekday';
+    if (rowKey === 'D') return Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0);
+    if (rowKey === 'E') return Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0);
+    if (rowKey === 'N') return Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0);
+    return null;
+  };
+
+  const getDemandHighlightStyle = (dateStr, rowKey, actualCount) => {
+    if (!showDemandHighlight || !['D', 'E', 'N'].includes(rowKey)) return {};
+    const requiredCount = getRequiredCountForDate(dateStr, rowKey);
+    if (requiredCount === null) return {};
+    if (actualCount < requiredCount) return { backgroundColor: demandUnderColor };
+    if (actualCount > requiredCount) return { backgroundColor: demandOverColor };
+    return { backgroundColor: demandMatchColor };
   };
 
   const saveToHistory = (label, currentSchedule = schedule) => {
@@ -1823,7 +1858,11 @@ const openSelectedCellFillModal = () => {
                   {daysInMonth.map(d => {
                     const count = getDailyStats(d.date)[rowKey];
                     return (
-                      <td key={d.date} className={`border-r p-2 text-center font-black ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
+                      <td
+                        key={d.date}
+                        className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
+                        style={{ color: tableFontColor, ...getDemandHighlightStyle(d.date, rowKey, count) }}
+                      >
                         {count || ''}
                       </td>
                     );
@@ -2009,6 +2048,20 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                   <div className="flex items-center justify-between"><span className="text-sm font-medium">快速切換全部統計</span><button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showStats: !prev.showStats, showRightStats: !prev.showStats, showLeaveStats: !prev.showStats, showBottomStats: !prev.showStats }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showStats ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showStats ? 'right-1' : 'left-1'}`}></div></button></div>
                 </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">需求警示顯示</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <span className="text-sm font-medium">啟用需求警示高亮</span>
+                      <button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showDemandHighlight: !prev.showDemandHighlight }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showDemandHighlight ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showDemandHighlight ? 'right-1' : 'left-1'}`}></div>
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求不足顏色</span><input type="color" value={uiSettings.demandUnderColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandUnderColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求剛好顏色</span><input type="color" value={uiSettings.demandMatchColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandMatchColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求超編顏色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                  </div>
+                </div>
               </div>
 
             </SettingRow>
@@ -2042,7 +2095,10 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                             shiftColumnBgColor: preset.shiftColumnBgColor,
                             nameDateColumnBgColor: preset.nameDateColumnBgColor,
                             shiftColumnFontColor: preset.shiftColumnFontColor,
-                            nameDateColumnFontColor: preset.nameDateColumnFontColor
+                            nameDateColumnFontColor: preset.nameDateColumnFontColor,
+                            demandUnderColor: preset.demandUnderColor,
+                            demandMatchColor: preset.demandMatchColor,
+                            demandOverColor: preset.demandOverColor
                           }));
                         }}
                         className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
@@ -2122,53 +2178,8 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
               </div>
             </SettingRow>
-            <SettingRow icon={UserCheck} title="人力需求設定" desc="獨立設定平日 / 假日各班需求，作為全月補空與指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
+            <SettingRow icon={UserCheck} title="補空需求設定" desc="設定平日 / 假日各班需求，作為全月補空與指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">醫院層級</label>
-                    <select
-                      value={staffingConfig.hospitalLevel}
-                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, hospitalLevel: e.target.value }))}
-                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"
-                    >
-                      <option value="medical">醫學中心</option>
-                      <option value="regional">區域醫院</option>
-                      <option value="local">地區醫院</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">總床數</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={staffingConfig.totalBeds}
-                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, totalBeds: parseInt(e.target.value, 10) || 0 }))}
-                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">護理師總數</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={staffingConfig.totalNurses}
-                      onChange={(e) => setStaffingConfig(prev => ({ ...prev, totalNurses: parseInt(e.target.value, 10) || 0 }))}
-                      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50"
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-sky-50 border border-sky-100 px-4 py-3 text-xs text-sky-700">
-                  參考護病比：{HOSPITAL_LEVEL_LABELS[staffingConfig.hospitalLevel]}｜白班 {HOSPITAL_RATIO_HINTS[staffingConfig.hospitalLevel].white}、小夜 {HOSPITAL_RATIO_HINTS[staffingConfig.hospitalLevel].evening}、大夜 {HOSPITAL_RATIO_HINTS[staffingConfig.hospitalLevel].night}
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                  <div className="font-semibold text-gray-800 mb-1">目前補空依據</div>
-                  <div>平日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.night}</span> 人</div>
-                  <div>假日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.night}</span> 人</div>
-                </div>
-
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
                     <h4 className="font-bold text-gray-800 mb-4">平日需求</h4>
@@ -2218,13 +2229,16 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                     </div>
                   </div>
                 </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                  <div className="font-semibold text-gray-800 mb-1">目前補空依據</div>
+                  <div>平日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.night}</span> 人</div>
+                  <div>假日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.night}</span> 人</div>
+                </div>
               </div>
             </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
               <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
-            </SettingRow>
-            <SettingRow icon={Grid} title="補空優先" desc="設定補空排序偏好，作為後續智慧補班的參考方向。" iconBg="bg-teal-50" iconColor="text-teal-600">
-              <div className="space-y-3">{[{ label: '優先補缺額最多的班別', active: true }, { label: '優先達成個人班數平均', active: true }, { label: '優先減少跨天連班', active: false }, { label: '優先分配假日班補空', active: true }].map((item, idx) => <div key={idx} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl cursor-pointer"><div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${item.active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`}>{item.active && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div><span className="text-sm text-gray-700">{item.label}</span></div>)}<div className="pt-3 border-t border-gray-100"><button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-3.5 h-3.5" /> 新增自訂偏好</button></div></div>
             </SettingRow>
           </div>
         </section>
@@ -2280,7 +2294,11 @@ export default function App() {
     shiftColumnWidthMode: 'standard',
     nameDateColumnWidthMode: 'standard',
     dayColumnWidthMode: 'standard',
-    cellHeightMode: 'standard'
+    cellHeightMode: 'standard',
+    showDemandHighlight: true,
+    demandUnderColor: '#fecaca',
+    demandMatchColor: '#dcfce7',
+    demandOverColor: '#fde68a'
   });
   const [staffingConfig, setStaffingConfig] = useState({
     hospitalLevel: 'regional',
