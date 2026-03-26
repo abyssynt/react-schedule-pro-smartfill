@@ -5,7 +5,7 @@ import {
   ArrowUp, ArrowDown, Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
-  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2
+  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2
 } from 'lucide-react';
 
 // ==========================================
@@ -305,165 +305,7 @@ const getShiftGroupByCode = (code = '') => {
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
 const isShiftCode = (code = '') => DICT.SHIFTS.includes(code);
 
-const GROUP_TO_DEMAND_KEY = {
-  '白班': 'white',
-  '小夜': 'evening',
-  '大夜': 'night'
-};
-
-const DEFAULT_SHIFT_BY_GROUP = {
-  '白班': 'D',
-  '小夜': 'E',
-  '大夜': 'N'
-};
-
-const AI_MAIN_SHIFTS = ['D', 'E', 'N'];
-
-const HOSPITAL_LEVEL_LABELS = {
-  medical: '醫學中心',
-  regional: '區域醫院',
-  local: '地區醫院'
-};
-
-const HOSPITAL_RATIO_HINTS = {
-  medical: { white: '1:6', evening: '1:9', night: '1:11' },
-  regional: { white: '1:7', evening: '1:11', night: '1:13' },
-  local: { white: '1:10', evening: '1:13', night: '1:15' }
-};
-
-
-const UI_FONT_SIZE_OPTIONS = {
-  small: { label: '小', className: 'text-xs', shiftLabelSize: '1.45rem', shiftCellLabelSize: '1.55rem' },
-  medium: { label: '標準', className: 'text-sm', shiftLabelSize: '1.95rem', shiftCellLabelSize: '2.05rem' },
-  large: { label: '大', className: 'text-base', shiftLabelSize: '2.45rem', shiftCellLabelSize: '2.55rem' }
-};
-
-const getUiFontSizeClass = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.className || UI_FONT_SIZE_OPTIONS.medium.className;
-const getShiftLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.shiftLabelSize || UI_FONT_SIZE_OPTIONS.medium.shiftLabelSize;
-const getShiftCellLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.shiftCellLabelSize || UI_FONT_SIZE_OPTIONS.medium.shiftCellLabelSize;
-
-const UI_DENSITY_OPTIONS = {
-  compact: {
-    shiftWidth: 58,
-    nameWidth: 98,
-    dayMinWidth: 32,
-    dayHeaderClass: 'px-0.5 py-1 text-[11px]',
-    statHeaderClass: 'p-1.5',
-    leaveHeaderClass: 'p-1',
-    cellHeightClass: 'h-8',
-    nameCellPaddingClass: 'px-1.5 py-1',
-    footCellPaddingClass: 'p-1.5',
-    groupLabelClass: '',
-    selectorDotClass: 'w-1.5 h-1.5',
-    rowMinHeight: 72
-  },
-  standard: {
-    shiftWidth: 76,
-    nameWidth: 122,
-    dayMinWidth: 42,
-    dayHeaderClass: 'px-1.5 py-2 text-xs',
-    statHeaderClass: 'p-3',
-    leaveHeaderClass: 'p-1.5',
-    cellHeightClass: 'h-10',
-    nameCellPaddingClass: 'px-2 py-2',
-    footCellPaddingClass: 'p-2.5',
-    groupLabelClass: '',
-    selectorDotClass: 'w-2 h-2',
-    rowMinHeight: 80
-  },
-  relaxed: {
-    shiftWidth: 100,
-    nameWidth: 156,
-    dayMinWidth: 56,
-    dayHeaderClass: 'px-2 py-2.5 text-sm',
-    statHeaderClass: 'p-4',
-    leaveHeaderClass: 'p-2',
-    cellHeightClass: 'h-12',
-    nameCellPaddingClass: 'px-3 py-2.5',
-    footCellPaddingClass: 'p-3',
-    groupLabelClass: '',
-    selectorDotClass: 'w-3 h-3',
-    rowMinHeight: 96
-  }
-};
-
-const getUiDensityConfig = (densityKey = 'standard') => UI_DENSITY_OPTIONS[densityKey] || UI_DENSITY_OPTIONS.standard;
-
-
-const UI_THEME_PRESETS = {
-  classic: {
-    pageBackgroundColor: '#f8fafc',
-    weekendColor: '#dcfce7',
-    holidayColor: '#fca5a5',
-    tableFontColor: '#1f2937',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#ffffff',
-    shiftColumnFontColor: '#1e293b',
-    nameDateColumnFontColor: '#1e293b',
-    demandUnderColor: '#fecaca',
-    demandMatchColor: '#dcfce7',
-    demandOverColor: '#fde68a'
-  },
-  soft: {
-    pageBackgroundColor: '#f7faf7',
-    weekendColor: '#e7f7ec',
-    holidayColor: '#f6c7c7',
-    tableFontColor: '#334155',
-    shiftColumnBgColor: '#f7fbf8',
-    nameDateColumnBgColor: '#fcfdfc',
-    shiftColumnFontColor: '#365314',
-    nameDateColumnFontColor: '#334155',
-    demandUnderColor: '#fed7aa',
-    demandMatchColor: '#d9f99d',
-    demandOverColor: '#fde68a'
-  },
-  warm: {
-    pageBackgroundColor: '#fffaf5',
-    weekendColor: '#fef3c7',
-    holidayColor: '#fecaca',
-    tableFontColor: '#44403c',
-    shiftColumnBgColor: '#fff7ed',
-    nameDateColumnBgColor: '#fffbeb',
-    shiftColumnFontColor: '#7c2d12',
-    nameDateColumnFontColor: '#44403c',
-    demandUnderColor: '#fecaca',
-    demandMatchColor: '#fde68a',
-    demandOverColor: '#fdba74'
-  },
-  dark: {
-    pageBackgroundColor: '#0f172a',
-    weekendColor: '#334155',
-    holidayColor: '#7f1d1d',
-    tableFontColor: '#e2e8f0',
-    shiftColumnBgColor: '#1e293b',
-    nameDateColumnBgColor: '#172033',
-    shiftColumnFontColor: '#f8fafc',
-    nameDateColumnFontColor: '#e2e8f0',
-    demandUnderColor: '#7f1d1d',
-    demandMatchColor: '#14532d',
-    demandOverColor: '#78350f'
-  }
-};
-
-const WIDTH_ADJUST_MAP = { narrow: -12, standard: 0, wide: 12 };
-const HEIGHT_ADJUST_MAP = { compact: -4, standard: 0, roomy: 4 };
-const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
-  const shiftAdjust = WIDTH_ADJUST_MAP[uiSettings.shiftColumnWidthMode || 'standard'] || 0;
-  const nameAdjust = WIDTH_ADJUST_MAP[uiSettings.nameDateColumnWidthMode || 'standard'] || 0;
-  const dayAdjust = WIDTH_ADJUST_MAP[uiSettings.dayColumnWidthMode || 'standard'] || 0;
-  const heightAdjust = HEIGHT_ADJUST_MAP[uiSettings.cellHeightMode || 'standard'] || 0;
-  const dotClassMap = { compact: 'w-1.5 h-1.5', standard: 'w-2 h-2', roomy: 'w-2.5 h-2.5' };
-  return {
-    ...baseConfig,
-    shiftWidth: Math.max(48, baseConfig.shiftWidth + shiftAdjust),
-    nameWidth: Math.max(90, baseConfig.nameWidth + nameAdjust),
-    dayMinWidth: Math.max(28, baseConfig.dayMinWidth + dayAdjust),
-    rowMinHeight: Math.max(72, (baseConfig.rowMinHeight || 80) + heightAdjust * 4),
-    selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
-  };
-};
-
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, loadLatestOnEnter, onLatestLoaded }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, overstaffColor, setOverstaffColor, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -494,8 +336,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [selectedFillCell, setSelectedFillCell] = useState(null);
   const [fillCandidates, setFillCandidates] = useState([]);
   const [showFillModal, setShowFillModal] = useState(false);
-  const [selectedGridCell, setSelectedGridCell] = useState(null);
-  const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
 
   // AI 指定排班設定
   const [aiConfig, setAiConfig] = useState({
@@ -503,37 +343,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     dateRange: { start: 1, end: 31 },
     targetShift: ''
   });
-
-  const tableFontSizeClass = getUiFontSizeClass(uiSettings?.tableFontSize);
-  const shiftColumnFontSizeClass = getUiFontSizeClass(uiSettings?.shiftColumnFontSize);
-  const nameDateColumnFontSizeClass = getUiFontSizeClass(uiSettings?.nameDateColumnFontSize);
-  const shiftLabelFontSize = getShiftLabelFontSize(uiSettings?.shiftColumnFontSize);
-  const shiftCellLabelFontSize = getShiftCellLabelFontSize(uiSettings?.shiftColumnFontSize);
-  const densityConfig = getAdjustedDensityConfig(getUiDensityConfig(uiSettings?.tableDensity), uiSettings);
-
-  const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
-  const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
-  const shiftColumnFontColor = uiSettings?.shiftColumnFontColor || '#1e293b';
-  const nameDateColumnFontColor = uiSettings?.nameDateColumnFontColor || '#1e293b';
-  const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
-  const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
-  const showDemandHighlight = uiSettings?.showDemandHighlight ?? true;
-  const demandUnderColor = uiSettings?.demandUnderColor || '#fecaca';
-  const demandMatchColor = uiSettings?.demandMatchColor || '#dcfce7';
-  const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
-  const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
-  const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
-  const showBottomStats = uiSettings?.showBottomStats ?? true;
-  const showBlueDots = uiSettings?.showBlueDots ?? true;
-  const showShiftLabels = uiSettings?.showShiftLabels ?? true;
-  const defaultAutoLeaveCode = uiSettings?.defaultAutoLeaveCode || 'off';
-  const selectionMode = uiSettings?.selectionMode || 'dot';
-  const mergedLeaveCodes = useMemo(() => Array.from(new Set([...DICT.LEAVES, ...(customLeaveCodes || [])])).filter(Boolean), [customLeaveCodes]);
-  const isConfiguredLeaveCode = (code = '') => {
-    if (!code) return false;
-    const prefix = getCodePrefix(code);
-    return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
-  };
 
   // ==========================================
   // 3. 初始載入與自動帶入
@@ -624,7 +433,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
 
-    const headerRow = ['班別', '日期/姓名', ...daysInMonth.map(d => `${d.day}\n(${d.weekStr})`), '上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
+    const headerRow = ['班別', '日期/姓名', ...daysInMonth.map(d => `${d.day}\n(${d.weekStr})`), '上班', '假日休', '總休', ...DICT.LEAVES];
     const header = worksheet.addRow(headerRow);
     header.height = 30;
 
@@ -652,7 +461,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           return typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
         }),
         stats.work, stats.holidayLeave, stats.totalLeave,
-        ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''), ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
+        ...DICT.LEAVES.map(l => stats.leaveDetails[l] || '')
       ];
       const row = worksheet.addRow(rowData);
 
@@ -762,277 +571,54 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // ==========================================
   const handleAiAutoSchedule = async (isPartial = false) => {
     setIsAiLoading(true);
-    setAiFeedback(isPartial ? "🧩 系統正在依指定範圍補空..." : "🧩 系統正在依人力需求補全整月空白...");
+    setAiFeedback(isPartial ? "✨ AI 正在根據指定區域填寫班表..." : "✨ AI 正在規劃全月空缺...");
+
+    const systemPrompt = `你是一個專業護理排班專家。請為未排班的日期填寫代碼。可用班別: ${DICT.SHIFTS.join(', ')}，可用休假: ${DICT.LEAVES.join(', ')}。${isPartial && aiConfig.targetShift ? `優先填寫指定班別: ${aiConfig.targetShift}` : ''} 格式要求: {"schedule": {"staffId": {"YYYY-MM-DD": "CODE"}}}`;
+
+    const currentScheduleForAi = {};
+    staffs.forEach(s => {
+      currentScheduleForAi[s.id] = {};
+      Object.keys(schedule[s.id] || {}).forEach(date => {
+        const cell = schedule[s.id][date];
+        if (cell && (cell.value || typeof cell === 'string')) currentScheduleForAi[s.id][date] = cell.value || cell;
+      });
+    });
+
+    const userPrompt = `年: ${year}, 月: ${month}, 人員對象: ${JSON.stringify(isPartial ? aiConfig.selectedStaffs : staffs.map(s => s.id))}, 日期區間: ${isPartial ? `${aiConfig.dateRange.start}號到${aiConfig.dateRange.end}號` : '全月'}, 既有排班數據: ${JSON.stringify(currentScheduleForAi)}。注意：絕對不可覆蓋已有的手動排班內容。`;
 
     try {
-      const mergedSchedule = JSON.parse(JSON.stringify(schedule));
-      const targetStaffIds = isPartial && aiConfig.selectedStaffs.length > 0
-        ? new Set(aiConfig.selectedStaffs)
-        : new Set(staffs.map(s => s.id));
+      const result = await callGemini(userPrompt, systemPrompt);
+      if (result.schedule) {
+        const mergedSchedule = { ...schedule };
+        Object.keys(result.schedule).forEach(staffId => {
+          if (isPartial && !aiConfig.selectedStaffs.includes(staffId)) return;
+          if (!mergedSchedule[staffId]) mergedSchedule[staffId] = {};
+          Object.keys(result.schedule[staffId]).forEach(dateStr => {
+            const dayNum = parseInt(dateStr.split('-')[2], 10);
+            if (isPartial && (dayNum < aiConfig.dateRange.start || dayNum > aiConfig.dateRange.end)) return;
+            const aiCode = result.schedule[staffId][dateStr];
+            const existingCell = mergedSchedule[staffId][dateStr];
+            if (existingCell && existingCell.source === 'manual') return;
 
-      const targetDays = daysInMonth.filter(d => {
-        if (!isPartial) return true;
-        return d.day >= aiConfig.dateRange.start && d.day <= aiConfig.dateRange.end;
-      });
-
-      const normalizedTargetShift = AI_MAIN_SHIFTS.includes(aiConfig.targetShift) ? aiConfig.targetShift : '';
-      const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
-      const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
-
-      const getScheduleCode = (snapshot, staffId, dateStr) => {
-        const cellData = snapshot[staffId]?.[dateStr];
-        return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-      };
-
-      const setScheduleCode = (snapshot, staffId, dateStr, value, source = 'auto') => {
-        if (!snapshot[staffId]) snapshot[staffId] = {};
-        snapshot[staffId][dateStr] = value ? { value, source } : null;
-      };
-
-      const getDemandType = (day) => (day.isWeekend || day.isHoliday) ? 'holiday' : 'weekday';
-      const getDemandForGroup = (day, group) => {
-        const bucket = getDemandType(day);
-        const key = GROUP_TO_DEMAND_KEY[group];
-        return Number(staffingConfig?.requiredStaffing?.[bucket]?.[key] || 0);
-      };
-
-      const getAssignedCountByGroup = (snapshot, dateStr, group) => {
-        return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
-          const code = getScheduleCode(snapshot, s.id, dateStr);
-          return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
-        }, 0);
-      };
-
-      const countConsecutiveBeforeFromSnapshot = (snapshot, staffId, dateStr) => {
-        let count = 0;
-        let cursor = addDays(parseDateKey(dateStr), -1);
-        while (true) {
-          const key = formatDateKey(cursor);
-          const code = getScheduleCode(snapshot, staffId, key);
-          if (!isShiftCode(code)) break;
-          count += 1;
-          cursor = addDays(cursor, -1);
-        }
-        return count;
-      };
-
-      const canAssignWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
-        const reasons = [];
-        const currentCode = getScheduleCode(snapshot, staff.id, dateStr);
-        if (currentCode) reasons.push('該格已有排班或休假代碼');
-        const prefix = getCodePrefix(currentCode);
-        if (isConfiguredLeaveCode(currentCode)) reasons.push('該格已有休假，不可再排班');
-        const staffGroup = staff.group || '白班';
-        const shiftGroup = getShiftGroupByCode(shiftCode);
-        if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) reasons.push('不可跨群組排班');
-        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-        const prevCode = getScheduleCode(snapshot, staff.id, prevKey);
-        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-        if (disallowed.includes(shiftCode)) reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
-        const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff.id, dateStr);
-        if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
-        if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) reasons.push('懷孕標記人員不可排 N / 夜8-8');
-        return { allowed: reasons.length === 0, reasons };
-      };
-
-      const getWorkCountFromSnapshot = (snapshot, staffId) => {
-        return daysInMonth.reduce((sum, d) => sum + (isShiftCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
-      };
-
-      const getShiftCountFromSnapshot = (snapshot, staffId, shiftCode) => {
-        return daysInMonth.reduce((sum, d) => sum + (getScheduleCode(snapshot, staffId, d.date) === shiftCode ? 1 : 0), 0);
-      };
-
-      const getLeaveCountFromSnapshot = (snapshot, staffId) => {
-        return daysInMonth.reduce((sum, d) => sum + (isConfiguredLeaveCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
-      };
-
-      const getBlankCountFromSnapshot = (snapshot, staffId) => {
-        return daysInMonth.reduce((sum, d) => sum + (!getScheduleCode(snapshot, staffId, d.date) ? 1 : 0), 0);
-      };
-
-      const canStillMeetRequiredLeavesAfterAssign = (snapshot, staffId) => {
-        const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
-        const remainingBlanks = getBlankCountFromSnapshot(snapshot, staffId);
-        const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
-        return remainingBlanks >= remainingLeavesNeeded;
-      };
-
-      const canStillMeetRequiredLeavesIfAssignShift = (snapshot, staffId) => {
-        const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
-        const remainingBlanks = getBlankCountFromSnapshot(snapshot, staffId);
-        const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
-        return (remainingBlanks - 1) >= remainingLeavesNeeded;
-      };
-
-      const getRecentWorkPressure = (snapshot, staffId, dateStr, lookback = 3) => {
-        let count = 0;
-        let cursor = addDays(parseDateKey(dateStr), -1);
-        for (let i = 0; i < lookback; i += 1) {
-          const code = getScheduleCode(snapshot, staffId, formatDateKey(cursor));
-          if (isShiftCode(code)) count += 1;
-          cursor = addDays(cursor, -1);
-        }
-        return count;
-      };
-
-      const getRecentLeavePressure = (snapshot, staffId, dateStr, lookback = 4) => {
-        let count = 0;
-        let cursor = addDays(parseDateKey(dateStr), -1);
-        for (let i = 0; i < lookback; i += 1) {
-          const code = getScheduleCode(snapshot, staffId, formatDateKey(cursor));
-          if (isLeaveCode(code)) count += 1;
-          cursor = addDays(cursor, -1);
-        }
-        return count;
-      };
-
-      const getNearbyLeavePressure = (snapshot, staffId, dateStr, radius = 2) => {
-        let count = 0;
-        const center = parseDateKey(dateStr);
-        for (let offset = -radius; offset <= radius; offset += 1) {
-          if (offset === 0) continue;
-          const key = formatDateKey(addDays(center, offset));
-          const code = getScheduleCode(snapshot, staffId, key);
-          if (isLeaveCode(code)) count += 1;
-        }
-        return count;
-      };
-
-      const getDaysSinceLastLeave = (snapshot, staffId, dateStr, maxLookback = 10) => {
-        let cursor = addDays(parseDateKey(dateStr), -1);
-        for (let i = 1; i <= maxLookback; i += 1) {
-          const code = getScheduleCode(snapshot, staffId, formatDateKey(cursor));
-          if (isLeaveCode(code)) return i;
-          cursor = addDays(cursor, -1);
-        }
-        return maxLookback + 1;
-      };
-
-      const getGroupLeaveLoad = (snapshot, dateStr, group) => {
-        return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
-          const code = getScheduleCode(snapshot, s.id, dateStr);
-          return sum + (isLeaveCode(code) ? 1 : 0);
-        }, 0);
-      };
-
-      const getConsecutiveLeavePattern = (snapshot, staffId, dateStr) => {
-        const prevCode = getScheduleCode(snapshot, staffId, formatDateKey(addDays(parseDateKey(dateStr), -1)));
-        const nextCode = getScheduleCode(snapshot, staffId, formatDateKey(addDays(parseDateKey(dateStr), 1)));
-        const prevIsLeave = isLeaveCode(prevCode);
-        const nextIsLeave = isLeaveCode(nextCode);
-        return {
-          prevIsLeave,
-          nextIsLeave,
-          adjacentLeaveCount: (prevIsLeave ? 1 : 0) + (nextIsLeave ? 1 : 0)
-        };
-      };
-
-      const scoreCandidateWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
-        let score = 0;
-        score += (999 - getShiftCountFromSnapshot(snapshot, staff.id, shiftCode)) * SMART_RULES.fillPriorityWeights.sameShiftCount;
-        score += (999 - getWorkCountFromSnapshot(snapshot, staff.id)) * SMART_RULES.fillPriorityWeights.totalShiftCount;
-        if (getShiftGroupByCode(shiftCode) === (staff.group || '白班')) score += 100 * SMART_RULES.fillPriorityWeights.sameGroup;
-        score -= getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 18;
-        return score;
-      };
-
-      const scoreLeaveCandidateWithSnapshot = (snapshot, staff, dateStr) => {
-        const leaveDeficit = Math.max(0, requiredLeaves - getLeaveCountFromSnapshot(snapshot, staff.id));
-        const workCount = getWorkCountFromSnapshot(snapshot, staff.id);
-        const group = staff.group || '白班';
-        const sameDayLeaveLoad = getGroupLeaveLoad(snapshot, dateStr, group);
-        const recentLeavePressure = getRecentLeavePressure(snapshot, staff.id, dateStr, 4);
-        const nearbyLeavePressure = getNearbyLeavePressure(snapshot, staff.id, dateStr, 2);
-        const daysSinceLastLeave = getDaysSinceLastLeave(snapshot, staff.id, dateStr, 10);
-        const consecutiveLeavePattern = getConsecutiveLeavePattern(snapshot, staff.id, dateStr);
-        let score = 0;
-        score += leaveDeficit * 120;
-        score += workCount * 5;
-        score += getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 18;
-        score += Math.min(daysSinceLastLeave, 10) * 8;
-        score -= sameDayLeaveLoad * 30;
-        score -= recentLeavePressure * 18;
-        score -= nearbyLeavePressure * 28;
-        if (consecutiveLeavePattern.adjacentLeaveCount === 1) score += 22;
-        if (consecutiveLeavePattern.adjacentLeaveCount >= 2) score -= 12;
-        return score;
-      };
-
-      for (const day of targetDays) {
-        for (const group of SHIFT_GROUPS) {
-          if (restrictedGroup && restrictedGroup !== group) continue;
-
-          const shiftCode = normalizedTargetShift && getShiftGroupByCode(normalizedTargetShift) === group
-            ? normalizedTargetShift
-            : DEFAULT_SHIFT_BY_GROUP[group];
-
-          const demand = getDemandForGroup(day, group);
-          const alreadyAssigned = getAssignedCountByGroup(mergedSchedule, day.date, group);
-          const needed = Math.max(0, demand - alreadyAssigned);
-
-          const groupStaffs = staffs.filter(s => (s.group || '白班') === group && targetStaffIds.has(s.id));
-          const groupStaffIds = new Set(groupStaffs.map(s => s.id));
-
-          // 逐格補主班別，補到需求就停
-          for (let slot = 0; slot < needed; slot += 1) {
-            const assignableCandidates = groupStaffs
-              .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
-              .map(staff => {
-                const result = canAssignWithSnapshot(mergedSchedule, staff, day.date, shiftCode);
-                const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesIfAssignShift(mergedSchedule, staff.id) : false;
-                return {
-                  staff,
-                  allowed: result.allowed && canKeepLeaveTarget,
-                  score: result.allowed && canKeepLeaveTarget ? scoreCandidateWithSnapshot(mergedSchedule, staff, day.date, shiftCode) : -1
-                };
-              })
-              .filter(item => item.allowed)
-              .sort((a, b) => b.score - a.score);
-
-            if (assignableCandidates.length === 0) {
-              summary.skipped += 1;
-              continue;
+            if (aiCode) {
+              let finalValue = aiCode;
+              if (isPartial && aiConfig.targetShift && !DICT.LEAVES.includes(aiCode)) finalValue = aiConfig.targetShift;
+              mergedSchedule[staffId][dateStr] = { value: finalValue, source: 'ai' };
             }
-
-            const picked = assignableCandidates[0];
-            setScheduleCode(mergedSchedule, picked.staff.id, day.date, shiftCode, 'auto');
-            summary.workFilled += 1;
-          }
-
-          // 需求已滿後，只替休假不足者補 off；其他空白保留
-          const leaveCandidates = groupStaffs
-            .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
-            .filter(staff => getLeaveCountFromSnapshot(mergedSchedule, staff.id) < requiredLeaves)
-            .map(staff => ({ staff, score: scoreLeaveCandidateWithSnapshot(mergedSchedule, staff, day.date) }))
-            .sort((a, b) => b.score - a.score);
-
-          if (leaveCandidates.length > 0) {
-            const currentLeaveLoad = getGroupLeaveLoad(mergedSchedule, day.date, group);
-            const maxLeaveForDay = Math.max(0, groupStaffIds.size - demand);
-            if (currentLeaveLoad < maxLeaveForDay) {
-              const bestLeaveCandidate = leaveCandidates[0];
-              if (bestLeaveCandidate && canStillMeetRequiredLeavesAfterAssign(mergedSchedule, bestLeaveCandidate.staff.id)) {
-                setScheduleCode(mergedSchedule, bestLeaveCandidate.staff.id, day.date, defaultAutoLeaveCode, 'auto');
-                summary.leaveFilled += 1;
-              }
-            }
-          }
-        }
+          });
+        });
+        setSchedule(mergedSchedule);
+        saveToHistory(isPartial ? 'AI區域排班' : 'AI全月排班', mergedSchedule);
+        setAiFeedback(`✅ ${isPartial ? '區域' : '全月'}補空完成！`);
       }
-
-      setSchedule(mergedSchedule);
-      saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
-      setAiFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
     } catch (error) {
-      console.error(error);
-      setAiFeedback("❌ 規則補空失敗，請檢查設定。");
+      setAiFeedback("❌ AI 排班失敗，請檢查網路。");
     } finally {
       setIsAiLoading(false);
     }
   };
 
-const callGemini = async (prompt, systemInstruction = "") => {
+  const callGemini = async (prompt, systemInstruction = "") => {
     let delay = 1000;
     for (let i = 0; i < 5; i++) {
       try {
@@ -1064,7 +650,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
       work: 0,
       holidayLeave: 0,
       totalLeave: 0,
-      leaveDetails: Object.fromEntries(mergedLeaveCodes.map(l => [l, 0]))
+      leaveDetails: Object.fromEntries(DICT.LEAVES.map(l => [l, 0]))
     };
 
     const mySchedule = schedule[staffId] || {};
@@ -1074,7 +660,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
       if (!code) return;
 
       if (DICT.SHIFTS.includes(code)) stats.work += 1;
-      if (isConfiguredLeaveCode(code)) {
+      if (DICT.LEAVES.includes(code)) {
         stats.totalLeave += 1;
         if (stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
         if (d.isWeekend || d.isHoliday) stats.holidayLeave += 1;
@@ -1084,44 +670,15 @@ const callGemini = async (prompt, systemInstruction = "") => {
   };
 
   const getDailyStats = (dateStr) => {
-    const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
-
+    const stats = { D: 0, E: 0, N: 0, '白8-8': 0, '夜8-8': 0, '8-12': 0, '12-16': 0, totalLeave: 0 };
     staffs.forEach(staff => {
       const cellData = schedule[staff.id]?.[dateStr];
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
-
-      if (['D', '白8-8', '8-12', '12-16'].includes(code)) {
-        stats.D += 1;
-      } else if (['E', '夜8-8'].includes(code)) {
-        stats.E += 1;
-      } else if (code === 'N') {
-        stats.N += 1;
-      } else if (isConfiguredLeaveCode(code)) {
-        stats.totalLeave += 1;
-      }
+      if (DICT.SHIFTS.includes(code)) stats[code] += 1;
+      else if (DICT.LEAVES.includes(code)) stats.totalLeave += 1;
     });
-
     return stats;
-  };
-
-  const getRequiredCountForDate = (dateStr, rowKey) => {
-    const dayInfo = daysInMonth.find(d => d.date === dateStr);
-    if (!dayInfo) return null;
-    const bucket = (dayInfo.isWeekend || dayInfo.isHoliday) ? 'holiday' : 'weekday';
-    if (rowKey === 'D') return Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0);
-    if (rowKey === 'E') return Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0);
-    if (rowKey === 'N') return Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0);
-    return null;
-  };
-
-  const getDemandHighlightStyle = (dateStr, rowKey, actualCount) => {
-    if (!showDemandHighlight || !['D', 'E', 'N'].includes(rowKey)) return {};
-    const requiredCount = getRequiredCountForDate(dateStr, rowKey);
-    if (requiredCount === null) return {};
-    if (actualCount < requiredCount) return { backgroundColor: demandUnderColor };
-    if (actualCount > requiredCount) return { backgroundColor: demandOverColor };
-    return { backgroundColor: demandMatchColor };
   };
 
   const saveToHistory = (label, currentSchedule = schedule) => {
@@ -1129,7 +686,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customColumns, customColumnValues }
+      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, overstaffColor }
     };
 
     setHistoryList(prev => {
@@ -1147,10 +704,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
     setSpecialWorkdays(Array.isArray(state.specialWorkdays) ? state.specialWorkdays : []);
     setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
     if (state.staffingConfig) setStaffingConfig(state.staffingConfig);
-    if (state.uiSettings) setUiSettings(state.uiSettings);
-    if (Array.isArray(state.customLeaveCodes)) setCustomLeaveCodes(state.customLeaveCodes);
-    if (Array.isArray(state.customColumns)) setCustomColumns(state.customColumns);
-    if (state.customColumnValues) setCustomColumnValues(state.customColumnValues);
+    if (state.overstaffColor) setOverstaffColor(state.overstaffColor);
     setStaffs(normalizeStaffGroup(state.staffs));
     setSchedule(state.schedule);
     if (state.colors) setColors(state.colors);
@@ -1177,13 +731,6 @@ const callGemini = async (prompt, systemInstruction = "") => {
     return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
   };
 
-  const getCellSource = (staffId, dateStr) => {
-    const cellData = schedule[staffId]?.[dateStr];
-    if (!cellData) return '';
-    if (typeof cellData === 'object' && cellData !== null) return cellData.source || 'manual';
-    return 'manual';
-  };
-
   const countConsecutiveWorkDaysBefore = (staffId, dateStr) => {
     let count = 0;
     let cursor = addDays(parseDateKey(dateStr), -1);
@@ -1205,7 +752,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
     }
 
     const prefix = getCodePrefix(currentCode);
-    if (isConfiguredLeaveCode(currentCode)) {
+    if (prefix && SMART_RULES.blockedLeavePrefixes.includes(prefix)) {
       reasons.push('該格已有休假，不可再排班');
     }
 
@@ -1249,140 +796,25 @@ const callGemini = async (prompt, systemInstruction = "") => {
     return score;
   };
 
-  const getCurrentConsecutiveLeavePattern = (staffId, dateStr) => {
-    const prevCode = getCellCode(staffId, formatDateKey(addDays(parseDateKey(dateStr), -1)));
-    const nextCode = getCellCode(staffId, formatDateKey(addDays(parseDateKey(dateStr), 1)));
-    const prevIsLeave = isLeaveCode(prevCode);
-    const nextIsLeave = isLeaveCode(nextCode);
-    return {
-      prevIsLeave,
-      nextIsLeave,
-      adjacentLeaveCount: (prevIsLeave ? 1 : 0) + (nextIsLeave ? 1 : 0)
-    };
-  };
-
   const openFillModal = (staff, dateStr) => {
-    const group = staff.group || '白班';
-    const shiftCode = DEFAULT_SHIFT_BY_GROUP[group];
-    const dayInfo = daysInMonth.find(d => d.date === dateStr);
-    const demand = dayInfo ? Number(staffingConfig?.requiredStaffing?.[(dayInfo.isWeekend || dayInfo.isHoliday) ? 'holiday' : 'weekday']?.[GROUP_TO_DEMAND_KEY[group]] || 0) : 0;
-    const alreadyAssigned = staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
-      const code = getCellCode(s.id, dateStr);
-      return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
-    }, 0);
-    const leaveCount = daysInMonth.reduce((sum, d) => sum + (isLeaveCode(getCellCode(staff.id, d.date)) ? 1 : 0), 0);
-    const leaveDeficit = Math.max(0, requiredLeaves - leaveCount);
-
-    const shiftResult = canAssign(staff, dateStr, shiftCode);
-    const currentLeaves = leaveCount;
-    const remainingBlanks = daysInMonth.reduce((sum, d) => sum + (!getCellCode(staff.id, d.date) ? 1 : 0), 0);
-    const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
-    const canKeepLeaveTarget = (remainingBlanks - 1) >= remainingLeavesNeeded;
-
-    const candidates = [];
-
-    if (alreadyAssigned < demand && shiftResult.allowed && canKeepLeaveTarget) {
-      const reasonBits = [
-        `${group}缺額尚未補滿`,
-        `${shiftCode} 為此群組主班別`
-      ];
-      candidates.push({
+    const groupShiftOptions = DICT.SHIFTS.filter((shift) => getShiftGroupByCode(shift) === (staff.group || '白班'));
+    const candidates = groupShiftOptions.map((shiftCode) => {
+      const result = canAssign(staff, dateStr, shiftCode);
+      return {
         type: 'self-shift',
         staffId: staff.id,
         staffName: staff.name,
-        group,
+        group: staff.group,
         shiftCode,
-        allowed: true,
-        score: scoreCandidate(staff, dateStr, shiftCode),
-        reasons: reasonBits
-      });
-    }
-
-    if (alreadyAssigned >= demand && leaveDeficit > 0) {
-      const sameDayLeaveLoad = staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => sum + (isLeaveCode(getCellCode(s.id, dateStr)) ? 1 : 0), 0);
-      const recentWorkPressure = (() => {
-        let count = 0;
-        let cursor = addDays(parseDateKey(dateStr), -1);
-        for (let i = 0; i < 3; i += 1) {
-          if (isShiftCode(getCellCode(staff.id, formatDateKey(cursor)))) count += 1;
-          cursor = addDays(cursor, -1);
-        }
-        return count;
-      })();
-      const consecutiveLeavePattern = getCurrentConsecutiveLeavePattern(staff.id, dateStr);
-      let offScore = leaveDeficit * 100 + recentWorkPressure * 20 - sameDayLeaveLoad * 25;
-      if (consecutiveLeavePattern.adjacentLeaveCount === 1) offScore += 18;
-      if (consecutiveLeavePattern.adjacentLeaveCount >= 2) offScore -= 10;
-      candidates.push({
-        type: 'self-leave',
-        staffId: staff.id,
-        staffName: staff.name,
-        group,
-        shiftCode: defaultAutoLeaveCode,
-        allowed: true,
-        score: offScore,
-        reasons: ['本月休假尚未達標', `當日群組需求已滿，優先補休（${defaultAutoLeaveCode}）`]
-      });
-    }
-
-    candidates.sort((a, b) => b.score - a.score);
+        allowed: result.allowed,
+        reasons: result.reasons,
+        score: result.allowed ? scoreCandidate(staff, dateStr, shiftCode) : -1
+      };
+    }).filter((item) => item.allowed).sort((a, b) => b.score - a.score);
 
     setSelectedFillCell({ staffId: staff.id, staffName: staff.name, dateStr, group: staff.group });
     setFillCandidates(candidates);
     setShowFillModal(true);
-  };
-
-const openSelectedCellFillModal = () => {
-    if (!selectedGridCell) return;
-    openFillModal(selectedGridCell.staff, selectedGridCell.dateStr);
-  };
-
-  const clearSelectedCell = () => {
-    if (!selectedGridCell) return;
-    const { staff, dateStr } = selectedGridCell;
-    const currentCode = getCellCode(staff.id, dateStr);
-    if (!currentCode) return;
-    if (!window.confirm(`確定清除此格內容？\n${staff.name}｜${dateStr}｜${currentCode}`)) return;
-
-    setSchedule(prev => ({
-      ...prev,
-      [staff.id]: { ...prev[staff.id], [dateStr]: null }
-    }));
-    setSelectedGridCell(null);
-    setAiFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
-  };
-
-  const clearRangeCells = () => {
-    if (aiConfig.selectedStaffs.length === 0) {
-      setAiFeedback('⚠️ 請先選擇要清除的人員');
-      return;
-    }
-
-    const start = Number(aiConfig.dateRange.start || 1);
-    const end = Number(aiConfig.dateRange.end || 31);
-    const targetStaffIds = new Set(aiConfig.selectedStaffs);
-
-    let cleared = 0;
-    setSchedule(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      staffs.forEach(staff => {
-        if (!targetStaffIds.has(staff.id)) return;
-        daysInMonth.forEach(day => {
-          if (day.day < start || day.day > end) return;
-          const cellData = next[staff.id]?.[day.date];
-          if (!cellData) return;
-
-          const source = typeof cellData === 'object' && cellData !== null ? (cellData.source || 'manual') : 'manual';
-          if (rangeClearMode === 'autoOnly' && source !== 'auto') return;
-
-          next[staff.id][day.date] = null;
-          cleared += 1;
-        });
-      });
-      return next;
-    });
-
-    setAiFeedback(cleared > 0 ? `🧹 已清除 ${cleared} 格內容` : 'ℹ️ 指定範圍內沒有可清除的內容');
   };
 
   const applyFillCandidate = (candidate) => {
@@ -1391,7 +823,6 @@ const openSelectedCellFillModal = () => {
     setShowFillModal(false);
     setSelectedFillCell(null);
     setFillCandidates([]);
-    setSelectedGridCell(null);
   };
 
   const addStaff = (group = '白班') => {
@@ -1438,7 +869,7 @@ const openSelectedCellFillModal = () => {
   }, [staffs]);
 
   return (
-    <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 font-sans overflow-x-hidden relative">
       <style>{`
         @keyframes pulse-once { 0% { transform: translateY(-10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
         @keyframes fade-in-down { 0% { opacity: 0; transform: translateY(-5px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -1448,7 +879,7 @@ const openSelectedCellFillModal = () => {
 
       {showDraftPrompt && (
         <div className="max-w-[95vw] mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <Clock size={18} className="text-amber-600" />
             <span className="text-sm font-bold">偵測到先前暫存紀錄。</span>
           </div>
@@ -1495,28 +926,12 @@ const openSelectedCellFillModal = () => {
 
             <div className="w-px h-8 bg-slate-200 mx-2 hidden sm:block"></div>
 
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button onClick={() => handleAiAutoSchedule(false)} disabled={isAiLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
                 {isAiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 全月補空
               </button>
               <button onClick={() => setShowAiControl(!showAiControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showAiControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
-                <Calendar size={14} /> 指定補空
-              </button>
-              <button
-                type="button"
-                onClick={openSelectedCellFillModal}
-                disabled={!selectedGridCell}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
-              >
-                <Check size={14} /> 補此格
-              </button>
-              <button
-                type="button"
-                onClick={clearSelectedCell}
-                disabled={!selectedGridCell}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
-              >
-                <Trash2 size={14} /> 清除此格
+                <Calendar size={14} /> 指定排班
               </button>
             </div>
           </div>
@@ -1527,26 +942,14 @@ const openSelectedCellFillModal = () => {
             {aiFeedback}
           </div>
         )}
-        {selectedGridCell && (
-          <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
-            <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
-            <button
-              type="button"
-              onClick={() => setSelectedGridCell(null)}
-              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
-            >
-              取消選取
-            </button>
-          </div>
-        )}
       </div>
 
       {showAiControl && (
         <div className="max-w-[95vw] mx-auto mb-6 bg-blue-50 border border-blue-200 p-6 rounded-2xl shadow-sm animate-fade-in-down">
-          <h3 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Sparkles size={18} /> 指定補空設定</h3>
+          <h3 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Sparkles size={18} /> 指定區域排班設定</h3>
           <div className="grid lg:grid-cols-4 gap-6">
             <div>
-              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">1. 選擇人員（補空範圍）</label>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">1. 選擇人員</label>
               <div className="flex flex-wrap gap-2">
                 {staffs.map(s => (
                   <button
@@ -1589,46 +992,26 @@ const openSelectedCellFillModal = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">3. 指定班別（選填）</label>
+              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">3. 指定班別 (非必填)</label>
               <select
                 value={aiConfig.targetShift}
                 onChange={(e) => setAiConfig({ ...aiConfig, targetShift: e.target.value })}
                 className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
               >
-                <option value="">依群組需求自動補空</option>
-                {AI_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
+                <option value="">由 AI 自由規劃</option>
+                {DICT.SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
+                <option value="off">休假 (off)</option>
               </select>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">4. 範圍清除模式</label>
-                <select
-                  value={rangeClearMode}
-                  onChange={(e) => setRangeClearMode(e.target.value)}
-                  className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
-                >
-                  <option value="autoOnly">只清除自動補入內容</option>
-                  <option value="all">清除範圍內全部內容</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-1 gap-3">
-                <button
-                  disabled={isAiLoading || aiConfig.selectedStaffs.length === 0}
-                  onClick={() => handleAiAutoSchedule(true)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
-                >
-                  {isAiLoading ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} 套用並補空
-                </button>
-                <button
-                  type="button"
-                  disabled={aiConfig.selectedStaffs.length === 0}
-                  onClick={clearRangeCells}
-                  className="w-full bg-white border border-red-200 text-red-600 hover:bg-red-50 font-black py-2 rounded-xl transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={18} /> 範圍清除
-                </button>
-              </div>
+            <div className="flex items-end">
+              <button
+                disabled={isAiLoading || aiConfig.selectedStaffs.length === 0}
+                onClick={() => handleAiAutoSchedule(true)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
+              >
+                {isAiLoading ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} 套用並補空
+              </button>
             </div>
           </div>
         </div>
@@ -1662,30 +1045,23 @@ const openSelectedCellFillModal = () => {
           <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200">
-                <th className={`sticky left-0 z-30 border-r font-black ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
-                <th className={`sticky z-30 border-r font-black ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
+                <th className="sticky left-0 bg-slate-200 z-30 p-4 border-r font-black text-slate-700 w-24 min-w-[96px]">班別</th>
+                <th className="sticky left-[96px] bg-slate-200 z-30 p-4 border-r font-black text-slate-700 w-36 min-w-[144px]">日期/姓名</th>
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
-                    className={`${densityConfig.dayHeaderClass} border-r text-center`}
-                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}
+                    className="p-2 border-r min-w-[48px] text-center"
+                    style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}
                   >
-                    <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
-                    <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
+                    <div className="text-[10px] opacity-60 uppercase">{d.weekStr}</div>
+                    <div className="text-lg font-black">{d.day}</div>
                   </th>
                 ))}
-                {showRightStats && (
-                <>
-                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold`}>上班</th>
-                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-green-50 text-green-700 font-bold`}>假日休</th>
-                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold`}>總休</th>
-                </>
-                )}
-                {showLeaveStats && mergedLeaveCodes.map(l => (
-                  <th key={l} className={`${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold`}>{l}</th>
-                ))}
-                {(customColumns || []).map(col => (
-                  <th key={col} className={`${densityConfig.leaveHeaderClass} border-r min-w-[70px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold`}>{col}</th>
+                <th className="p-4 border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold">上班</th>
+                <th className="p-4 border-r min-w-[60px] bg-green-50 text-green-700 font-bold">假日休</th>
+                <th className="p-4 border-r min-w-[60px] bg-red-50 text-red-700 font-bold">總休</th>
+                {DICT.LEAVES.map(l => (
+                  <th key={l} className="p-2 border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">{l}</th>
                 ))}
               </tr>
             </thead>
@@ -1701,18 +1077,18 @@ const openSelectedCellFillModal = () => {
                     return (
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
-                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
-                            <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
-                              {showShiftLabels && (<span className={`font-black leading-tight tracking-[0.14em] [writing-mode:vertical-rl]`} style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}>
+                          <td rowSpan={groupCount} className="sticky left-0 bg-white z-20 border-r p-3 text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
+                            <div className="flex items-center justify-center h-full min-h-[80px]">
+                              <span className="text-3xl font-black text-slate-800 leading-tight tracking-[0.2em] [writing-mode:vertical-rl]">
                                 {group}
-                              </span>)}
+                              </span>
                             </div>
                           </td>
                         )}
 
-                        <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                        <td className="sticky left-[96px] bg-white z-10 border-r p-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
                           <div className="flex items-center gap-2">
-                            <div className="flex flex-col items-center justify-center shrink-0 w-5">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-8">
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'up')}
                                 disabled={groupIndex === 0}
@@ -1738,12 +1114,12 @@ const openSelectedCellFillModal = () => {
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className={`flex-1 min-w-0 text-center py-1.5 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
+                              className="flex-1 text-center py-2 font-bold text-slate-700 border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent"
                             />
 
                             <button
                               onClick={() => removeStaff(staff.id)}
-                              className="text-slate-400 hover:text-red-500 shrink-0 w-6 flex items-center justify-center"
+                              className="text-slate-400 hover:text-red-500 shrink-0 w-8 flex items-center justify-center"
                             >
                               <Minus size={14} />
                             </button>
@@ -1756,65 +1132,43 @@ const openSelectedCellFillModal = () => {
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
+                              className="border-r p-0"
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
-                            onClick={() => { if (selectionMode === 'cell') setSelectedGridCell({ staff, dateStr: d.date }); }}
                             >
                               <div className="relative">
                                 <select
                                   value={val}
                                   onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
-                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`} style={{ color: tableFontColor }}
+                                  className={`w-full h-10 text-center bg-transparent border-none cursor-pointer text-sm font-bold appearance-none hover:bg-black/5 ${DICT.LEAVES.map(getCodePrefix).includes(getCodePrefix(val)) ? 'text-red-500' : 'text-slate-800'}`}
                                 >
                                   <option value=""></option>
                                   <optgroup label="上班">
                                     {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
                                   </optgroup>
                                   <optgroup label="休假">
-                                    {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
+                                    {DICT.LEAVES.map(l => <option key={l} value={l}>{l}</option>)}
                                   </optgroup>
                                 </select>
-
-                                {showBlueDots && selectionMode === 'dot' && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedGridCell({ staff, dateStr: d.date });
-                                  }}
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
-                                  aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
-                                  title={`選取 ${staff.name} ${d.date} 儲存格`}
-                                >
-                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
-                                </button>
+                                {!val && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); openFillModal(staff, d.date); }}
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white hover:bg-blue-700"
+                                  >
+                                    補
+                                  </button>
                                 )}
                               </div>
                             </td>
                           );
                         })}
 
-                        {showRightStats && (
-                        <>
-                        <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.work}</td>
-                        <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.holidayLeave}</td>
-                        <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.totalLeave}</td>
-                        </>
-                        )}
-                        {showLeaveStats && mergedLeaveCodes.map(l => (
-                          <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
+                        <td className="border-r text-center font-black text-blue-600 bg-blue-50/30">{stats.work}</td>
+                        <td className="border-r text-center font-black text-green-600 bg-green-50/30">{stats.holidayLeave}</td>
+                        <td className="border-r text-center font-black text-red-600 bg-red-50/30">{stats.totalLeave}</td>
+                        {DICT.LEAVES.map(l => (
+                          <td key={l} className="border-r text-center text-[10px] text-slate-500 bg-slate-50/20">
                             {stats.leaveDetails[l] || ''}
-                          </td>
-                        ))}
-                        {(customColumns || []).map(col => (
-                          <td key={col} className={`border-r bg-violet-50/10 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
-                            <input
-                              type="text"
-                              value={customColumnValues?.[staff.id]?.[col] || ''}
-                              onChange={(e) => setCustomColumnValues(prev => ({ ...prev, [staff.id]: { ...(prev?.[staff.id] || {}), [col]: e.target.value } }))}
-                              className="w-full h-full px-2 py-1 text-center bg-transparent border-none focus:ring-1 focus:ring-violet-300"
-                              placeholder=""
-                            />
                           </td>
                         ))}
                       </tr>
@@ -1822,7 +1176,7 @@ const openSelectedCellFillModal = () => {
                   })}
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
-                    <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                    <td className="sticky left-[96px] bg-white z-10 border-r p-2 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]">
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
@@ -1841,18 +1195,17 @@ const openSelectedCellFillModal = () => {
                       ></td>
                     ))}
 
-                    <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                    <td colSpan={3 + DICT.LEAVES.length}></td>
                   </tr>
                 </React.Fragment>
               ))}
             </tbody>
 
-            {showBottomStats && (
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
-              {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
+              {['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
-                  <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
-                  <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                  <td className="sticky left-0 bg-slate-200 z-10 border-r p-3 w-24 min-w-[96px]"></td>
+                  <td className="sticky left-[96px] bg-slate-200 z-10 border-r p-3 text-right text-xs font-bold text-slate-600 min-w-[144px]">
                     {rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`}
                   </td>
                   {daysInMonth.map(d => {
@@ -1860,18 +1213,17 @@ const openSelectedCellFillModal = () => {
                     return (
                       <td
                         key={d.date}
-                        className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                        style={{ color: tableFontColor, ...getDemandHighlightStyle(d.date, rowKey, count) }}
+                        className={`border-r p-2 text-center text-sm font-black text-slate-700 ${rowKey !== 'totalLeave' ? getDemandCellClass(d.date, rowKey) : ''}`}
+                        style={rowKey !== 'totalLeave' && getDemandCellClass(d.date, rowKey) ? { backgroundColor: overstaffColor } : undefined}
                       >
                         {count || ''}
                       </td>
                     );
                   })}
-                  <td colSpan={3 + mergedLeaveCodes.length + (customColumns?.length || 0)}></td>
+                  <td colSpan={3 + DICT.LEAVES.length}></td>
                 </tr>
               ))}
             </tfoot>
-            )}
           </table>
         </div>
       </div>
@@ -1891,15 +1243,12 @@ const openSelectedCellFillModal = () => {
             </div>
             <div className="p-4 max-h-[60vh] overflow-y-auto space-y-3">
               {fillCandidates.length === 0 ? (
-                <div className="p-6 text-center text-slate-500">目前沒有可直接建議的班別或人員。</div>
+                <div className="p-6 text-center text-slate-500">目前沒有可直接建議的班別。</div>
               ) : fillCandidates.map((candidate, index) => (
                 <div key={`${candidate.staffId}-${candidate.shiftCode}`} className="border rounded-2xl p-4 flex items-center justify-between gap-4 hover:border-blue-400 hover:bg-blue-50/40 transition-all">
                   <div>
                     <div className="font-black text-slate-800">{candidate.staffName} → {candidate.shiftCode}</div>
                     <div className="text-xs text-slate-500 mt-1">群組：{candidate.group}｜排序分數：{candidate.score}</div>
-                    {candidate.reasons?.length > 0 && (
-                      <div className="text-xs text-slate-500 mt-1">{candidate.reasons.join('｜')}</div>
-                    )}
                   </div>
                   <button onClick={() => applyFillCandidate(candidate)} className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700">
                     {index === 0 ? '選擇推薦' : '選擇'}
@@ -1970,25 +1319,8 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns }) {
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, overstaffColor, setOverstaffColor }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
-  const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
-  const addCustomLeaveCode = () => {
-    const raw = window.prompt('請輸入自訂休假代碼');
-    const code = String(raw || "").trim();
-    if (!code) return;
-    if (DICT.LEAVES.includes(code) || (customLeaveCodes || []).includes(code)) return;
-    setCustomLeaveCodes(prev => [...prev, code]);
-  };
-  const removeCustomLeaveCode = (code) => setCustomLeaveCodes(prev => prev.filter(item => item !== code));
-  const addCustomColumn = () => {
-    const raw = window.prompt('請輸入自訂欄位名稱');
-    const name = String(raw || "").trim();
-    if (!name) return;
-    if ((customColumns || []).includes(name)) return;
-    setCustomColumns(prev => [...prev, name]);
-  };
-  const removeCustomColumn = (name) => setCustomColumns(prev => prev.filter(item => item !== name));
   const addCustomHoliday = () => {
     const y = holidayInput.year.trim();
     const m = holidayInput.month.trim();
@@ -2028,218 +1360,55 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
           <div className="space-y-5">
             <SettingRow icon={Monitor} title="外觀與顯示" desc="調整班表顏色、顯示大小與統計欄位呈現。">
               <div className="space-y-6">
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">色彩標示</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">週末顏色</span><input type="color" value={colors.weekend} onChange={(e) => setColors(prev => ({ ...prev, weekend: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">假日顏色</span><input type="color" value={colors.holiday} onChange={(e) => setColors(prev => ({ ...prev, holiday: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">主頁背景顏色</span><input type="color" value={uiSettings.pageBackgroundColor} onChange={(e) => setUiSettings(prev => ({ ...prev, pageBackgroundColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">表格字體顏色</span><input type="color" value={uiSettings.tableFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄背景顏色</span><input type="color" value={uiSettings.shiftColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnBgColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄背景顏色</span><input type="color" value={uiSettings.nameDateColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnBgColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">表格顯示大小</span><select value={uiSettings.tableDensity} onChange={(e) => setUiSettings(prev => ({ ...prev, tableDensity: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="standard">標準 (預設)</option><option value="compact">緊湊</option><option value="relaxed">寬鬆</option></select></div>
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">表格字體大小</span><select value={uiSettings.tableFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">班別欄字體大小</span><select value={uiSettings.shiftColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">班別欄字體顏色</span><input type="color" value={uiSettings.shiftColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體大小</span><select value={uiSettings.nameDateColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                  <div className="flex items-center justify-between"><span className="text-sm font-medium">快速切換全部統計</span><button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showStats: !prev.showStats, showRightStats: !prev.showStats, showLeaveStats: !prev.showStats, showBottomStats: !prev.showStats }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showStats ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showStats ? 'right-1' : 'left-1'}`}></div></button></div>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">需求警示顯示</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                      <span className="text-sm font-medium">啟用需求警示高亮</span>
-                      <button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showDemandHighlight: !prev.showDemandHighlight }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showDemandHighlight ? 'bg-blue-600' : 'bg-gray-300'}`}>
-                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showDemandHighlight ? 'right-1' : 'left-1'}`}></div>
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求不足顏色</span><input type="color" value={uiSettings.demandUnderColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandUnderColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求剛好顏色</span><input type="color" value={uiSettings.demandMatchColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandMatchColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求超編顏色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                  </div>
-                </div>
-              </div>
-
-            </SettingRow>
-            <SettingRow icon={Settings} title="使用偏好" desc="快速切換主題、欄位顯示、操作方式與預設補休代碼。" iconBg="bg-violet-50" iconColor="text-violet-600">
-              <div className="space-y-6">
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">主題預設</label>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    {[
-                      ['classic','經典藍白'],
-                      ['soft','柔和綠灰'],
-                      ['warm','米色護理站'],
-                      ['dark','深色模式'],
-                      ['custom','自訂主題']
-                    ].map(([key,label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => {
-                          if (key === 'custom') {
-                            setUiSettings(prev => ({ ...prev, themePreset: 'custom' }));
-                            return;
-                          }
-                          const preset = UI_THEME_PRESETS[key];
-                          setColors(prev => ({ ...prev, weekend: preset.weekendColor, holiday: preset.holidayColor }));
-                          setUiSettings(prev => ({
-                            ...prev,
-                            themePreset: key,
-                            pageBackgroundColor: preset.pageBackgroundColor,
-                            tableFontColor: preset.tableFontColor,
-                            shiftColumnBgColor: preset.shiftColumnBgColor,
-                            nameDateColumnBgColor: preset.nameDateColumnBgColor,
-                            shiftColumnFontColor: preset.shiftColumnFontColor,
-                            nameDateColumnFontColor: preset.nameDateColumnFontColor,
-                            demandUnderColor: preset.demandUnderColor,
-                            demandMatchColor: preset.demandMatchColor,
-                            demandOverColor: preset.demandOverColor
-                          }));
-                        }}
-                        className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄位顯示</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      ['showRightStats','顯示右側統計'],
-                      ['showLeaveStats','顯示休假別統計'],
-                      ['showBottomStats','顯示下方每日統計'],
-                      ['showBlueDots','顯示藍點提示'],
-                      ['showShiftLabels','顯示班別群組大字']
-                    ].map(([key,label]) => (
-                      <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                        <span className="text-sm font-medium">{label}</span>
-                        <button
-                          type="button"
-                          onClick={() => setUiSettings(prev => ({ ...prev, [key]: !prev[key] }))}
-                          className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings[key] ? 'bg-violet-600' : 'bg-gray-300'}`}
-                        >
-                          <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings[key] ? 'right-1' : 'left-1'}`}></div>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄寬與高度</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄寬</span><select value={uiSettings.shiftColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, shiftColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄寬</span><select value={uiSettings.nameDateColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, nameDateColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">日期欄寬</span><select value={uiSettings.dayColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, dayColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">儲存格高度</span><select value={uiSettings.cellHeightMode} onChange={(e)=>setUiSettings(prev=>({...prev, cellHeightMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="compact">緊湊</option><option value="standard">標準</option><option value="roomy">寬鬆</option></select></div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">系統補休預設代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2">{mergedLeaveCodes.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">選格操作模式</span><select value={uiSettings.selectionMode} onChange={(e)=>setUiSettings(prev=>({...prev, selectionMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="dot">點藍點選格</option><option value="cell">點格選取</option></select></div>
-                </div>
+                <div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">色彩標示</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">週末顏色</span><input type="color" value={colors.weekend} onChange={(e) => setColors(prev => ({ ...prev, weekend: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div><div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">假日顏色</span><input type="color" value={colors.holiday} onChange={(e) => setColors(prev => ({ ...prev, holiday: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div><div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">超編警示色</span><input type="color" value={overstaffColor} onChange={(e) => setOverstaffColor(e.target.value)} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div></div></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="flex items-center justify-between"><span className="text-sm font-medium">表格顯示大小</span><select className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option>標準 (預設)</option><option>緊湊</option><option>寬鬆</option></select></div><div className="flex items-center justify-between"><span className="text-sm font-medium">顯示統計欄位</span><div className="w-10 h-5 bg-blue-600 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div></div></div></div>
               </div>
             </SettingRow>
             <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
               <div className="space-y-5">
                 <div>
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={addCustomLeaveCode} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                      <Plus className="w-3.5 h-3.5" /> 新增
-                    </button>
-                    {(customLeaveCodes || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂休假代碼</div> : (customLeaveCodes || []).map(code => (
-                      <span key={code} className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}<button type="button" onClick={() => removeCustomLeaveCode(code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
-                    ))}
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
-                </div>
-                <div className="pt-3 border-t border-gray-100 space-y-3">
-                  <div>
-                    <button type="button" onClick={addCustomColumn} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                      <Plus className="w-3.5 h-3.5" /> 新增自訂欄位
-                    </button>
-                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {(customColumns || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂欄位</div> : (customColumns || []).map(col => (
-                      <span key={col} className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 text-violet-700 text-xs font-bold rounded-md border border-violet-200">{col}<button type="button" onClick={() => removeCustomColumn(col)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
-                    ))}
+                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100"><Plus className="w-3.5 h-3.5" />新增</button>
                   </div>
-                  <div className="text-xs text-gray-500">新增後會同步出現在主頁右側，作為延伸紀錄欄位。可用來記錄如門診、支援、教學、行政或其他單位自訂資訊。</div>
+                </div>
+                <div className="pt-3 border-t border-gray-100">
+                  <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100"><Plus className="w-3.5 h-3.5" />新增自訂欄位</button>
+                  <p className="text-xs text-gray-500 mt-3 leading-relaxed">可新增主頁右側的補充紀錄欄位，例如門診、支援、教學、行政或其他單位自訂資訊。</p>
                 </div>
               </div>
             </SettingRow>
             <SettingRow icon={UserCheck} title="補空需求設定" desc="設定平日 / 假日各班需求，作為全月補空與指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
               <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
-                    <h4 className="font-bold text-gray-800 mb-4">平日需求</h4>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-4">
+                    <div className="text-sm font-bold text-gray-800 mb-4">平日需求</div>
                     <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">白班</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.white}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">小夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.evening}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">大夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.night}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
-                      </div>
+                      <div><label className="text-xs text-gray-500 block mb-2">白班</label><input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.white} onChange={(e)=>setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, white: parseInt(e.target.value, 10) || 0 } } }))} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" /></div>
+                      <div><label className="text-xs text-gray-500 block mb-2">小夜</label><input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.evening} onChange={(e)=>setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, evening: parseInt(e.target.value, 10) || 0 } } }))} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" /></div>
+                      <div><label className="text-xs text-gray-500 block mb-2">大夜</label><input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.night} onChange={(e)=>setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, night: parseInt(e.target.value, 10) || 0 } } }))} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" /></div>
                     </div>
                   </div>
-
-                  <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
-                    <h4 className="font-bold text-gray-800 mb-4">假日需求</h4>
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-4">
+                    <div className="text-sm font-bold text-gray-800 mb-4">假日需求</div>
                     <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">白班</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.white}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">小夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.evening}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">大夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.night}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
-                      </div>
+                      <div><label className="text-xs text-gray-500 block mb-2">白班</label><input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.white} onChange={(e)=>setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, white: parseInt(e.target.value, 10) || 0 } } }))} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" /></div>
+                      <div><label className="text-xs text-gray-500 block mb-2">小夜</label><input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.evening} onChange={(e)=>setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, evening: parseInt(e.target.value, 10) || 0 } } }))} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" /></div>
+                      <div><label className="text-xs text-gray-500 block mb-2">大夜</label><input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.night} onChange={(e)=>setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, night: parseInt(e.target.value, 10) || 0 } } }))} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" /></div>
                     </div>
                   </div>
                 </div>
-
                 <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
                   <div className="font-semibold text-gray-800 mb-1">目前補空依據</div>
                   <div>平日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.night}</span> 人</div>
-                  <div>假日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.night}</span> 人</div>
+                  <div className="mt-1">假日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.night}</span> 人</div>
                 </div>
               </div>
             </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
-              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
+              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
             </SettingRow>
+            
           </div>
         </section>
         <section className="space-y-6">
@@ -2271,47 +1440,8 @@ export default function App() {
   const [customHolidays, setCustomHolidays] = useState([]);
   const [specialWorkdays, setSpecialWorkdays] = useState([]);
   const [medicalCalendarAdjustments, setMedicalCalendarAdjustments] = useState({ holidays: [], workdays: [] });
-  const [uiSettings, setUiSettings] = useState({
-    pageBackgroundColor: '#f8fafc',
-    tableFontSize: 'medium',
-    tableFontColor: '#1f2937',
-    shiftColumnFontSize: 'large',
-    shiftColumnFontColor: '#1e293b',
-    nameDateColumnFontSize: 'medium',
-    nameDateColumnFontColor: '#1e293b',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#ffffff',
-    tableDensity: 'standard',
-    showStats: true,
-    themePreset: 'custom',
-    showRightStats: true,
-    showLeaveStats: true,
-    showBottomStats: true,
-    showBlueDots: true,
-    showShiftLabels: true,
-    defaultAutoLeaveCode: 'off',
-    selectionMode: 'dot',
-    shiftColumnWidthMode: 'standard',
-    nameDateColumnWidthMode: 'standard',
-    dayColumnWidthMode: 'standard',
-    cellHeightMode: 'standard',
-    showDemandHighlight: true,
-    demandUnderColor: '#fecaca',
-    demandMatchColor: '#dcfce7',
-    demandOverColor: '#fde68a'
-  });
-  const [staffingConfig, setStaffingConfig] = useState({
-    hospitalLevel: 'regional',
-    totalBeds: 60,
-    totalNurses: 20,
-    requiredStaffing: {
-      weekday: { white: 6, evening: 3, night: 2 },
-      holiday: { white: 4, evening: 2, night: 2 }
-    }
-  });
-  const [customLeaveCodes, setCustomLeaveCodes] = useState([]);
-  const [customColumns, setCustomColumns] = useState([]);
-  const [customColumnValues, setCustomColumnValues] = useState({});
+  const [staffingConfig, setStaffingConfig] = useState(DEFAULT_STAFFING_CONFIG);
+  const [overstaffColor, setOverstaffColor] = useState('#fde68a');
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
 
   const goToSchedule = () => {
@@ -2338,14 +1468,8 @@ export default function App() {
         setMedicalCalendarAdjustments={setMedicalCalendarAdjustments}
         staffingConfig={staffingConfig}
         setStaffingConfig={setStaffingConfig}
-        uiSettings={uiSettings}
-        setUiSettings={setUiSettings}
-        customLeaveCodes={customLeaveCodes}
-        setCustomLeaveCodes={setCustomLeaveCodes}
-        customColumns={customColumns}
-        setCustomColumns={setCustomColumns}
-        customColumnValues={customColumnValues}
-        setCustomColumnValues={setCustomColumnValues}
+        overstaffColor={overstaffColor}
+        setOverstaffColor={setOverstaffColor}
         loadLatestOnEnter={loadLatestOnEnter}
         onLatestLoaded={() => setLoadLatestOnEnter(false)}
       />
@@ -2366,12 +1490,8 @@ export default function App() {
         setMedicalCalendarAdjustments={setMedicalCalendarAdjustments}
         staffingConfig={staffingConfig}
         setStaffingConfig={setStaffingConfig}
-        uiSettings={uiSettings}
-        setUiSettings={setUiSettings}
-        customLeaveCodes={customLeaveCodes}
-        setCustomLeaveCodes={setCustomLeaveCodes}
-        customColumns={customColumns}
-        setCustomColumns={setCustomColumns}
+        overstaffColor={overstaffColor}
+        setOverstaffColor={setOverstaffColor}
       />
     );
   }
