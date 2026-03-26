@@ -333,51 +333,53 @@ const HOSPITAL_RATIO_HINTS = {
 
 
 const UI_FONT_SIZE_OPTIONS = {
-  small: { label: '小', className: 'text-xs' },
-  medium: { label: '標準', className: 'text-sm' },
-  large: { label: '大', className: 'text-base' }
+  small: { label: '小', className: 'text-xs', shiftLabelSize: '1.45rem', shiftCellLabelSize: '1.55rem' },
+  medium: { label: '標準', className: 'text-sm', shiftLabelSize: '1.95rem', shiftCellLabelSize: '2.05rem' },
+  large: { label: '大', className: 'text-base', shiftLabelSize: '2.45rem', shiftCellLabelSize: '2.55rem' }
 };
 
 const getUiFontSizeClass = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.className || UI_FONT_SIZE_OPTIONS.medium.className;
+const getShiftLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.shiftLabelSize || UI_FONT_SIZE_OPTIONS.medium.shiftLabelSize;
+const getShiftCellLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.shiftCellLabelSize || UI_FONT_SIZE_OPTIONS.medium.shiftCellLabelSize;
 
 const UI_DENSITY_OPTIONS = {
   compact: {
-    shiftWidth: 68,
-    nameWidth: 116,
-    dayMinWidth: 38,
-    dayHeaderClass: 'px-1 py-1.5',
-    statHeaderClass: 'p-2',
-    leaveHeaderClass: 'p-1.5',
-    cellHeightClass: 'h-9',
-    nameCellPaddingClass: 'px-2 py-1.5',
-    footCellPaddingClass: 'p-2',
-    groupLabelClass: 'text-[1.7rem]',
-    selectorDotClass: 'w-2 h-2'
+    shiftWidth: 58,
+    nameWidth: 98,
+    dayMinWidth: 32,
+    dayHeaderClass: 'px-0.5 py-1 text-[11px]',
+    statHeaderClass: 'p-1.5',
+    leaveHeaderClass: 'p-1',
+    cellHeightClass: 'h-8',
+    nameCellPaddingClass: 'px-1.5 py-1',
+    footCellPaddingClass: 'p-1.5',
+    groupLabelClass: '',
+    selectorDotClass: 'w-1.5 h-1.5'
   },
   standard: {
-    shiftWidth: 80,
-    nameWidth: 128,
-    dayMinWidth: 44,
-    dayHeaderClass: 'px-1.5 py-2',
-    statHeaderClass: 'p-4',
-    leaveHeaderClass: 'p-2',
+    shiftWidth: 76,
+    nameWidth: 122,
+    dayMinWidth: 42,
+    dayHeaderClass: 'px-1.5 py-2 text-xs',
+    statHeaderClass: 'p-3',
+    leaveHeaderClass: 'p-1.5',
     cellHeightClass: 'h-10',
     nameCellPaddingClass: 'px-2 py-2',
-    footCellPaddingClass: 'p-3',
-    groupLabelClass: 'text-[2rem]',
-    selectorDotClass: 'w-2.5 h-2.5'
+    footCellPaddingClass: 'p-2.5',
+    groupLabelClass: '',
+    selectorDotClass: 'w-2 h-2'
   },
   relaxed: {
-    shiftWidth: 92,
-    nameWidth: 148,
-    dayMinWidth: 52,
-    dayHeaderClass: 'px-2 py-2.5',
+    shiftWidth: 100,
+    nameWidth: 156,
+    dayMinWidth: 56,
+    dayHeaderClass: 'px-2 py-2.5 text-sm',
     statHeaderClass: 'p-4',
     leaveHeaderClass: 'p-2',
-    cellHeightClass: 'h-11',
+    cellHeightClass: 'h-12',
     nameCellPaddingClass: 'px-3 py-2.5',
     footCellPaddingClass: 'p-3',
-    groupLabelClass: 'text-[2.2rem]',
+    groupLabelClass: '',
     selectorDotClass: 'w-3 h-3'
   }
 };
@@ -428,6 +430,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const tableFontSizeClass = getUiFontSizeClass(uiSettings?.tableFontSize);
   const shiftColumnFontSizeClass = getUiFontSizeClass(uiSettings?.shiftColumnFontSize);
   const nameDateColumnFontSizeClass = getUiFontSizeClass(uiSettings?.nameDateColumnFontSize);
+  const shiftLabelFontSize = getShiftLabelFontSize(uiSettings?.shiftColumnFontSize);
+  const shiftCellLabelFontSize = getShiftCellLabelFontSize(uiSettings?.shiftColumnFontSize);
   const densityConfig = getUiDensityConfig(uiSettings?.tableDensity);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
@@ -1580,7 +1584,7 @@ const openSelectedCellFillModal = () => {
                         {index === 0 && (
                           <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
                             <div className="flex items-center justify-center h-full min-h-[80px]">
-                              <span className={`${densityConfig.groupLabelClass} font-black leading-tight tracking-[0.14em] [writing-mode:vertical-rl] ${shiftColumnFontSizeClass}`} style={{ color: shiftColumnFontColor }}>
+                              <span className={`font-black leading-tight tracking-[0.14em] [writing-mode:vertical-rl]`} style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}>
                                 {group}
                               </span>
                             </div>
