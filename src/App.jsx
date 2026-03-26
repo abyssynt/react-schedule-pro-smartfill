@@ -2097,18 +2097,21 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
               <div className="space-y-5">
                 <div>
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label>
-                  <div className="flex flex-wrap gap-2">
-                    {(customLeaveCodes || []).map(code => (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={addCustomLeaveCode} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <Plus className="w-3.5 h-3.5" /> 新增
+                    </button>
+                    {(customLeaveCodes || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂休假代碼</div> : (customLeaveCodes || []).map(code => (
                       <span key={code} className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}<button type="button" onClick={() => removeCustomLeaveCode(code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                     ))}
-                    <button type="button" onClick={addCustomLeaveCode} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><Plus className="w-4 h-4" /></button>
                   </div>
                   <div className="mt-2 text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
                 </div>
                 <div className="pt-3 border-t border-gray-100 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-blue-600 font-medium flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</span>
-                    <button type="button" onClick={addCustomColumn} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-sm font-medium hover:bg-blue-100">新增</button>
+                  <div>
+                    <button type="button" onClick={addCustomColumn} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-blue-600 hover:bg-blue-50">
+                      <Plus className="w-3.5 h-3.5" /> 新增自訂欄位
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {(customColumns || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂欄位</div> : (customColumns || []).map(col => (
@@ -2117,7 +2120,6 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   </div>
                   <div className="text-xs text-gray-500">新增後會同步出現在主頁右側，作為延伸紀錄欄位。可用來記錄如門診、支援、教學、行政或其他單位自訂資訊。</div>
                 </div>
-                <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">系統已支援固定國曆假日、補假規則、清明/端午/中秋/除夕與春節推算；2024–2026 仍優先採官方公告日曆，未來可再擴充特殊補班與輪班單位調移。</div>
               </div>
             </SettingRow>
             <SettingRow icon={UserCheck} title="人力需求設定" desc="獨立設定平日 / 假日各班需求，作為全月補空與指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
