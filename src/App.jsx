@@ -1933,6 +1933,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
 
 function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
+  const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
   const addCustomLeaveCode = () => {
     const raw = window.prompt('請輸入自訂休假代碼');
     const code = String(raw || "").trim();
