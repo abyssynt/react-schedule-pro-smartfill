@@ -451,7 +451,7 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, loadLatestOnEnter, onLatestLoaded }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -512,6 +512,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const showShiftLabels = uiSettings?.showShiftLabels ?? true;
   const defaultAutoLeaveCode = uiSettings?.defaultAutoLeaveCode || 'off';
   const selectionMode = uiSettings?.selectionMode || 'dot';
+  const mergedLeaveCodes = useMemo(() => Array.from(new Set([...DICT.LEAVES, ...(customLeaveCodes || [])])).filter(Boolean), [customLeaveCodes]);
+  const isConfiguredLeaveCode = (code = '') => {
+    if (!code) return false;
+    const prefix = getCodePrefix(code);
+    return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
+  };
 
   // ==========================================
   // 3. 初始載入與自動帶入
@@ -602,7 +608,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
 
-    const headerRow = ['班別', '日期/姓名', ...daysInMonth.map(d => `${d.day}\n(${d.weekStr})`), '上班', '假日休', '總休', ...DICT.LEAVES];
+    const headerRow = ['班別', '日期/姓名', ...daysInMonth.map(d => `${d.day}\n(${d.weekStr})`), '上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
     const header = worksheet.addRow(headerRow);
     header.height = 30;
 
@@ -630,7 +636,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           return typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
         }),
         stats.work, stats.holidayLeave, stats.totalLeave,
-        ...DICT.LEAVES.map(l => stats.leaveDetails[l] || '')
+        ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''), ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
       ];
       const row = worksheet.addRow(rowData);
 
@@ -799,7 +805,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const currentCode = getScheduleCode(snapshot, staff.id, dateStr);
         if (currentCode) reasons.push('該格已有排班或休假代碼');
         const prefix = getCodePrefix(currentCode);
-        if (prefix && SMART_RULES.blockedLeavePrefixes.includes(prefix)) reasons.push('該格已有休假，不可再排班');
+        if (isConfiguredLeaveCode(currentCode)) reasons.push('該格已有休假，不可再排班');
         const staffGroup = staff.group || '白班';
         const shiftGroup = getShiftGroupByCode(shiftCode);
         if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) reasons.push('不可跨群組排班');
@@ -822,7 +828,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       };
 
       const getLeaveCountFromSnapshot = (snapshot, staffId) => {
-        return daysInMonth.reduce((sum, d) => sum + (isLeaveCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
+        return daysInMonth.reduce((sum, d) => sum + (isConfiguredLeaveCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
       };
 
       const getBlankCountFromSnapshot = (snapshot, staffId) => {
@@ -1042,7 +1048,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
       work: 0,
       holidayLeave: 0,
       totalLeave: 0,
-      leaveDetails: Object.fromEntries(DICT.LEAVES.map(l => [l, 0]))
+      leaveDetails: Object.fromEntries(mergedLeaveCodes.map(l => [l, 0]))
     };
 
     const mySchedule = schedule[staffId] || {};
@@ -1052,7 +1058,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
       if (!code) return;
 
       if (DICT.SHIFTS.includes(code)) stats.work += 1;
-      if (DICT.LEAVES.includes(code)) {
+      if (isConfiguredLeaveCode(code)) {
         stats.totalLeave += 1;
         if (stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
         if (d.isWeekend || d.isHoliday) stats.holidayLeave += 1;
@@ -1075,7 +1081,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
         stats.E += 1;
       } else if (code === 'N') {
         stats.N += 1;
-      } else if (DICT.LEAVES.includes(code)) {
+      } else if (isConfiguredLeaveCode(code)) {
         stats.totalLeave += 1;
       }
     });
@@ -1088,7 +1094,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings }
+      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customColumns, customColumnValues }
     };
 
     setHistoryList(prev => {
@@ -1107,6 +1113,9 @@ const callGemini = async (prompt, systemInstruction = "") => {
     setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
     if (state.staffingConfig) setStaffingConfig(state.staffingConfig);
     if (state.uiSettings) setUiSettings(state.uiSettings);
+    if (Array.isArray(state.customLeaveCodes)) setCustomLeaveCodes(state.customLeaveCodes);
+    if (Array.isArray(state.customColumns)) setCustomColumns(state.customColumns);
+    if (state.customColumnValues) setCustomColumnValues(state.customColumnValues);
     setStaffs(normalizeStaffGroup(state.staffs));
     setSchedule(state.schedule);
     if (state.colors) setColors(state.colors);
@@ -1161,7 +1170,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
     }
 
     const prefix = getCodePrefix(currentCode);
-    if (prefix && SMART_RULES.blockedLeavePrefixes.includes(prefix)) {
+    if (isConfiguredLeaveCode(currentCode)) {
       reasons.push('該格已有休假，不可再排班');
     }
 
@@ -1637,8 +1646,11 @@ const openSelectedCellFillModal = () => {
                 <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold`}>總休</th>
                 </>
                 )}
-                {showLeaveStats && DICT.LEAVES.map(l => (
+                {showLeaveStats && mergedLeaveCodes.map(l => (
                   <th key={l} className={`${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold`}>{l}</th>
+                ))}
+                {(customColumns || []).map(col => (
+                  <th key={col} className={`${densityConfig.leaveHeaderClass} border-r min-w-[70px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold`}>{col}</th>
                 ))}
               </tr>
             </thead>
@@ -1724,7 +1736,7 @@ const openSelectedCellFillModal = () => {
                                     {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
                                   </optgroup>
                                   <optgroup label="休假">
-                                    {DICT.LEAVES.map(l => <option key={l} value={l}>{l}</option>)}
+                                    {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
                                   </optgroup>
                                 </select>
 
@@ -1754,9 +1766,20 @@ const openSelectedCellFillModal = () => {
                         <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.totalLeave}</td>
                         </>
                         )}
-                        {showLeaveStats && DICT.LEAVES.map(l => (
+                        {showLeaveStats && mergedLeaveCodes.map(l => (
                           <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
                             {stats.leaveDetails[l] || ''}
+                          </td>
+                        ))}
+                        {(customColumns || []).map(col => (
+                          <td key={col} className={`border-r bg-violet-50/10 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
+                            <input
+                              type="text"
+                              value={customColumnValues?.[staff.id]?.[col] || ''}
+                              onChange={(e) => setCustomColumnValues(prev => ({ ...prev, [staff.id]: { ...(prev?.[staff.id] || {}), [col]: e.target.value } }))}
+                              className="w-full h-full px-2 py-1 text-center bg-transparent border-none focus:ring-1 focus:ring-violet-300"
+                              placeholder=""
+                            />
                           </td>
                         ))}
                       </tr>
@@ -1783,7 +1806,7 @@ const openSelectedCellFillModal = () => {
                       ></td>
                     ))}
 
-                    <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? DICT.LEAVES.length : 0)}></td>
+                    <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
                   </tr>
                 </React.Fragment>
               ))}
@@ -1805,7 +1828,7 @@ const openSelectedCellFillModal = () => {
                       </td>
                     );
                   })}
-                  <td colSpan={3 + DICT.LEAVES.length}></td>
+                  <td colSpan={3 + mergedLeaveCodes.length + (customColumns?.length || 0)}></td>
                 </tr>
               ))}
             </tfoot>
@@ -1908,8 +1931,24 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings }) {
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
+  const addCustomLeaveCode = () => {
+    const raw = window.prompt('請輸入自訂休假代碼');
+    const code = String(raw || "").trim();
+    if (!code) return;
+    if (DICT.LEAVES.includes(code) || (customLeaveCodes || []).includes(code)) return;
+    setCustomLeaveCodes(prev => [...prev, code]);
+  };
+  const removeCustomLeaveCode = (code) => setCustomLeaveCodes(prev => prev.filter(item => item !== code));
+  const addCustomColumn = () => {
+    const raw = window.prompt('請輸入自訂欄位名稱');
+    const name = String(raw || "").trim();
+    if (!name) return;
+    if ((customColumns || []).includes(name)) return;
+    setCustomColumns(prev => [...prev, name]);
+  };
+  const removeCustomColumn = (name) => setCustomColumns(prev => prev.filter(item => item !== name));
   const addCustomHoliday = () => {
     const y = holidayInput.year.trim();
     const m = holidayInput.month.trim();
@@ -2048,13 +2087,41 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">系統補休預設代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2">{DICT.LEAVES.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">系統補休預設代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2">{mergedLeaveCodes.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">選格操作模式</span><select value={uiSettings.selectionMode} onChange={(e)=>setUiSettings(prev=>({...prev, selectionMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="dot">點藍點選格</option><option value="cell">點格選取</option></select></div>
                 </div>
               </div>
             </SettingRow>
             <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼、班別呈現順序與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
-              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label><div className="flex flex-wrap gap-2">{['V','PL','S','O'].map(code => <span key={code} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}</span>)}<button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><Plus className="w-4 h-4" /></button></div></div><div><label className="text-sm font-medium block mb-2">班別顯示順序</label><div className="text-xs text-gray-500 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">拖放排序功能開發中</div></div><div className="pt-3 border-t border-gray-100"><button className="text-sm text-blue-600 font-medium flex items-center gap-1 hover:underline"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</button></div><div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">系統已支援固定國曆假日、補假規則、清明/端午/中秋/除夕與春節推算；2024–2026 仍優先採官方公告日曆，未來可再擴充特殊補班與輪班單位調移。</div></div>
+              <div className="space-y-5">
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label>
+                  <div className="flex flex-wrap gap-2">
+                    {(customLeaveCodes || []).map(code => (
+                      <span key={code} className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}<button type="button" onClick={() => removeCustomLeaveCode(code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
+                    ))}
+                    <button type="button" onClick={addCustomLeaveCode} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><Plus className="w-4 h-4" /></button>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-2">班別顯示順序</label>
+                  <div className="text-xs text-gray-500 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">拖放排序功能開發中</div>
+                </div>
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-blue-600 font-medium flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> 新增自訂欄位</span>
+                    <button type="button" onClick={addCustomColumn} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-sm font-medium hover:bg-blue-100">新增</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(customColumns || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂欄位</div> : (customColumns || []).map(col => (
+                      <span key={col} className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 text-violet-700 text-xs font-bold rounded-md border border-violet-200">{col}<button type="button" onClick={() => removeCustomColumn(col)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
+                    ))}
+                  </div>
+                  <div className="text-xs text-gray-500">新增後會同步出現在主頁右側，作為延伸紀錄欄位。</div>
+                </div>
+                <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">系統已支援固定國曆假日、補假規則、清明/端午/中秋/除夕與春節推算；2024–2026 仍優先採官方公告日曆，未來可再擴充特殊補班與輪班單位調移。</div>
+              </div>
             </SettingRow>
             <SettingRow icon={UserCheck} title="人力需求設定" desc="獨立設定平日 / 假日各班需求，作為全月補空與指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
               <div className="space-y-6">
@@ -2225,6 +2292,9 @@ export default function App() {
       holiday: { white: 4, evening: 2, night: 2 }
     }
   });
+  const [customLeaveCodes, setCustomLeaveCodes] = useState(['V', 'PL', 'S', 'O']);
+  const [customColumns, setCustomColumns] = useState([]);
+  const [customColumnValues, setCustomColumnValues] = useState({});
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
 
   const goToSchedule = () => {
@@ -2253,6 +2323,12 @@ export default function App() {
         setStaffingConfig={setStaffingConfig}
         uiSettings={uiSettings}
         setUiSettings={setUiSettings}
+        customLeaveCodes={customLeaveCodes}
+        setCustomLeaveCodes={setCustomLeaveCodes}
+        customColumns={customColumns}
+        setCustomColumns={setCustomColumns}
+        customColumnValues={customColumnValues}
+        setCustomColumnValues={setCustomColumnValues}
         loadLatestOnEnter={loadLatestOnEnter}
         onLatestLoaded={() => setLoadLatestOnEnter(false)}
       />
@@ -2275,6 +2351,10 @@ export default function App() {
         setStaffingConfig={setStaffingConfig}
         uiSettings={uiSettings}
         setUiSettings={setUiSettings}
+        customLeaveCodes={customLeaveCodes}
+        setCustomLeaveCodes={setCustomLeaveCodes}
+        customColumns={customColumns}
+        setCustomColumns={setCustomColumns}
       />
     );
   }
