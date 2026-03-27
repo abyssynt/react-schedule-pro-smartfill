@@ -1362,23 +1362,23 @@ const callGemini = async (prompt, systemInstruction = "") => {
           <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200">
-                <th className="sticky top-0 left-0 bg-slate-200 z-50 px-3 py-4 border-r font-black text-slate-700 w-20 min-w-[80px]">班別</th>
-                <th className="sticky top-0 left-[80px] bg-slate-200 z-50 px-3 py-4 border-r font-black text-slate-700 w-32 min-w-[128px]">姓名/日期</th>
+                <th className="sticky left-0 bg-slate-200 z-30 px-3 py-4 border-r font-black text-slate-700 w-20 min-w-[80px]">班別</th>
+                <th className="sticky left-[80px] bg-slate-200 z-30 px-3 py-4 border-r font-black text-slate-700 w-32 min-w-[128px]">姓名/日期</th>
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
-                    className="sticky top-0 z-40 px-1.5 py-2 border-r min-w-[44px] text-center"
-                    style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9') }}
+                    className="px-1.5 py-2 border-r min-w-[44px] text-center"
+                    style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}
                   >
                     <div className="text-[10px] opacity-60 uppercase">{d.weekStr}</div>
                     <div className="text-lg font-black">{d.day}</div>
                   </th>
                 ))}
-                <th className="sticky top-0 z-40 p-4 border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold">上班</th>
-                <th className="sticky top-0 z-40 p-4 border-r min-w-[60px] bg-green-50 text-green-700 font-bold">假日休</th>
-                <th className="sticky top-0 z-40 p-4 border-r min-w-[60px] bg-red-50 text-red-700 font-bold">總休</th>
+                <th className="p-4 border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold">上班</th>
+                <th className="p-4 border-r min-w-[60px] bg-green-50 text-green-700 font-bold">假日休</th>
+                <th className="p-4 border-r min-w-[60px] bg-red-50 text-red-700 font-bold">總休</th>
                 {DICT.LEAVES.map(l => (
-                  <th key={l} className="sticky top-0 z-40 p-2 border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">{l}</th>
+                  <th key={l} className="p-2 border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold">{l}</th>
                 ))}
               </tr>
             </thead>
