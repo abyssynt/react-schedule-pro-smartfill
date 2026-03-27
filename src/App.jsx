@@ -80,8 +80,6 @@ const normalizeLunarDay = (label = '') => {
   return null;
 };
 
-const apiKey = "";
-
 const formatDateKey = (date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -313,29 +311,39 @@ const normalizeImportedShiftCode = (rawValue = '') => {
   return value;
 };
 
-const parseImportedExcelWorkbook = async (file) => {
-  const XLSX = await loadSheetJS();
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: 'array' });
+const buildMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 
-  const firstSheetName = workbook.SheetNames.find((name) => {
-    const sheet = workbook.Sheets[name];
-    return sheet && sheet['!ref'];
-  });
-  if (!firstSheetName) {
-    throw new Error('找不到可讀取的工作表');
+const extractYearMonthCandidates = (...sources) => {
+  const patterns = [
+    /(\d{4})\s*年\s*(\d{1,2})\s*月/,
+    /(\d{4})[\/_\-.](\d{1,2})/,
+    /(\d{1,2})\s*月/
+  ];
+
+  for (const source of sources) {
+    const text = String(source || '').trim();
+    if (!text) continue;
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match) continue;
+      if (match.length >= 3 && pattern !== patterns[2]) {
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        if (year >= 1900 && month >= 1 && month <= 12) return { year, month };
+      }
+      if (pattern === patterns[2]) {
+        const month = Number(match[1]);
+        if (month >= 1 && month <= 12) return { year: null, month };
+      }
+    }
   }
 
-  const worksheet = workbook.Sheets[firstSheetName];
-  const rows = XLSX.utils.sheet_to_json(worksheet, {
-    header: 1,
-    raw: false,
-    defval: ''
-  });
+  return { year: null, month: null };
+};
 
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error('找不到可讀取的工作表');
-  }
+const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
 
   let headerRowIndex = -1;
   let headerMap = {};
@@ -353,9 +361,7 @@ const parseImportedExcelWorkbook = async (file) => {
     }
   }
 
-  if (headerRowIndex === -1) {
-    throw new Error('匯入失敗：找不到「姓名」與「班別群組」欄位');
-  }
+  if (headerRowIndex === -1) return null;
 
   const validGroups = new Set(SHIFT_GROUPS);
   const validCodes = new Set([...DICT.SHIFTS, ...DICT.LEAVES]);
@@ -369,7 +375,7 @@ const parseImportedExcelWorkbook = async (file) => {
     .sort((a, b) => a.day - b.day);
 
   if (dayColumnPairs.length === 0) {
-    throw new Error('匯入失敗：找不到日期欄（格式需為 1日、2日 ...）');
+    throw new Error(`工作表「${sheetName}」找不到日期欄（格式需為 1日、2日 ...）`);
   }
 
   const importedStaffs = [];
@@ -382,12 +388,11 @@ const parseImportedExcelWorkbook = async (file) => {
     const rawGroup = String(row[headerMap['班別群組']] ?? '').trim();
 
     const hasAnyContent = row.some((value) => String(value ?? '').trim() !== '');
-    if (!hasAnyContent) continue;
-    if (!rawName) continue;
+    if (!hasAnyContent || !rawName) continue;
 
     const normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
     const rowNumber = rowIndex + 1;
-    const staffId = `import_${Date.now()}_${rowNumber}`;
+    const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
 
     importedStaffs.push({
       id: staffId,
@@ -398,7 +403,7 @@ const parseImportedExcelWorkbook = async (file) => {
     importedSchedule[staffId] = {};
 
     if (rawGroup && !validGroups.has(rawGroup)) {
-      invalidMessages.push(`第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，已自動改為白班`);
+      invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，已自動改為白班`);
     }
 
     dayColumnPairs.forEach(({ day, colNumber }) => {
@@ -407,7 +412,7 @@ const parseImportedExcelWorkbook = async (file) => {
 
       const normalizedCode = normalizeImportedShiftCode(rawValue);
       if (!validCodes.has(normalizedCode)) {
-        invalidMessages.push(`第 ${rowNumber} 列「${rawName}」的 ${day}日 代碼「${rawValue}」無法匯入，已略過`);
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的 ${day}日 代碼「${rawValue}」無法匯入，已略過`);
         return;
       }
 
@@ -415,32 +420,109 @@ const parseImportedExcelWorkbook = async (file) => {
     });
   }
 
-  if (importedStaffs.length === 0) {
-    throw new Error('匯入失敗：找不到可匯入的人員資料');
+  if (importedStaffs.length === 0) return null;
+
+  const scanTexts = [];
+  const maxRowsToScan = Math.min(rows.length, 8);
+  for (let r = 0; r < maxRowsToScan; r += 1) {
+    const row = Array.isArray(rows[r]) ? rows[r] : [];
+    for (let c = 0; c < Math.min(row.length, 8); c += 1) {
+      const cellText = String(row[c] ?? '').trim();
+      if (cellText) scanTexts.push(cellText);
+    }
   }
 
-  const titleCandidates = [
-    String(rows?.[0]?.[0] ?? '').trim(),
-    String(firstSheetName ?? '').trim()
-  ];
-  let importedYear = null;
-  let importedMonth = null;
-  titleCandidates.forEach((candidate) => {
-    if (!candidate) return;
-    const yearMatch = candidate.match(/(\d{4})年/);
-    const monthMatch = candidate.match(/(\d{1,2})月/);
-    if (yearMatch) importedYear = Number(yearMatch[1]);
-    if (monthMatch) importedMonth = Number(monthMatch[1]);
-  });
+  const detected = extractYearMonthCandidates(...scanTexts, sheetName, fileName);
+  const month = detected.month;
+  const year = detected.year || fallbackYear;
+
+  if (!month) {
+    throw new Error(`工作表「${sheetName}」無法辨識月份，請確認表頭、sheet 名稱或檔名包含幾月資訊`);
+  }
 
   return {
-    year: importedYear,
-    month: importedMonth,
+    year,
+    month,
     staffs: importedStaffs,
     scheduleByDay: importedSchedule,
-    warnings: invalidMessages
+    warnings: invalidMessages,
+    importMeta: {
+      sourceType: 'excel',
+      sourceFiles: [fileName],
+      sourceSheets: [sheetName],
+      importedAt: new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString()
+    }
   };
 };
+
+const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().getFullYear()) => {
+  const XLSX = await loadSheetJS();
+  const fileList = Array.from(files || []);
+  const monthlySchedules = {};
+  const warnings = [];
+  let firstMonthKey = '';
+
+  for (const file of fileList) {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+
+    for (const sheetName of workbook.SheetNames) {
+      const worksheet = workbook.Sheets[sheetName];
+      if (!worksheet || !worksheet['!ref']) continue;
+
+      const rows = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        raw: false,
+        defval: ''
+      });
+
+      try {
+        const parsed = parseImportedWorksheet({
+          rows,
+          sheetName,
+          fileName: file.name,
+          fallbackYear
+        });
+
+        if (!parsed) continue;
+
+        const monthKey = buildMonthKey(parsed.year, parsed.month);
+        const existing = monthlySchedules[monthKey];
+        if (existing) {
+          monthlySchedules[monthKey] = {
+            ...parsed,
+            importMeta: {
+              ...parsed.importMeta,
+              sourceFiles: Array.from(new Set([...(existing.importMeta?.sourceFiles || []), file.name])),
+              sourceSheets: Array.from(new Set([...(existing.importMeta?.sourceSheets || []), sheetName]))
+            }
+          };
+          warnings.push(`月份 ${parsed.year}年${parsed.month}月 重複匯入，已以最後讀取的內容覆蓋`);
+        } else {
+          monthlySchedules[monthKey] = parsed;
+          if (!firstMonthKey) firstMonthKey = monthKey;
+        }
+
+        warnings.push(...(parsed.warnings || []));
+      } catch (error) {
+        warnings.push(error?.message || `檔案「${file.name}」工作表「${sheetName}」無法匯入`);
+      }
+    }
+  }
+
+  const keys = Object.keys(monthlySchedules).sort();
+  if (keys.length === 0) {
+    throw new Error('匯入失敗：找不到可匯入的月份資料，請確認檔案使用系統範本或至少包含「姓名」、「班別群組」、「1日~31日」欄位');
+  }
+
+  return {
+    monthlySchedules,
+    firstMonthKey: firstMonthKey || keys[0],
+    warnings
+  };
+};
+
 
 
 const normalizeStaffGroup = (staffList = []) => {
@@ -629,7 +711,7 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -676,6 +758,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftLabelFontSize = getShiftLabelFontSize(uiSettings?.shiftColumnFontSize);
   const shiftCellLabelFontSize = getShiftCellLabelFontSize(uiSettings?.shiftColumnFontSize);
   const densityConfig = getAdjustedDensityConfig(getUiDensityConfig(uiSettings?.tableDensity), uiSettings);
+  const monthLoadSkipRef = useRef(false);
+  const initializedMonthRef = useRef(false);
+  const monthSwitchSeedRef = useRef('');
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -739,43 +824,72 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   }, [loadLatestOnEnter, onLatestLoaded]);
 
   useEffect(() => {
-    if (!importedSchedulePayload) return;
+    if (!pendingOpenMonthKey) return;
+    const [nextYear, nextMonth] = String(pendingOpenMonthKey).split('-').map(Number);
+    if (!Number.isFinite(nextYear) || !Number.isFinite(nextMonth)) {
+      onPendingOpenHandled?.();
+      return;
+    }
+    monthSwitchSeedRef.current = pendingOpenMonthKey;
+    setYear(nextYear);
+    setMonth(nextMonth);
+    onPendingOpenHandled?.();
+  }, [pendingOpenMonthKey, onPendingOpenHandled]);
 
-    const importedYear = Number(importedSchedulePayload.year);
-    const importedMonth = Number(importedSchedulePayload.month);
-    const safeYear = Number.isFinite(importedYear) && importedYear > 1900 ? importedYear : year;
-    const safeMonth = Number.isFinite(importedMonth) && importedMonth >= 1 && importedMonth <= 12 ? importedMonth : month;
-    const maxDays = new Date(safeYear, safeMonth, 0).getDate();
-
-    const normalizedStaffs = normalizeStaffGroup(importedSchedulePayload.staffs || []);
-    const rebuiltSchedule = normalizedStaffs.reduce((acc, staff) => {
-      const sourceMap = importedSchedulePayload.scheduleByDay?.[staff.id] || {};
-      const staffSchedule = {};
-      Object.entries(sourceMap).forEach(([day, cell]) => {
-        const dayNumber = Number(day);
-        if (!Number.isFinite(dayNumber) || dayNumber < 1 || dayNumber > maxDays) return;
-        const dateKey = `${safeYear}-${String(safeMonth).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`;
-        staffSchedule[dateKey] = cell;
-      });
-      acc[staff.id] = staffSchedule;
-      return acc;
-    }, {});
-
-    setYear(safeYear);
-    setMonth(safeMonth);
-    setStaffs(normalizedStaffs);
-    setSchedule(rebuiltSchedule);
-    setCustomColumnValues({});
-    setSelectedGridCell(null);
-
+  useEffect(() => {
+    if (!importedSchedulePayload || !importedSchedulePayload.monthlySchedules) return;
+    setMonthlySchedules(prev => ({
+      ...prev,
+      ...importedSchedulePayload.monthlySchedules
+    }));
+    const totalMonths = Object.keys(importedSchedulePayload.monthlySchedules || {}).length;
     if (Array.isArray(importedSchedulePayload.warnings) && importedSchedulePayload.warnings.length > 0) {
-      setAiFeedback(`✅ 匯入完成，共載入 ${normalizedStaffs.length} 位人員；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過或修正`);
+      setAiFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過、修正或覆蓋`);
     } else {
-      setAiFeedback(`✅ 匯入完成，共載入 ${normalizedStaffs.length} 位人員`);
+      setAiFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份`);
+    }
+    onImportedScheduleApplied?.();
+  }, [importedSchedulePayload, onImportedScheduleApplied, setMonthlySchedules]);
+
+  useEffect(() => {
+    const currentKey = buildMonthKey(year, month);
+    if (!initializedMonthRef.current) {
+      loadMonthState(year, month);
+      initializedMonthRef.current = true;
+      monthSwitchSeedRef.current = currentKey;
+      return;
     }
 
-    onImportedScheduleApplied?.();
-  }, [importedSchedulePayload, onImportedScheduleApplied]);
+    if (monthSwitchSeedRef.current !== currentKey) {
+      loadMonthState(year, month);
+      monthSwitchSeedRef.current = currentKey;
+    }
+  }, [year, month]);
+
+  useEffect(() => {
+    if (monthLoadSkipRef.current) return;
+    const monthKey = buildMonthKey(year, month);
+    setMonthlySchedules(prev => ({
+      ...prev,
+      [monthKey]: {
+        ...(prev?.[monthKey] || {}),
+        year,
+        month,
+        staffs: normalizeStaffGroup(staffs),
+        scheduleData: schedule,
+        customColumnValues: customColumnValues || {},
+        schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
+        importMeta: {
+          ...(prev?.[monthKey]?.importMeta || {}),
+          sourceType: prev?.[monthKey]?.importMeta?.sourceType || 'manual',
+          sourceFiles: prev?.[monthKey]?.importMeta?.sourceFiles || [],
+          sourceSheets: prev?.[monthKey]?.importMeta?.sourceSheets || [],
+          importedAt: prev?.[monthKey]?.importMeta?.importedAt || new Date().toISOString(),
+          lastUpdatedAt: new Date().toISOString()
+        }
+      }
+    }));
+  }, [year, month, staffs, schedule, customColumnValues, schedulingRulesText, setMonthlySchedules]);
 
   const holidayCalendar = useMemo(() => {
     return getSystemHolidayCalendar(year, {
@@ -816,6 +930,38 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     () => daysInMonth.filter(d => d.isWeekend || d.isHoliday).length,
     [daysInMonth]
   );
+
+  const createBlankScheduleForStaffs = (staffList = []) => {
+    return staffList.reduce((acc, staff) => {
+      acc[staff.id] = {};
+      return acc;
+    }, {});
+  };
+
+  const loadMonthState = (targetYear, targetMonth) => {
+    const monthKey = buildMonthKey(targetYear, targetMonth);
+    const monthData = monthlySchedules?.[monthKey];
+    monthLoadSkipRef.current = true;
+
+    if (monthData) {
+      const normalizedMonthStaffs = normalizeStaffGroup(monthData.staffs || []);
+      setStaffs(normalizedMonthStaffs);
+      setSchedule(monthData.scheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
+      setCustomColumnValues(monthData.customColumnValues || {});
+      setSchedulingRulesText(typeof monthData.schedulingRulesText === 'string' ? monthData.schedulingRulesText : '');
+    } else {
+      const fallbackStaffs = normalizeStaffGroup(staffs);
+      setStaffs(fallbackStaffs);
+      setSchedule(createBlankScheduleForStaffs(fallbackStaffs));
+      setCustomColumnValues({});
+      setSchedulingRulesText('');
+    }
+
+    setSelectedGridCell(null);
+    setTimeout(() => {
+      monthLoadSkipRef.current = false;
+    }, 0);
+  };
 
   // ==========================================
   // 4. Excel 匯出 (ExcelJS 實現)
@@ -1410,29 +1556,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
   };
 
-const callGemini = async (prompt, systemInstruction = "") => {
-    let delay = 1000;
-    for (let i = 0; i < 5; i++) {
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-            generationConfig: { responseMimeType: "application/json" }
-          })
-        });
-        if (!response.ok) throw new Error('API Error');
-        const data = await response.json();
-        return JSON.parse(data.candidates[0].content.parts[0].text);
-      } catch (err) {
-        if (i === 4) throw err;
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2;
-      }
-    }
-  };
 
   // ==========================================
   // 6. 輔助統計與操作
@@ -2677,7 +2800,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
   );
 }
 
-function EntryView({ changeScreen, goToLatestHistory, onImportFile }) {
+function EntryView({ changeScreen, goToLatestHistory, onImportFiles }) {
   const importInputRef = useRef(null);
 
   const handleImportButtonClick = () => {
@@ -2685,18 +2808,21 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFile }) {
   };
 
   const handleImportInputChange = async (event) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
     event.target.value = '';
-    if (!file) return;
+    if (files.length === 0) return;
 
-    const fileName = String(file.name || '').toLowerCase();
-    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    const invalidFile = files.find((file) => {
+      const fileName = String(file.name || '').toLowerCase();
+      return !fileName.endsWith('.xlsx') && !fileName.endsWith('.xls');
+    });
+    if (invalidFile) {
       window.alert('目前僅支援 Excel 檔案（.xlsx / .xls）');
       return;
     }
 
     try {
-      await onImportFile?.(file);
+      await onImportFiles?.(files);
     } catch (error) {
       console.error('匯入檔案失敗:', error);
       window.alert(error?.message || '匯入檔案失敗，請確認是否使用系統範本。');
@@ -2814,6 +2940,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFile }) {
           <input
             ref={importInputRef}
             type="file"
+            multiple
             accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
             onChange={handleImportInputChange}
@@ -2922,21 +3049,26 @@ export default function App() {
   const [schedulingRulesText, setSchedulingRulesText] = useState('');
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
   const [importedSchedulePayload, setImportedSchedulePayload] = useState(null);
+  const [monthlySchedules, setMonthlySchedules] = useState({});
+  const [pendingOpenMonthKey, setPendingOpenMonthKey] = useState('');
 
-  const handleImportFile = async (file) => {
-    const imported = await parseImportedExcelWorkbook(file);
+  const handleImportFiles = async (files) => {
+    const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
     setImportedSchedulePayload(imported);
+    setPendingOpenMonthKey(imported.firstMonthKey || '');
     setLoadLatestOnEnter(false);
     setScreen('schedule');
   };
 
   const goToSchedule = () => {
     setLoadLatestOnEnter(false);
+    setPendingOpenMonthKey('');
     setScreen('schedule');
   };
 
   const goToLatestHistory = () => {
     setLoadLatestOnEnter(true);
+    setPendingOpenMonthKey('');
     setScreen('schedule');
   };
 
@@ -2968,6 +3100,10 @@ export default function App() {
         onLatestLoaded={() => setLoadLatestOnEnter(false)}
         importedSchedulePayload={importedSchedulePayload}
         onImportedScheduleApplied={() => setImportedSchedulePayload(null)}
+        monthlySchedules={monthlySchedules}
+        setMonthlySchedules={setMonthlySchedules}
+        pendingOpenMonthKey={pendingOpenMonthKey}
+        onPendingOpenHandled={() => setPendingOpenMonthKey('')}
       />
     );
   }
@@ -3005,7 +3141,7 @@ export default function App() {
         else setScreen(target);
       }}
       goToLatestHistory={goToLatestHistory}
-      onImportFile={handleImportFile}
+      onImportFiles={handleImportFiles}
     />
   );
 }
