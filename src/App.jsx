@@ -676,6 +676,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     } finally {
       onLatestLoaded?.();
     }
+  }, [loadLatestOnEnter, onLatestLoaded]);
 
   useEffect(() => {
     if (!importedSchedulePayload) return;
