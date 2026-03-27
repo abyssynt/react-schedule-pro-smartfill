@@ -2044,22 +2044,10 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
     setHolidayInput({ year: '', month: '', day: '' });
   };
   const removeCustomHoliday = (dateStr) => setCustomHolidays(prev => prev.filter(item => item !== dateStr));
-  const fixedGroups = [
-    { icon: ShieldCheck, title: '排班核心規則', items: ['每日至少一位主管級別值班', '夜班後必須接續至少 24 小時休息', '特定危險單位需雙人以上配置'] },
-    { icon: Clock, title: '班別接續限制', items: ['禁止「花班」：白班不得直接接續大夜', '小夜轉白班間隔需大於 12 小時', '連班上限不得超過 6 天'] },
-    { icon: UserCheck, title: '請假與休假限制', items: ['法定假日優先排休計算', '年度特休不得低於勞基法標準', '病假/喪假排位權重調整限制'] },
-    { icon: Database, title: '核心資料格式', items: ['員工編號固定為 8 位數字', '班表週期固定為 1 個自然月', '資料匯出格式限定為 .xlsx / .pdf'] }
-  ];
-  const extGroups = [
-    { title: '權限控管', desc: '各級主管登入權限', icon: ShieldCheck },
-    { title: '雲端同步', desc: '即時異地備份機制', icon: Database },
-    { title: '單位自訂規則', desc: '細化至科別的規則', icon: Plus },
-    { title: '進階 AI 條件', desc: '複雜人員偏好學習', icon: Cpu }
-  ];
   return (
     <div className="min-h-screen bg-gray-50 text-slate-800 font-sans selection:bg-blue-100">
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-8 py-4 flex justify-between items-center shadow-sm">
-        <div><div className="flex items-center gap-2 mb-0.5"><Settings className="w-6 h-6 text-blue-600" /><h1 className="text-xl font-bold tracking-tight text-gray-900">系統設定</h1></div><p className="text-sm text-gray-500">可調整使用者設定，核心規則由系統固定管理</p></div>
+        <div><div className="flex items-center gap-2 mb-0.5"><Settings className="w-6 h-6 text-blue-600" /><h1 className="text-xl font-bold tracking-tight text-gray-900">系統設定</h1></div><p className="text-sm text-gray-500">可調整使用者設定與畫面顯示參數。</p></div>
         <div className="flex items-center gap-3">
           <button onClick={() => changeScreen('entry')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="w-4 h-4" />返回入口頁</button>
           <button onClick={() => changeScreen('schedule')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><Calendar className="w-4 h-4" />返回排班頁</button>
@@ -2275,11 +2263,6 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
             </SettingRow>
           </div>
         </section>
-        <section className="space-y-6">
-          <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-1 h-6 bg-amber-500 rounded-full"></div><h2 className="text-lg font-bold text-gray-800">系統固定規則</h2></div><div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-100"><Lock className="w-3.5 h-3.5" /><span className="text-xs font-bold uppercase tracking-tight">唯讀模式 / 使用者不可修改</span></div></div>
-          <div className="bg-slate-50 border border-slate-200 rounded-3xl overflow-hidden shadow-inner"><div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">{fixedGroups.map((group, i) => <div key={i} className="bg-white p-6 hover:bg-slate-50 transition-colors"><div className="flex items-center gap-3 mb-4"><group.icon className="w-5 h-5 text-slate-400" /><h4 className="font-bold text-slate-700">{group.title}</h4></div><ul className="space-y-3">{group.items.map((item, j) => <li key={j} className="flex items-start gap-3"><CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" /><span className="text-sm text-slate-600 leading-relaxed">{item}</span></li>)}</ul></div>)}<div className="md:col-span-2 bg-slate-900 text-white p-8"><div className="flex items-center gap-3 mb-6"><div className="p-2 bg-blue-500/20 rounded-xl border border-blue-400/30"><Cpu className="w-5 h-5 text-blue-400" /></div><div><h4 className="font-bold text-lg">AI 智能補班基礎限制 (核心邏輯)</h4><p className="text-xs text-slate-400 uppercase tracking-widest mt-0.5">Core Intelligent Logic Constraints</p></div></div><div className="grid grid-cols-1 md:grid-cols-3 gap-8"><div className="space-y-2"><div className="text-blue-400 text-xs font-bold">權重演算限制</div><p className="text-sm text-slate-300">AI 禁止將權重設為負值，所有補空邏輯皆需符合人員適任性評分，系統會鎖定基底適任性分數不被手動覆蓋。</p></div><div className="space-y-2"><div className="text-blue-400 text-xs font-bold">覆蓋衝突限制</div><p className="text-sm text-slate-300">手動排班具有 100% 絕對優先權。AI 補空演算時自動迴避「手動鎖定」儲存格，且不主動修改現有固定排程。</p></div><div className="space-y-2"><div className="text-blue-400 text-xs font-bold">合規性校準</div><p className="text-sm text-slate-300">補空結果產出前需通過內部「三重合規檢驗」，若違反勞基法工時限制，AI 將拒絕輸出該時段排程。</p></div></div></div></div></div>
-        </section>
-        <section className="space-y-6"><div className="flex items-center gap-2"><div className="w-1 h-6 bg-purple-600 rounded-full"></div><h2 className="text-lg font-bold text-gray-800">未來擴充功能</h2></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{extGroups.map((ext, idx) => <div key={idx} className="group p-5 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-purple-200 transition-all cursor-not-allowed opacity-75"><div className="mb-4 p-2 w-fit bg-purple-50 rounded-xl group-hover:bg-purple-100 transition-colors"><ext.icon className="w-5 h-5 text-purple-600" /></div><h4 className="font-bold text-gray-800 mb-1">{ext.title}</h4><p className="text-xs text-gray-500 mb-4">{ext.desc}</p><div className="flex items-center text-[10px] font-bold text-purple-400 uppercase tracking-tighter"><span className="bg-purple-50 px-2 py-0.5 rounded">Coming Soon</span></div></div>)}</div></section>
       </main>
       <footer className="max-w-7xl mx-auto px-8 py-12 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-4"><div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div><span className="text-sm font-semibold text-gray-700">系統核心版本: v2.5.0-PRO</span></div><span className="text-gray-300">|</span><span className="text-sm text-gray-500">智慧排班引擎開發測試版</span></div><div className="text-sm text-gray-400">© 2024 Intelligent Scheduling System PRO. All rights reserved.</div></footer>
     </div>
