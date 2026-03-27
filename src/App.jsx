@@ -455,7 +455,7 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, loadLatestOnEnter, onLatestLoaded }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -744,6 +744,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const statHeaders = ['上班', '假日休', '總休'];
     const titleColSpan = daysInMonth.length;
     const leaveColSpan = statHeaders.length;
+    const totalColumns = 1 + daysInMonth.length + statHeaders.length;
+    const schedulingRuleLines = String(schedulingRulesText || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean);
+    const schedulingRulesHtml = schedulingRuleLines.length > 0
+      ? `排班規則：<br/>${schedulingRuleLines.map((line, index) => `${index + 1}. ${line}`).join('<br/>')}`
+      : '排班規則：';
 
     const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -841,6 +849,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .stat-work-cell { background-color: #eff6ff; }
           .stat-holiday-cell { background-color: #f0fdf4; }
           .stat-total-cell { background-color: #fef2f2; }
+          .rules-row td {
+            padding: 8pt 10pt;
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.7;
+            font-size: 10pt;
+            background: #ffffff;
+          }
         </style>
       </head>
       <body>
@@ -885,6 +901,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 </tr>`;
               }).join('')}
             </tbody>
+            <tfoot>
+              <tr class="rules-row">
+                <td colspan="${totalColumns}">${schedulingRulesHtml}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </body>
@@ -1272,7 +1293,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customColumns, customColumnValues }
+      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText }
     };
 
     setHistoryList(prev => {
@@ -1294,6 +1315,7 @@ const callGemini = async (prompt, systemInstruction = "") => {
     if (Array.isArray(state.customLeaveCodes)) setCustomLeaveCodes(state.customLeaveCodes);
     if (Array.isArray(state.customColumns)) setCustomColumns(state.customColumns);
     if (state.customColumnValues) setCustomColumnValues(state.customColumnValues);
+    if (typeof state.schedulingRulesText === 'string') setSchedulingRulesText(state.schedulingRulesText);
     setStaffs(normalizeStaffGroup(state.staffs));
     setSchedule(state.schedule);
     if (state.colors) setColors(state.colors);
@@ -2174,7 +2196,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns }) {
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
   const addCustomLeaveCode = () => {
@@ -2357,6 +2379,19 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   </div>
                   <div className="text-xs text-gray-500">新增後會同步出現在主頁右側，作為延伸紀錄欄位。可用來記錄如門診、支援、教學、行政或其他單位自訂資訊。</div>
                 </div>
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">匯出用排班規則</label>
+                    <textarea
+                      value={schedulingRulesText}
+                      onChange={(e) => setSchedulingRulesText(e.target.value)}
+                      rows={6}
+                      placeholder={`請逐行輸入排班規則\n例如：\n白班每日至少 6 人\n小夜不跨白班支援`}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500">這裡輸入的內容不會同步到主頁顯示，但會在匯出 Word 時顯示於最下方，格式為：排班規則：1.XXX 2.XXX。</div>
+                </div>
               </div>
             </SettingRow>
             <SettingRow icon={UserCheck} title="補空需求設定" desc="設定平日 / 假日各班需求，作為全月補空與指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
@@ -2485,6 +2520,7 @@ export default function App() {
   const [customLeaveCodes, setCustomLeaveCodes] = useState([]);
   const [customColumns, setCustomColumns] = useState([]);
   const [customColumnValues, setCustomColumnValues] = useState({});
+  const [schedulingRulesText, setSchedulingRulesText] = useState('');
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
 
   const goToSchedule = () => {
@@ -2519,6 +2555,8 @@ export default function App() {
         setCustomColumns={setCustomColumns}
         customColumnValues={customColumnValues}
         setCustomColumnValues={setCustomColumnValues}
+        schedulingRulesText={schedulingRulesText}
+        setSchedulingRulesText={setSchedulingRulesText}
         loadLatestOnEnter={loadLatestOnEnter}
         onLatestLoaded={() => setLoadLatestOnEnter(false)}
       />
@@ -2545,6 +2583,8 @@ export default function App() {
         setCustomLeaveCodes={setCustomLeaveCodes}
         customColumns={customColumns}
         setCustomColumns={setCustomColumns}
+        schedulingRulesText={schedulingRulesText}
+        setSchedulingRulesText={setSchedulingRulesText}
       />
     );
   }
