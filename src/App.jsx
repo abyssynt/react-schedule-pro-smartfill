@@ -741,59 +741,139 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
 
   const exportToWord = () => {
+    const daysCount = daysInMonth.length;
+    const titleColSpan = Math.max(1, daysCount - 3);
+    const leaveColSpan = Math.min(3, daysCount);
+    const emptyLeadingColSpan = 1;
+    const titleStartIndex = emptyLeadingColSpan + 1;
+    const titleEndIndex = titleStartIndex + titleColSpan - 1;
+    const leaveStartIndex = Math.max(titleEndIndex + 1, daysCount - leaveColSpan + 2);
+    const leaveEndIndex = daysCount + 1;
+
+    const monthTitleCells = [];
+    monthTitleCells.push(`<td></td>`);
+    for (let i = 2; i <= daysCount + 1; i += 1) {
+      if (i === titleStartIndex) {
+        monthTitleCells.push(`<td colspan="${Math.max(1, titleEndIndex - titleStartIndex + 1)}" class="month-title">` + `${month}月班表` + `</td>`);
+        i = titleEndIndex;
+      } else if (i === leaveStartIndex) {
+        monthTitleCells.push(`<td colspan="${Math.max(1, leaveEndIndex - leaveStartIndex + 1)}" class="leave-title">` + `應休${requiredLeaves}天` + `</td>`);
+        i = leaveEndIndex;
+      }
+    }
+
     const html = `
-    <html>
+    <html xmlns:o="urn:schemas-microsoft-com:office:office"
+          xmlns:w="urn:schemas-microsoft-com:office:word"
+          xmlns="http://www.w3.org/TR/REC-html40">
       <head>
         <meta charset="utf-8">
+        <meta name="ProgId" content="Word.Document">
+        <meta name="Generator" content="Microsoft Word 15">
+        <meta name="Originator" content="Microsoft Word 15">
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>90</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
         <style>
-          @page { size: landscape; margin: 1cm; }
-          body { font-family: sans-serif; }
-          table { border-collapse: collapse; width: 100%; font-size: 9pt; }
-          th, td { border: 1px solid #000; padding: 4px; text-align: center; }
+          @page WordSection1 {
+            size: 841.9pt 595.3pt;
+            mso-page-orientation: landscape;
+            margin: 28.35pt 28.35pt 28.35pt 28.35pt;
+          }
+          div.WordSection1 { page: WordSection1; }
+          body {
+            font-family: "Microsoft JhengHei", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+          }
+          table {
+            border-collapse: collapse;
+            table-layout: fixed;
+            width: auto;
+            margin: 0 auto;
+            font-size: 9pt;
+          }
+          th, td {
+            border: 1px solid #000;
+            padding: 2px 3px;
+            text-align: center;
+            vertical-align: middle;
+            word-break: break-all;
+          }
+          .month-row td {
+            height: 24pt;
+            font-weight: 700;
+            background: #ffffff;
+          }
+          .month-title {
+            font-size: 14pt;
+            text-align: center;
+          }
+          .leave-title {
+            font-size: 10pt;
+            text-align: right;
+            white-space: nowrap;
+          }
+          .name-col {
+            width: 52pt;
+            min-width: 52pt;
+            font-weight: 700;
+          }
+          .day-col {
+            width: 18pt;
+            min-width: 18pt;
+          }
+          .header-cell {
+            font-weight: 700;
+            line-height: 1.1;
+          }
           .holiday { background-color: ${colors.holiday}; }
           .weekend { background-color: ${colors.weekend}; }
         </style>
       </head>
       <body>
-        <h2 style="text-align:center;">${year}年${month}月 班表</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>班別</th>
-              <th>姓名</th>
-              ${daysInMonth.map(d => `<th class="${d.isHoliday ? 'holiday' : (d.isWeekend ? 'weekend' : '')}">${d.day}<br/>(${d.weekStr})</th>`).join('')}
-              <th>上班</th>
-              <th>總休</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${staffs.map(staff => {
-              const stats = getStaffStats(staff.id);
-              return `
+        <div class="WordSection1">
+          <table>
+            <thead>
+              <tr class="month-row">
+                ${monthTitleCells.join('')}
+              </tr>
+              <tr>
+                <th class="name-col header-cell">姓名</th>
+                ${daysInMonth.map(d => `<th class="day-col header-cell ${d.isHoliday ? 'holiday' : (d.isWeekend ? 'weekend' : '')}">${d.day}<br/>(${d.weekStr})</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${staffs.map(staff => `
                 <tr>
-                  <td>${staff.group}</td>
-                  <td>${staff.name}</td>
+                  <td class="name-col">${staff.name}</td>
                   ${daysInMonth.map(d => {
                     const cellData = schedule[staff.id]?.[d.date];
-                    return `<td>${typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '')}</td>`;
+                    const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
+                    const cellClass = d.isHoliday ? 'holiday' : (d.isWeekend ? 'weekend' : '');
+                    return `<td class="day-col ${cellClass}">${value}</td>`;
                   }).join('')}
-                  <td>${stats.work}</td>
-                  <td>${stats.totalLeave}</td>
                 </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
       </body>
     </html>`;
 
-    const blob = new Blob([html], { type: 'application/msword' });
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `列印班表_${year}年${month}月.doc`;
     a.click();
+    URL.revokeObjectURL(url);
     setShowExportMenu(false);
+    setAiFeedback("✅ Word 導出成功！");
   };
 
   // ==========================================
