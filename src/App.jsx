@@ -742,25 +742,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const exportToWord = () => {
     const daysCount = daysInMonth.length;
-    const titleColSpan = Math.max(1, daysCount - 3);
-    const leaveColSpan = Math.min(3, daysCount);
-    const emptyLeadingColSpan = 1;
-    const titleStartIndex = emptyLeadingColSpan + 1;
-    const titleEndIndex = titleStartIndex + titleColSpan - 1;
-    const leaveStartIndex = Math.max(titleEndIndex + 1, daysCount - leaveColSpan + 2);
-    const leaveEndIndex = daysCount + 1;
-
-    const monthTitleCells = [];
-    monthTitleCells.push(`<td></td>`);
-    for (let i = 2; i <= daysCount + 1; i += 1) {
-      if (i === titleStartIndex) {
-        monthTitleCells.push(`<td colspan="${Math.max(1, titleEndIndex - titleStartIndex + 1)}" class="month-title">` + `${month}月班表` + `</td>`);
-        i = titleEndIndex;
-      } else if (i === leaveStartIndex) {
-        monthTitleCells.push(`<td colspan="${Math.max(1, leaveEndIndex - leaveStartIndex + 1)}" class="leave-title">` + `應休${requiredLeaves}天` + `</td>`);
-        i = leaveEndIndex;
-      }
-    }
+    const monthTitleColSpan = daysCount;
 
     const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -809,11 +791,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-weight: 700;
             background: #ffffff;
           }
+          .month-title-wrap {
+            position: relative;
+            height: 24pt;
+          }
           .month-title {
             font-size: 14pt;
             text-align: center;
+            display: block;
+            width: 100%;
           }
           .leave-title {
+            position: absolute;
+            right: 4pt;
+            top: 50%;
+            transform: translateY(-50%);
             font-size: 10pt;
             text-align: right;
             white-space: nowrap;
@@ -840,7 +832,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           <table>
             <thead>
               <tr class="month-row">
-                ${monthTitleCells.join('')}
+                <td></td>
+                <td colspan="${monthTitleColSpan}">
+                  <div class="month-title-wrap">
+                    <span class="month-title">${month}月班表</span>
+                    <span class="leave-title">應休${requiredLeaves}天</span>
+                  </div>
+                </td>
               </tr>
               <tr>
                 <th class="name-col header-cell">姓名</th>
