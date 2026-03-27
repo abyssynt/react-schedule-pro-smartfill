@@ -463,17 +463,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [month, setMonth] = useState(3);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const clampMonth = (value) => Math.min(12, Math.max(1, Number(value) || 1));
-  const handleYearInputChange = (value) => setYear(Number(value) || new Date().getFullYear());
-  const handleMonthInputChange = (value) => setMonth(clampMonth(value));
-  const adjustYear = (delta) => setYear((prev) => prev + delta);
-  const adjustMonth = (delta) => setMonth((prev) => {
-    const next = prev + delta;
-    if (next < 1) return 12;
-    if (next > 12) return 1;
-    return next;
-  });
-
   const [staffs, setStaffs] = useState(normalizeStaffGroup([
     { id: 's1', name: '新成員' }, { id: 's2', name: '新成員' }, { id: 's3', name: '新成員' }, { id: 's4', name: '新成員' }, { id: 's5', name: '新成員' },
     { id: 's6', name: '新成員' }, { id: 's7', name: '新成員' }, { id: 's8', name: '新成員' }, { id: 's9', name: '新成員' }, { id: 's10', name: '新成員' },
@@ -1634,53 +1623,43 @@ const openSelectedCellFillModal = () => {
       )}
 
       <div className="max-w-[95vw] mx-auto mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-7 bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-4">
+        <div className="lg:col-span-7 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-5">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-slate-600">年</span>
-              <div className="flex items-center border rounded-lg overflow-hidden bg-white">
-                <input
-                  type="number"
-                  value={year}
-                  onChange={(e) => handleYearInputChange(e.target.value)}
-                  className="w-24 p-2 text-center font-bold border-none focus:ring-0"
-                />
-                <div className="flex flex-col border-l border-slate-200">
-                  <button type="button" onClick={() => adjustYear(1)} className="px-2 py-1 hover:bg-slate-100 text-slate-600">
-                    <ArrowUp size={14} />
-                  </button>
-                  <button type="button" onClick={() => adjustYear(-1)} className="px-2 py-1 border-t border-slate-200 hover:bg-slate-100 text-slate-600">
-                    <ArrowDown size={14} />
-                  </button>
-                </div>
-              </div>
+              <span className="text-sm font-bold text-slate-600 shrink-0">年份</span>
+              <input
+                type="number"
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())}
+                className="w-28 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold"
+              />
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-slate-600">月</span>
-              <div className="flex items-center border rounded-lg overflow-hidden bg-white">
-                <input
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={month}
-                  onChange={(e) => handleMonthInputChange(e.target.value)}
-                  className="w-20 p-2 text-center font-bold border-none focus:ring-0"
-                />
-                <div className="flex flex-col border-l border-slate-200">
-                  <button type="button" onClick={() => adjustMonth(1)} className="px-2 py-1 hover:bg-slate-100 text-slate-600">
-                    <ArrowUp size={14} />
-                  </button>
-                  <button type="button" onClick={() => adjustMonth(-1)} className="px-2 py-1 border-t border-slate-200 hover:bg-slate-100 text-slate-600">
-                    <ArrowDown size={14} />
-                  </button>
-                </div>
-              </div>
+              <span className="text-sm font-bold text-slate-600 shrink-0">月份</span>
+              <input
+                type="number"
+                min="1"
+                max="12"
+                step="1"
+                value={month}
+                onChange={(e) => {
+                  const nextMonth = Number(e.target.value);
+                  if (!Number.isFinite(nextMonth)) return;
+                  setMonth(Math.min(12, Math.max(1, nextMonth)));
+                }}
+                className="w-24 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold"
+              />
             </div>
 
-            <div className="bg-blue-600 px-4 py-2 rounded-xl shadow-md text-white flex items-center gap-3">
-              <span className="text-sm opacity-90 font-bold">應休天數</span>
-              <span className="text-2xl font-black leading-none">{requiredLeaves}</span>
+            <div className="hidden lg:block w-px h-10 bg-slate-200"></div>
+
+            <div className="flex items-center gap-3 lg:gap-2 lg:ml-1">
+              <span className="text-sm font-bold text-slate-600 shrink-0">應休天數</span>
+              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white shadow-sm">
+                <span className="text-2xl leading-none font-black">{requiredLeaves}</span>
+                <span className="text-xs font-bold tracking-wide opacity-90">DAYS</span>
+              </div>
             </div>
           </div>
         </div>
