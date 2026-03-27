@@ -440,11 +440,26 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
     throw new Error(`工作表「${sheetName}」無法辨識月份，請確認表頭、sheet 名稱或檔名包含幾月資訊`);
   }
 
+  const monthKey = buildMonthKey(year, month);
+  const importedScheduleByDate = Object.fromEntries(
+    Object.entries(importedSchedule).map(([staffId, dayMap]) => [
+      staffId,
+      Object.fromEntries(
+        Object.entries(dayMap || {}).map(([day, cell]) => {
+          const dateKey = `${monthKey}-${String(Number(day)).padStart(2, '0')}`;
+          return [dateKey, cell];
+        })
+      )
+    ])
+  );
+
   return {
     year,
     month,
     staffs: importedStaffs,
-    scheduleByDay: importedSchedule,
+    scheduleData: importedScheduleByDate,
+    customColumnValues: {},
+    schedulingRulesText: '',
     warnings: invalidMessages,
     importMeta: {
       sourceType: 'excel',
@@ -945,8 +960,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     if (monthData) {
       const normalizedMonthStaffs = normalizeStaffGroup(monthData.staffs || []);
+      const legacyScheduleByDay = monthData.scheduleByDay || {};
+      const rebuiltScheduleData = monthData.scheduleData || Object.fromEntries(
+        Object.entries(legacyScheduleByDay).map(([staffId, dayMap]) => [
+          staffId,
+          Object.fromEntries(
+            Object.entries(dayMap || {}).map(([day, cell]) => {
+              const dateKey = `${monthKey}-${String(Number(day)).padStart(2, '0')}`;
+              return [dateKey, cell];
+            })
+          )
+        ])
+      );
+
       setStaffs(normalizedMonthStaffs);
-      setSchedule(monthData.scheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
+      setSchedule(rebuiltScheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
       setCustomColumnValues(monthData.customColumnValues || {});
       setSchedulingRulesText(typeof monthData.schedulingRulesText === 'string' ? monthData.schedulingRulesText : '');
     } else {
