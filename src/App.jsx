@@ -255,6 +255,7 @@ const getSystemHolidayCalendar = (year, options = {}) => {
   };
 };
 const STORAGE_KEY = 'schedule_app_history';
+const ACTIVE_DRAFT_KEY = 'schedule_app_active_draft';
 
 // 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
 const loadExcelJS = () => {
@@ -2856,7 +2857,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
   );
 }
 
-function EntryView({ changeScreen, goToLatestHistory, onImportFiles }) {
+function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDraft, activeDraftMeta, restoreActiveDraft, discardActiveDraft }) {
   const importInputRef = useRef(null);
 
   const handleImportButtonClick = () => {
@@ -2986,6 +2987,35 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles }) {
 
       <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] border border-slate-200/60 overflow-hidden">
         <div className="p-10">
+          {hasActiveDraft && (
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-2">
+                <Clock className="mt-0.5 h-4 w-4 text-amber-600" />
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-amber-800">偵測到上次未完成工作</div>
+                  <div className="mt-1 text-xs leading-relaxed text-amber-700">
+                    {activeDraftMeta?.savedAtText ? `上次自動暫存：${activeDraftMeta.savedAtText}` : '可恢復上次未完成的排班進度。'}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={restoreActiveDraft}
+                  className="flex-1 rounded-xl bg-amber-600 px-3 py-2 text-sm font-bold text-white hover:bg-amber-700"
+                >
+                  恢復未完成進度
+                </button>
+                <button
+                  type="button"
+                  onClick={discardActiveDraft}
+                  className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100"
+                >
+                  捨棄
+                </button>
+              </div>
+            </div>
+          )}
           <div className="mb-8 text-center">
             <h2 className="text-xl font-bold text-slate-900 mb-2">系統入口</h2>
             <p className="text-sm text-slate-500 leading-relaxed">
@@ -3111,6 +3141,161 @@ export default function App() {
   const [month, setMonth] = useState(3);
   const [staffs, setStaffs] = useState(() => createBlankMonthState(2025, 3).staffs);
   const [schedule, setSchedule] = useState(() => createBlankMonthState(2025, 3).schedule);
+  const [hasActiveDraft, setHasActiveDraft] = useState(false);
+  const [activeDraftMeta, setActiveDraftMeta] = useState(null);
+  const activeDraftHydratedRef = useRef(false);
+  const activeDraftSaveReadyRef = useRef(false);
+
+  const formatDraftSavedAt = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString();
+  };
+
+  const applyWorkspaceState = (state = {}) => {
+    setColors(state.colors || { weekend: '#dcfce7', holiday: '#fca5a5' });
+    setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
+    setSpecialWorkdays(Array.isArray(state.specialWorkdays) ? state.specialWorkdays : []);
+    setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
+    setUiSettings(state.uiSettings || {
+      pageBackgroundColor: '#f8fafc',
+      tableFontSize: 'medium',
+      tableFontColor: '#1f2937',
+      shiftColumnFontSize: 'medium',
+      shiftColumnFontColor: '#1e293b',
+      nameDateColumnFontSize: 'medium',
+      nameDateColumnFontColor: '#1e293b',
+      shiftColumnBgColor: '#ffffff',
+      nameDateColumnBgColor: '#ffffff',
+      tableDensity: 'standard',
+      showStats: true,
+      themePreset: 'custom',
+      showRightStats: true,
+      showLeaveStats: true,
+      showBottomStats: true,
+      showBlueDots: true,
+      showShiftLabels: true,
+      defaultAutoLeaveCode: 'off',
+      selectionMode: 'dot',
+      shiftColumnWidthMode: 'standard',
+      nameDateColumnWidthMode: 'standard',
+      dayColumnWidthMode: 'standard',
+      cellHeightMode: 'standard',
+      demandOverColor: '#fde68a'
+    });
+    setStaffingConfig(state.staffingConfig || {
+      hospitalLevel: 'regional',
+      totalBeds: 60,
+      totalNurses: 20,
+      requiredStaffing: {
+        weekday: { white: 6, evening: 3, night: 2 },
+        holiday: { white: 4, evening: 2, night: 2 }
+      }
+    });
+    setCustomLeaveCodes(Array.isArray(state.customLeaveCodes) ? state.customLeaveCodes : []);
+    setCustomColumns(Array.isArray(state.customColumns) ? state.customColumns : []);
+    setCustomColumnValues(state.customColumnValues || {});
+    setSchedulingRulesText(typeof state.schedulingRulesText === 'string' ? state.schedulingRulesText : '');
+    setMonthlySchedules(state.monthlySchedules || {});
+    setYear(Number(state.year) || 2025);
+    setMonth(Number(state.month) || 3);
+    setStaffs(normalizeStaffGroup(state.staffs || createBlankMonthState(Number(state.year) || 2025, Number(state.month) || 3).staffs));
+    setSchedule(state.schedule || createBlankMonthState(Number(state.year) || 2025, Number(state.month) || 3).schedule);
+    setImportedSchedulePayload(null);
+    setPendingOpenMonthKey('');
+    setLoadLatestOnEnter(false);
+  };
+
+  useEffect(() => {
+    try {
+      const storedDraft = localStorage.getItem(ACTIVE_DRAFT_KEY);
+      if (!storedDraft) {
+        activeDraftHydratedRef.current = true;
+        return;
+      }
+      const parsed = JSON.parse(storedDraft);
+      if (parsed?.state) {
+        setHasActiveDraft(true);
+        setActiveDraftMeta({
+          savedAt: parsed.savedAt || '',
+          savedAtText: formatDraftSavedAt(parsed.savedAt),
+          year: parsed.state.year,
+          month: parsed.state.month
+        });
+      }
+    } catch (error) {
+      console.error('讀取自動暫存失敗', error);
+    } finally {
+      activeDraftHydratedRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeDraftHydratedRef.current) return;
+    if (!activeDraftSaveReadyRef.current) {
+      activeDraftSaveReadyRef.current = true;
+      return;
+    }
+
+    const savedAt = new Date().toISOString();
+    const payload = {
+      savedAt,
+      state: {
+        colors,
+        customHolidays,
+        specialWorkdays,
+        medicalCalendarAdjustments,
+        uiSettings,
+        staffingConfig,
+        customLeaveCodes,
+        customColumns,
+        customColumnValues,
+        schedulingRulesText,
+        monthlySchedules,
+        year,
+        month,
+        staffs,
+        schedule
+      }
+    };
+
+    try {
+      localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
+      setHasActiveDraft(true);
+      setActiveDraftMeta({ savedAt, savedAtText: formatDraftSavedAt(savedAt), year, month });
+    } catch (error) {
+      console.error('寫入自動暫存失敗', error);
+    }
+  }, [colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, year, month, staffs, schedule]);
+
+  const restoreActiveDraft = () => {
+    try {
+      const storedDraft = localStorage.getItem(ACTIVE_DRAFT_KEY);
+      if (!storedDraft) return;
+      const parsed = JSON.parse(storedDraft);
+      if (!parsed?.state) return;
+      applyWorkspaceState(parsed.state);
+      setHasActiveDraft(true);
+      setActiveDraftMeta({
+        savedAt: parsed.savedAt || '',
+        savedAtText: formatDraftSavedAt(parsed.savedAt),
+        year: parsed.state.year,
+        month: parsed.state.month
+      });
+      setScreen('schedule');
+    } catch (error) {
+      console.error('恢復自動暫存失敗', error);
+      window.alert('恢復未完成進度失敗，請稍後再試。');
+    }
+  };
+
+  const discardActiveDraft = () => {
+    if (!window.confirm('確定要捨棄上次未完成進度嗎？')) return;
+    localStorage.removeItem(ACTIVE_DRAFT_KEY);
+    setHasActiveDraft(false);
+    setActiveDraftMeta(null);
+  };
 
   const handleImportFiles = async (files) => {
     const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
@@ -3210,6 +3395,10 @@ export default function App() {
       }}
       goToLatestHistory={goToLatestHistory}
       onImportFiles={handleImportFiles}
+      hasActiveDraft={hasActiveDraft}
+      activeDraftMeta={activeDraftMeta}
+      restoreActiveDraft={restoreActiveDraft}
+      discardActiveDraft={discardActiveDraft}
     />
   );
 }
