@@ -1750,7 +1750,7 @@ const openSelectedCellFillModal = () => {
                               {showShiftLabels && (
                                 <span
                                   className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`}
-                                  style={{ color: shiftColumnFontColor }}
+                                  style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}
                                 >
                                   {group}
                                 </span>
