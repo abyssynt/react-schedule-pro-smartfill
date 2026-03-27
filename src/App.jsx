@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Plus, Minus, Settings, Sparkles, Loader2,
   ArrowUp, ArrowDown, Save, History as Clock, Download,
@@ -269,6 +269,120 @@ const loadExcelJS = () => {
   });
 };
 
+const parseImportedExcelWorkbook = async (file) => {
+  const ExcelJS = await loadExcelJS();
+  const workbook = new ExcelJS.Workbook();
+  const buffer = await file.arrayBuffer();
+  await workbook.xlsx.load(buffer);
+
+  const worksheet = workbook.worksheets.find(ws => ws && ws.rowCount > 0);
+  if (!worksheet) {
+    throw new Error('找不到可讀取的工作表');
+  }
+
+  let headerRowNumber = null;
+  let headerMap = {};
+  for (let rowNumber = 1; rowNumber <= Math.min(20, worksheet.rowCount); rowNumber += 1) {
+    const row = worksheet.getRow(rowNumber);
+    const map = {};
+    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      const value = String(cell.value ?? '').trim();
+      if (value) map[value] = colNumber;
+    });
+    if (map['姓名'] && map['班別群組']) {
+      headerRowNumber = rowNumber;
+      headerMap = map;
+      break;
+    }
+  }
+
+  if (!headerRowNumber) {
+    throw new Error('匯入失敗：找不到「姓名」與「班別群組」欄位');
+  }
+
+  const validGroups = new Set(SHIFT_GROUPS);
+  const validCodes = new Set([...DICT.SHIFTS, ...DICT.LEAVES]);
+
+  const dayColumnPairs = Object.entries(headerMap)
+    .map(([label, colNumber]) => {
+      const match = String(label).match(/^(\d{1,2})日$/);
+      return match ? { day: Number(match[1]), colNumber } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.day - b.day);
+
+  if (dayColumnPairs.length === 0) {
+    throw new Error('匯入失敗：找不到日期欄（格式需為 1日、2日 ...）');
+  }
+
+  const importedStaffs = [];
+  const importedSchedule = {};
+  const invalidMessages = [];
+
+  for (let rowNumber = headerRowNumber + 1; rowNumber <= worksheet.rowCount; rowNumber += 1) {
+    const row = worksheet.getRow(rowNumber);
+    const rawName = String(row.getCell(headerMap['姓名']).value ?? '').trim();
+    const rawGroup = String(row.getCell(headerMap['班別群組']).value ?? '').trim();
+
+    const hasAnyContent = row.values && row.values.some((value, index) => index > 0 && String(value ?? '').trim() !== '');
+    if (!hasAnyContent) continue;
+    if (!rawName) continue;
+
+    const normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
+    if (rawGroup && !validGroups.has(rawGroup)) {
+    }
+    const staffId = `import_${Date.now()}_${rowNumber}`;
+    importedStaffs.push({
+      id: staffId,
+      name: rawName,
+      group: normalizedGroup,
+      pregnant: false
+    });
+    importedSchedule[staffId] = {};
+
+    if (rawGroup && !validGroups.has(rawGroup)) {
+      invalidMessages.push(`第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，已自動改為白班`);
+    }
+
+    dayColumnPairs.forEach(({ day, colNumber }) => {
+      const rawValue = String(row.getCell(colNumber).value ?? '').trim();
+      if (!rawValue) return;
+      if (!validCodes.has(rawValue)) {
+        invalidMessages.push(`第 ${rowNumber} 列「${rawName}」的 ${day}日 代碼「${rawValue}」無法匯入，已略過`);
+        return;
+      }
+      importedSchedule[staffId][day] = { value: rawValue, source: 'manual' };
+    });
+  }
+
+  if (importedStaffs.length === 0) {
+    throw new Error('匯入失敗：找不到可匯入的人員資料');
+  }
+
+  const titleCandidates = [
+    String(worksheet.getCell('A1').value ?? '').trim(),
+    String(worksheet.name ?? '').trim()
+  ];
+  let importedYear = null;
+  let importedMonth = null;
+  titleCandidates.forEach((candidate) => {
+    if (!candidate) return;
+    const yearMatch = candidate.match(/(\d{4})年/);
+    const monthMatch = candidate.match(/(\d{1,2})月/);
+    if (yearMatch) importedYear = Number(yearMatch[1]);
+    if (monthMatch) importedMonth = Number(monthMatch[1]);
+  });
+
+  return {
+    year: importedYear,
+    month: importedMonth,
+    staffs: importedStaffs,
+    scheduleByDay: importedSchedule,
+    warnings: invalidMessages
+  };
+};
+
+
 const normalizeStaffGroup = (staffList = []) => {
   if (!Array.isArray(staffList) || staffList.length === 0) return [];
 
@@ -455,7 +569,7 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -562,7 +676,45 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     } finally {
       onLatestLoaded?.();
     }
-  }, [loadLatestOnEnter]);
+
+  useEffect(() => {
+    if (!importedSchedulePayload) return;
+
+    const importedYear = Number(importedSchedulePayload.year);
+    const importedMonth = Number(importedSchedulePayload.month);
+    const safeYear = Number.isFinite(importedYear) && importedYear > 1900 ? importedYear : year;
+    const safeMonth = Number.isFinite(importedMonth) && importedMonth >= 1 && importedMonth <= 12 ? importedMonth : month;
+    const maxDays = new Date(safeYear, safeMonth, 0).getDate();
+
+    const normalizedStaffs = normalizeStaffGroup(importedSchedulePayload.staffs || []);
+    const rebuiltSchedule = normalizedStaffs.reduce((acc, staff) => {
+      const sourceMap = importedSchedulePayload.scheduleByDay?.[staff.id] || {};
+      const staffSchedule = {};
+      Object.entries(sourceMap).forEach(([day, cell]) => {
+        const dayNumber = Number(day);
+        if (!Number.isFinite(dayNumber) || dayNumber < 1 || dayNumber > maxDays) return;
+        const dateKey = `${safeYear}-${String(safeMonth).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`;
+        staffSchedule[dateKey] = cell;
+      });
+      acc[staff.id] = staffSchedule;
+      return acc;
+    }, {});
+
+    setYear(safeYear);
+    setMonth(safeMonth);
+    setStaffs(normalizedStaffs);
+    setSchedule(rebuiltSchedule);
+    setCustomColumnValues({});
+    setSelectedGridCell(null);
+
+    if (Array.isArray(importedSchedulePayload.warnings) && importedSchedulePayload.warnings.length > 0) {
+      setAiFeedback(`✅ 匯入完成，共載入 ${normalizedStaffs.length} 位人員；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過或修正`);
+    } else {
+      setAiFeedback(`✅ 匯入完成，共載入 ${normalizedStaffs.length} 位人員`);
+    }
+
+    onImportedScheduleApplied?.();
+  }, [importedSchedulePayload, onImportedScheduleApplied]);
 
   const holidayCalendar = useMemo(() => {
     return getSystemHolidayCalendar(year, {
@@ -2464,7 +2616,32 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
   );
 }
 
-function EntryView({ changeScreen, goToLatestHistory }) {
+function EntryView({ changeScreen, goToLatestHistory, onImportFile }) {
+  const importInputRef = useRef(null);
+
+  const handleImportButtonClick = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportInputChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const fileName = String(file.name || '').toLowerCase();
+    if (!fileName.endsWith('.xlsx')) {
+      window.alert('目前僅支援 .xlsx Excel 檔案');
+      return;
+    }
+
+    try {
+      await onImportFile?.(file);
+    } catch (error) {
+      console.error('匯入檔案失敗:', error);
+      window.alert(error?.message || '匯入檔案失敗，請確認是否使用系統範本。');
+    }
+  };
+
   const handleDownloadImportTemplate = async () => {
     try {
       const ExcelJS = await loadExcelJS();
@@ -2569,9 +2746,17 @@ function EntryView({ changeScreen, goToLatestHistory }) {
           <div className="mb-8 text-center">
             <h2 className="text-xl font-bold text-slate-900 mb-2">系統入口</h2>
             <p className="text-sm text-slate-500 leading-relaxed">
-              請選擇要進入的功能。此版本可直接進入排班作業，並可開啟最近班表、匯入備份或先下載標準匯入範本。
+              請選擇要進入的功能。
             </p>
           </div>
+
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={handleImportInputChange}
+          />
 
           <div className="space-y-4">
             <button
@@ -2594,11 +2779,11 @@ function EntryView({ changeScreen, goToLatestHistory }) {
 
             <button
               type="button"
-              onClick={() => window.alert('匯入備份功能將於後續版本開放。')}
+              onClick={handleImportButtonClick}
               className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
             >
               <Database className="w-4 h-4 text-slate-500" />
-              匯入備份
+              匯入檔案
             </button>
 
             <button
@@ -2675,6 +2860,14 @@ export default function App() {
   const [customColumnValues, setCustomColumnValues] = useState({});
   const [schedulingRulesText, setSchedulingRulesText] = useState('');
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
+  const [importedSchedulePayload, setImportedSchedulePayload] = useState(null);
+
+  const handleImportFile = async (file) => {
+    const imported = await parseImportedExcelWorkbook(file);
+    setImportedSchedulePayload(imported);
+    setLoadLatestOnEnter(false);
+    setScreen('schedule');
+  };
 
   const goToSchedule = () => {
     setLoadLatestOnEnter(false);
@@ -2712,6 +2905,8 @@ export default function App() {
         setSchedulingRulesText={setSchedulingRulesText}
         loadLatestOnEnter={loadLatestOnEnter}
         onLatestLoaded={() => setLoadLatestOnEnter(false)}
+        importedSchedulePayload={importedSchedulePayload}
+        onImportedScheduleApplied={() => setImportedSchedulePayload(null)}
       />
     );
   }
@@ -2749,6 +2944,7 @@ export default function App() {
         else setScreen(target);
       }}
       goToLatestHistory={goToLatestHistory}
+      onImportFile={handleImportFile}
     />
   );
 }
