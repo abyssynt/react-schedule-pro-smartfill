@@ -808,7 +808,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .leave-title-cell {
             height: 24pt;
             padding: 0 8pt;
-            text-align: right;
+            text-align: center;
             font-size: 10.5pt;
             font-weight: 700;
             white-space: nowrap;
@@ -858,7 +858,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 <th class="name-col header-cell">姓名</th>
                 ${daysInMonth.map(d => {
                   const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
-                  return `<th class="day-col header-cell ${headClass}">${d.day}<br/>(${d.weekStr})</th>`;
+                  const headBg = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9');
+                  return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;">${d.day}<br/>(${d.weekStr})</th>`;
                 }).join('')}
                 <th class="stat-col header-cell stat-work-head">上班</th>
                 <th class="stat-col header-cell stat-holiday-head">假日休</th>
@@ -875,11 +876,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                     const cellData = schedule[staff.id]?.[d.date];
                     const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
-                    return `<td class="day-col ${cellClass}">${value}</td>`;
+                    const cellBg = d.isHoliday ? '#ffe4e4' : (d.isWeekend ? '#f0fdf4' : '#ffffff');
+                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;">${value}</td>`;
                   }).join('')}
-                  <td class="stat-col stat-work-cell">${stats.work || ''}</td>
-                  <td class="stat-col stat-holiday-cell">${stats.holidayLeave || ''}</td>
-                  <td class="stat-col stat-total-cell">${stats.totalLeave || ''}</td>
+                  <td class="stat-col stat-work-cell" style="background:#eff6ff; mso-pattern:auto none;">${stats.work || ''}</td>
+                  <td class="stat-col stat-holiday-cell" style="background:#f0fdf4; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
+                  <td class="stat-col stat-total-cell" style="background:#fef2f2; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
                 </tr>`;
               }).join('')}
             </tbody>
