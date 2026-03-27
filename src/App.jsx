@@ -463,6 +463,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [month, setMonth] = useState(3);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
+  const clampMonth = (value) => Math.min(12, Math.max(1, Number(value) || 1));
+  const handleYearInputChange = (value) => setYear(Number(value) || new Date().getFullYear());
+  const handleMonthInputChange = (value) => setMonth(clampMonth(value));
+  const adjustYear = (delta) => setYear((prev) => prev + delta);
+  const adjustMonth = (delta) => setMonth((prev) => {
+    const next = prev + delta;
+    if (next < 1) return 12;
+    if (next > 12) return 1;
+    return next;
+  });
+
   const [staffs, setStaffs] = useState(normalizeStaffGroup([
     { id: 's1', name: '新成員' }, { id: 's2', name: '新成員' }, { id: 's3', name: '新成員' }, { id: 's4', name: '新成員' }, { id: 's5', name: '新成員' },
     { id: 's6', name: '新成員' }, { id: 's7', name: '新成員' }, { id: 's8', name: '新成員' }, { id: 's9', name: '新成員' }, { id: 's10', name: '新成員' },
@@ -1623,16 +1634,55 @@ const openSelectedCellFillModal = () => {
       )}
 
       <div className="max-w-[95vw] mx-auto mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-24 border rounded-lg p-2 text-center font-bold" />
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-20 border rounded-lg p-2 text-center font-bold">
-            {[...Array(12).keys()].map(m => <option key={m + 1} value={m + 1}>{m + 1}月</option>)}
-          </select>
-        </div>
+        <div className="lg:col-span-7 bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-slate-600">年</span>
+              <div className="flex items-center border rounded-lg overflow-hidden bg-white">
+                <input
+                  type="number"
+                  value={year}
+                  onChange={(e) => handleYearInputChange(e.target.value)}
+                  className="w-24 p-2 text-center font-bold border-none focus:ring-0"
+                />
+                <div className="flex flex-col border-l border-slate-200">
+                  <button type="button" onClick={() => adjustYear(1)} className="px-2 py-1 hover:bg-slate-100 text-slate-600">
+                    <ArrowUp size={14} />
+                  </button>
+                  <button type="button" onClick={() => adjustYear(-1)} className="px-2 py-1 border-t border-slate-200 hover:bg-slate-100 text-slate-600">
+                    <ArrowDown size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
 
-        <div className="lg:col-span-3 bg-blue-600 p-4 rounded-xl shadow-md text-white flex flex-col justify-center">
-          <span className="text-xs opacity-80 uppercase tracking-wider">本月應休天數</span>
-          <span className="text-2xl font-black">{requiredLeaves} <small className="text-sm font-normal">DAYS</small></span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-slate-600">月</span>
+              <div className="flex items-center border rounded-lg overflow-hidden bg-white">
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={month}
+                  onChange={(e) => handleMonthInputChange(e.target.value)}
+                  className="w-20 p-2 text-center font-bold border-none focus:ring-0"
+                />
+                <div className="flex flex-col border-l border-slate-200">
+                  <button type="button" onClick={() => adjustMonth(1)} className="px-2 py-1 hover:bg-slate-100 text-slate-600">
+                    <ArrowUp size={14} />
+                  </button>
+                  <button type="button" onClick={() => adjustMonth(-1)} className="px-2 py-1 border-t border-slate-200 hover:bg-slate-100 text-slate-600">
+                    <ArrowDown size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-600 px-4 py-2 rounded-xl shadow-md text-white flex items-center gap-3">
+              <span className="text-sm opacity-90 font-bold">應休天數</span>
+              <span className="text-2xl font-black leading-none">{requiredLeaves}</span>
+            </div>
+          </div>
         </div>
 
         <div className="lg:col-span-5 flex items-center justify-end gap-2">
