@@ -751,16 +751,12 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
-  const [year, setYear] = useState(2025);
-  const [month, setMonth] = useState(3);
   const [isRuleFillLoading, setIsRuleFillLoading] = useState(false);
 
-  const [staffs, setStaffs] = useState(() => createBlankMonthState(2025, 3).staffs);
-  const [schedule, setSchedule] = useState(() => createBlankMonthState(2025, 3).schedule);
 
   const [unitAdjustmentDraft, setUnitAdjustmentDraft] = useState({ holidays: [], workdays: [] });
 
@@ -3111,6 +3107,10 @@ export default function App() {
   const [importedSchedulePayload, setImportedSchedulePayload] = useState(null);
   const [monthlySchedules, setMonthlySchedules] = useState({});
   const [pendingOpenMonthKey, setPendingOpenMonthKey] = useState('');
+  const [year, setYear] = useState(2025);
+  const [month, setMonth] = useState(3);
+  const [staffs, setStaffs] = useState(() => createBlankMonthState(2025, 3).staffs);
+  const [schedule, setSchedule] = useState(() => createBlankMonthState(2025, 3).schedule);
 
   const handleImportFiles = async (files) => {
     const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
@@ -3164,6 +3164,14 @@ export default function App() {
         setMonthlySchedules={setMonthlySchedules}
         pendingOpenMonthKey={pendingOpenMonthKey}
         onPendingOpenHandled={() => setPendingOpenMonthKey('')}
+        year={year}
+        setYear={setYear}
+        month={month}
+        setMonth={setMonth}
+        staffs={staffs}
+        setStaffs={setStaffs}
+        schedule={schedule}
+        setSchedule={setSchedule}
       />
     );
   }
