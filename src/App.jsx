@@ -1673,13 +1673,13 @@ const openSelectedCellFillModal = () => {
           <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200">
-                <th className={`sticky left-0 z-30 border-r font-black ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
-                <th className={`sticky z-30 border-r font-black ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
+                <th className={`sticky left-0 top-24 z-40 border-r font-black ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
+                <th className={`sticky top-24 z-40 border-r font-black ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
-                    className={`${densityConfig.dayHeaderClass} border-r text-center`}
-                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent') }}
+                    className={`sticky top-24 z-30 ${densityConfig.dayHeaderClass} border-r text-center`}
+                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9') }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
@@ -1687,16 +1687,16 @@ const openSelectedCellFillModal = () => {
                 ))}
                 {showRightStats && (
                 <>
-                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold`}>上班</th>
-                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-green-50 text-green-700 font-bold`}>假日休</th>
-                <th className={`${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold`}>總休</th>
+                <th className={`sticky top-24 z-30 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold`}>上班</th>
+                <th className={`sticky top-24 z-30 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-green-50 text-green-700 font-bold`}>假日休</th>
+                <th className={`sticky top-24 z-30 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold`}>總休</th>
                 </>
                 )}
                 {showLeaveStats && mergedLeaveCodes.map(l => (
-                  <th key={l} className={`${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold`}>{l}</th>
+                  <th key={l} className={`sticky top-24 z-30 ${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold`}>{l}</th>
                 ))}
                 {(customColumns || []).map(col => (
-                  <th key={col} className={`${densityConfig.leaveHeaderClass} border-r min-w-[70px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold`}>{col}</th>
+                  <th key={col} className={`sticky top-24 z-30 ${densityConfig.leaveHeaderClass} border-r min-w-[70px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold`}>{col}</th>
                 ))}
               </tr>
             </thead>
