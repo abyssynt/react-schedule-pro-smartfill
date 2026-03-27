@@ -269,34 +269,91 @@ const loadExcelJS = () => {
   });
 };
 
-const parseImportedExcelWorkbook = async (file) => {
-  const ExcelJS = await loadExcelJS();
-  const workbook = new ExcelJS.Workbook();
-  const buffer = await file.arrayBuffer();
-  await workbook.xlsx.load(buffer);
+const loadSheetJS = () => {
+  return new Promise((resolve, reject) => {
+    if (window.XLSX) return resolve(window.XLSX);
+    const existing = document.querySelector('script[data-sheetjs-loader="true"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.XLSX), { once: true });
+      existing.addEventListener('error', () => reject(new Error('SheetJS 載入失敗')), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.dataset.sheetjsLoader = 'true';
+    script.onload = () => resolve(window.XLSX);
+    script.onerror = () => reject(new Error('SheetJS 載入失敗'));
+    document.head.appendChild(script);
+  });
+};
 
-  const worksheet = workbook.worksheets.find(ws => ws && ws.rowCount > 0);
-  if (!worksheet) {
+const normalizeImportedShiftCode = (rawValue = '') => {
+  const value = String(rawValue ?? '').trim();
+  if (!value) return '';
+
+  const normalizedWhitespace = value.replace(/\s+/g, '');
+  const lower = normalizedWhitespace.toLowerCase();
+
+  const directMap = {
+    d: 'D',
+    e: 'E',
+    n: 'N',
+    off: 'off',
+    of: 'off',
+    am: 'AM',
+    pm: 'PM',
+    '8-12': '8-12',
+    '12-16': '12-16',
+    '白8-8': '白8-8',
+    '夜8-8': '夜8-8'
+  };
+
+  if (directMap[lower]) return directMap[lower];
+  if (DICT.LEAVES.includes(normalizedWhitespace) || DICT.SHIFTS.includes(normalizedWhitespace)) return normalizedWhitespace;
+  return value;
+};
+
+const parseImportedExcelWorkbook = async (file) => {
+  const XLSX = await loadSheetJS();
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: 'array' });
+
+  const firstSheetName = workbook.SheetNames.find((name) => {
+    const sheet = workbook.Sheets[name];
+    return sheet && sheet['!ref'];
+  });
+  if (!firstSheetName) {
     throw new Error('找不到可讀取的工作表');
   }
 
-  let headerRowNumber = null;
+  const worksheet = workbook.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, {
+    header: 1,
+    raw: false,
+    defval: ''
+  });
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('找不到可讀取的工作表');
+  }
+
+  let headerRowIndex = -1;
   let headerMap = {};
-  for (let rowNumber = 1; rowNumber <= Math.min(20, worksheet.rowCount); rowNumber += 1) {
-    const row = worksheet.getRow(rowNumber);
+  for (let rowIndex = 0; rowIndex < Math.min(20, rows.length); rowIndex += 1) {
+    const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
     const map = {};
-    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-      const value = String(cell.value ?? '').trim();
-      if (value) map[value] = colNumber;
+    row.forEach((cellValue, columnIndex) => {
+      const value = String(cellValue ?? '').trim();
+      if (value) map[value] = columnIndex;
     });
-    if (map['姓名'] && map['班別群組']) {
-      headerRowNumber = rowNumber;
+    if (map['姓名'] !== undefined && map['班別群組'] !== undefined) {
+      headerRowIndex = rowIndex;
       headerMap = map;
       break;
     }
   }
 
-  if (!headerRowNumber) {
+  if (headerRowIndex === -1) {
     throw new Error('匯入失敗：找不到「姓名」與「班別群組」欄位');
   }
 
@@ -319,19 +376,19 @@ const parseImportedExcelWorkbook = async (file) => {
   const importedSchedule = {};
   const invalidMessages = [];
 
-  for (let rowNumber = headerRowNumber + 1; rowNumber <= worksheet.rowCount; rowNumber += 1) {
-    const row = worksheet.getRow(rowNumber);
-    const rawName = String(row.getCell(headerMap['姓名']).value ?? '').trim();
-    const rawGroup = String(row.getCell(headerMap['班別群組']).value ?? '').trim();
+  for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
+    const rawName = String(row[headerMap['姓名']] ?? '').trim();
+    const rawGroup = String(row[headerMap['班別群組']] ?? '').trim();
 
-    const hasAnyContent = row.values && row.values.some((value, index) => index > 0 && String(value ?? '').trim() !== '');
+    const hasAnyContent = row.some((value) => String(value ?? '').trim() !== '');
     if (!hasAnyContent) continue;
     if (!rawName) continue;
 
     const normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
-    if (rawGroup && !validGroups.has(rawGroup)) {
-    }
+    const rowNumber = rowIndex + 1;
     const staffId = `import_${Date.now()}_${rowNumber}`;
+
     importedStaffs.push({
       id: staffId,
       name: rawName,
@@ -345,13 +402,16 @@ const parseImportedExcelWorkbook = async (file) => {
     }
 
     dayColumnPairs.forEach(({ day, colNumber }) => {
-      const rawValue = String(row.getCell(colNumber).value ?? '').trim();
+      const rawValue = String(row[colNumber] ?? '').trim();
       if (!rawValue) return;
-      if (!validCodes.has(rawValue)) {
+
+      const normalizedCode = normalizeImportedShiftCode(rawValue);
+      if (!validCodes.has(normalizedCode)) {
         invalidMessages.push(`第 ${rowNumber} 列「${rawName}」的 ${day}日 代碼「${rawValue}」無法匯入，已略過`);
         return;
       }
-      importedSchedule[staffId][day] = { value: rawValue, source: 'manual' };
+
+      importedSchedule[staffId][day] = { value: normalizedCode, source: 'manual' };
     });
   }
 
@@ -360,8 +420,8 @@ const parseImportedExcelWorkbook = async (file) => {
   }
 
   const titleCandidates = [
-    String(worksheet.getCell('A1').value ?? '').trim(),
-    String(worksheet.name ?? '').trim()
+    String(rows?.[0]?.[0] ?? '').trim(),
+    String(firstSheetName ?? '').trim()
   ];
   let importedYear = null;
   let importedMonth = null;
@@ -2630,8 +2690,8 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFile }) {
     if (!file) return;
 
     const fileName = String(file.name || '').toLowerCase();
-    if (!fileName.endsWith('.xlsx')) {
-      window.alert('目前僅支援 .xlsx Excel 檔案');
+    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+      window.alert('目前僅支援 Excel 檔案（.xlsx / .xls）');
       return;
     }
 
@@ -2754,7 +2814,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFile }) {
           <input
             ref={importInputRef}
             type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
             onChange={handleImportInputChange}
           />
