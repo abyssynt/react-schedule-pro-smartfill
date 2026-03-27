@@ -556,6 +556,31 @@ const normalizeStaffGroup = (staffList = []) => {
   }));
 };
 
+const createBlankMonthStaffs = (targetYear, targetMonth) => {
+  const monthKey = buildMonthKey(targetYear, targetMonth);
+  const blankStaffs = Array.from({ length: 15 }, (_, index) => ({
+    id: `blank_${monthKey}_${index + 1}`,
+    name: '新成員',
+    group: SHIFT_GROUPS[Math.floor(index / 5)] || '白班',
+    pregnant: false
+  }));
+  return normalizeStaffGroup(blankStaffs);
+};
+
+const createBlankMonthState = (targetYear, targetMonth) => {
+  const blankStaffs = createBlankMonthStaffs(targetYear, targetMonth);
+  const blankSchedule = blankStaffs.reduce((acc, staff) => {
+    acc[staff.id] = {};
+    return acc;
+  }, {});
+  return {
+    staffs: blankStaffs,
+    schedule: blankSchedule,
+    customColumnValues: {},
+    schedulingRulesText: ''
+  };
+};
+
 
 const getCodePrefix = (rawCode = '') => {
   const code = String(rawCode || '').trim();
@@ -734,16 +759,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [month, setMonth] = useState(3);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const [staffs, setStaffs] = useState(normalizeStaffGroup([
-    { id: 's1', name: '新成員' }, { id: 's2', name: '新成員' }, { id: 's3', name: '新成員' }, { id: 's4', name: '新成員' }, { id: 's5', name: '新成員' },
-    { id: 's6', name: '新成員' }, { id: 's7', name: '新成員' }, { id: 's8', name: '新成員' }, { id: 's9', name: '新成員' }, { id: 's10', name: '新成員' },
-    { id: 's11', name: '新成員' }, { id: 's12', name: '新成員' }, { id: 's13', name: '新成員' }, { id: 's14', name: '新成員' }, { id: 's15', name: '新成員' }
-  ]));
-  const [schedule, setSchedule] = useState({
-    s1: {}, s2: {}, s3: {}, s4: {}, s5: {},
-    s6: {}, s7: {}, s8: {}, s9: {}, s10: {},
-    s11: {}, s12: {}, s13: {}, s14: {}, s15: {}
-  });
+  const [staffs, setStaffs] = useState(() => createBlankMonthState(2025, 3).staffs);
+  const [schedule, setSchedule] = useState(() => createBlankMonthState(2025, 3).schedule);
 
   const [unitAdjustmentDraft, setUnitAdjustmentDraft] = useState({ holidays: [], workdays: [] });
 
@@ -978,11 +995,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setCustomColumnValues(monthData.customColumnValues || {});
       setSchedulingRulesText(typeof monthData.schedulingRulesText === 'string' ? monthData.schedulingRulesText : '');
     } else {
-      const fallbackStaffs = normalizeStaffGroup(staffs);
-      setStaffs(fallbackStaffs);
-      setSchedule(createBlankScheduleForStaffs(fallbackStaffs));
-      setCustomColumnValues({});
-      setSchedulingRulesText('');
+      const blankMonthState = createBlankMonthState(targetYear, targetMonth);
+      setStaffs(blankMonthState.staffs);
+      setSchedule(blankMonthState.schedule);
+      setCustomColumnValues(blankMonthState.customColumnValues);
+      setSchedulingRulesText(blankMonthState.schedulingRulesText);
     }
 
     setSelectedGridCell(null);
