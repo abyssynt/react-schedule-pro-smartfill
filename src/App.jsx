@@ -1625,15 +1625,14 @@ const openSelectedCellFillModal = () => {
       <div className="max-w-[95vw] mx-auto mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-7 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-5">
-            <div className="flex flex-wrap items-center gap-2 lg:gap-3">
-              <span className="text-sm font-bold text-slate-600 shrink-0">年份</span>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-3 text-sm font-bold text-slate-700">
               <input
                 type="number"
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())}
-                className="w-28 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold"
+                className="w-24 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
               />
-              <span className="text-sm font-bold text-slate-600 shrink-0">年</span>
+              <span className="shrink-0">年</span>
 
               <input
                 type="number"
@@ -1646,20 +1645,15 @@ const openSelectedCellFillModal = () => {
                   if (!Number.isFinite(nextMonth)) return;
                   setMonth(Math.min(12, Math.max(1, nextMonth)));
                 }}
-                className="w-24 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold"
+                className="w-20 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
               />
-              <span className="text-sm font-bold text-slate-600 shrink-0">月</span>
+              <span className="shrink-0">月</span>
 
-              <div className="hidden lg:block w-px h-8 bg-slate-200 mx-1"></div>
+              <div className="hidden lg:block w-px h-7 bg-slate-200 mx-2"></div>
 
-              <span className="text-sm font-bold text-slate-600 shrink-0">應休天數</span>
-              <input
-                type="number"
-                value={requiredLeaves}
-                readOnly
-                className="w-20 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-slate-50 text-slate-700"
-              />
-              <span className="text-sm font-bold text-slate-600 shrink-0">天</span>
+              <span className="shrink-0 text-slate-600">應休天數</span>
+              <span className="text-base font-black text-slate-800 tabular-nums">{requiredLeaves}</span>
+              <span className="shrink-0">天</span>
             </div>
           </div>
         </div>
