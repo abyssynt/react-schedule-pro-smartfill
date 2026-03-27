@@ -1530,58 +1530,85 @@ const openSelectedCellFillModal = () => {
       </div>
 
       {showAiControl && (
-        <div className="max-w-[95vw] mx-auto mb-6 bg-blue-50 border border-blue-200 p-6 rounded-2xl shadow-sm animate-fade-in-down">
-          <h3 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Sparkles size={18} /> 指定補空設定</h3>
-          <div className="grid lg:grid-cols-4 gap-6">
-            <div>
-              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">1. 選擇人員（補空範圍）</label>
-              <div className="flex flex-wrap gap-2">
-                {staffs.map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      const next = aiConfig.selectedStaffs.includes(s.id)
-                        ? aiConfig.selectedStaffs.filter(id => id !== s.id)
-                        : [...aiConfig.selectedStaffs, s.id];
-                      setAiConfig({ ...aiConfig, selectedStaffs: next });
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${aiConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-100'}`}
-                  >
-                    {s.name}（{s.group || '白班'}）
-                  </button>
-                ))}
+        <div className="max-w-[95vw] mx-auto mb-6 rounded-3xl border border-slate-200 bg-slate-100/90 px-5 py-5 shadow-sm animate-fade-in-down lg:px-6">
+          <div className="mb-4 flex items-center gap-2 text-slate-800">
+            <Sparkles size={18} className="text-blue-600" />
+            <h3 className="font-black">指定補空設定</h3>
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr_1.05fr_1.15fr]">
+            <div className="min-w-0">
+              <label className="mb-2 block text-xs font-bold text-blue-700">1. 選擇人員（補空範圍）</label>
+              <div className="max-h-[296px] space-y-3 overflow-y-auto pr-1">
+                {groupedStaffs.map(({ group, staffs: groupStaffs }) => {
+                  const groupIds = groupStaffs.map(s => s.id);
+                  const isGroupFullySelected = groupIds.length > 0 && groupIds.every(id => aiConfig.selectedStaffs.includes(id));
+
+                  return (
+                    <div key={group} className="rounded-2xl border border-blue-100 bg-white/75 p-3 shadow-sm">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-sm font-black text-slate-700">{group}：</span>
+                        <button
+                          type="button"
+                          onClick={() => setAiConfig({ ...aiConfig, selectedStaffs: groupIds })}
+                          className={`rounded-xl border px-3 py-1 text-xs font-black transition-all ${isGroupFullySelected ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                        >
+                          全選
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        {groupStaffs.map(s => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              const next = aiConfig.selectedStaffs.includes(s.id)
+                                ? aiConfig.selectedStaffs.filter(id => id !== s.id)
+                                : [...aiConfig.selectedStaffs, s.id];
+                              setAiConfig({ ...aiConfig, selectedStaffs: next });
+                            }}
+                            className={`min-h-[42px] rounded-xl border px-3 py-2 text-left text-xs font-bold transition-all ${aiConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'}`}
+                          >
+                            {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">2. 日期範圍 ({aiConfig.dateRange.start} ~ {aiConfig.dateRange.end} 號)</label>
-              <div className="flex items-center gap-2">
+              <label className="mb-2 block text-xs font-bold text-blue-700">2. 日期範圍（1 ~ 31 號）</label>
+              <div className="flex items-center gap-3">
                 <input
                   type="number"
                   min="1"
                   max="31"
                   value={aiConfig.dateRange.start}
                   onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
-                  className="w-full border-blue-200 border p-2 rounded-lg text-sm text-center font-bold"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
                 />
-                <span>至</span>
+                <span className="shrink-0 text-sm font-bold text-slate-500">至</span>
                 <input
                   type="number"
                   min="1"
                   max="31"
                   value={aiConfig.dateRange.end}
                   onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
-                  className="w-full border-blue-200 border p-2 rounded-lg text-sm text-center font-bold"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">3. 指定班別（選填）</label>
+              <label className="mb-2 block text-xs font-bold text-blue-700">3. 指定班別（選填）</label>
               <select
                 value={aiConfig.targetShift}
                 onChange={(e) => setAiConfig({ ...aiConfig, targetShift: e.target.value })}
-                className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
+                className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
               >
                 <option value="">依群組需求自動補空</option>
                 {AI_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
@@ -1590,21 +1617,22 @@ const openSelectedCellFillModal = () => {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-blue-700 mb-2 uppercase">4. 範圍清除模式</label>
+                <label className="mb-2 block text-xs font-bold text-blue-700">4. 範圍清除模式</label>
                 <select
                   value={rangeClearMode}
                   onChange={(e) => setRangeClearMode(e.target.value)}
-                  className="w-full border-blue-200 border p-2 rounded-lg text-sm font-bold bg-white"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
                 >
                   <option value="autoOnly">只清除自動補入內容</option>
                   <option value="all">清除範圍內全部內容</option>
                 </select>
               </div>
-              <div className="grid grid-cols-1 gap-3">
+
+              <div className="grid grid-cols-1 gap-3 pt-1">
                 <button
                   disabled={isAiLoading || aiConfig.selectedStaffs.length === 0}
                   onClick={() => handleAiAutoSchedule(true)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-400 py-2.5 font-black text-white transition-all hover:bg-slate-500 active:scale-95 disabled:opacity-50 disabled:grayscale"
                 >
                   {isAiLoading ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} 套用並補空
                 </button>
@@ -1612,7 +1640,7 @@ const openSelectedCellFillModal = () => {
                   type="button"
                   disabled={aiConfig.selectedStaffs.length === 0}
                   onClick={clearRangeCells}
-                  className="w-full bg-white border border-red-200 text-red-600 hover:bg-red-50 font-black py-2 rounded-xl transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-slate-200/80 py-2.5 font-black text-slate-500 transition-all hover:bg-slate-300 disabled:opacity-50 disabled:grayscale"
                 >
                   <Trash2 size={18} /> 範圍清除
                 </button>
