@@ -2206,19 +2206,19 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                     <h4 className="font-bold text-gray-800 mb-4">平日需求</h4>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="text-[11px] font-medium text-gray-400 block mb-2">白班</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.white}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, white: parseInt(e.target.value, 10) || 0 } } }))}
                           className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
-                        <label className="text-[11px] font-medium text-gray-400 block mb-2">小夜</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.evening}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, evening: parseInt(e.target.value, 10) || 0 } } }))}
                           className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
-                        <label className="text-[11px] font-medium text-gray-400 block mb-2">大夜</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.night}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, night: parseInt(e.target.value, 10) || 0 } } }))}
                           className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
@@ -2230,19 +2230,19 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                     <h4 className="font-bold text-gray-800 mb-4">假日需求</h4>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="text-[11px] font-medium text-gray-400 block mb-2">白班</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.white}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, white: parseInt(e.target.value, 10) || 0 } } }))}
                           className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
-                        <label className="text-[11px] font-medium text-gray-400 block mb-2">小夜</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.evening}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, evening: parseInt(e.target.value, 10) || 0 } } }))}
                           className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
-                        <label className="text-[11px] font-medium text-gray-400 block mb-2">大夜</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.night}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, night: parseInt(e.target.value, 10) || 0 } } }))}
                           className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
