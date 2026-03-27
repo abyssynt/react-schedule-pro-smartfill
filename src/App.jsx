@@ -613,7 +613,7 @@ const DEFAULT_SHIFT_BY_GROUP = {
   '大夜': 'N'
 };
 
-const AI_MAIN_SHIFTS = ['D', 'E', 'N'];
+const RULE_FILL_MAIN_SHIFTS = ['D', 'E', 'N'];
 
 const HOSPITAL_LEVEL_LABELS = {
   medical: '醫學中心',
@@ -757,15 +757,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // ==========================================
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(3);
-  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isRuleFillLoading, setIsRuleFillLoading] = useState(false);
 
   const [staffs, setStaffs] = useState(() => createBlankMonthState(2025, 3).staffs);
   const [schedule, setSchedule] = useState(() => createBlankMonthState(2025, 3).schedule);
 
   const [unitAdjustmentDraft, setUnitAdjustmentDraft] = useState({ holidays: [], workdays: [] });
 
-  const [showAiControl, setShowAiControl] = useState(false);
-  const [aiFeedback, setAiFeedback] = useState("");
+  const [showRuleFillControl, setShowRuleFillControl] = useState(false);
+  const [ruleFillFeedback, setRuleFillFeedback] = useState("");
 
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyList, setHistoryList] = useState([]);
@@ -777,8 +777,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [selectedGridCell, setSelectedGridCell] = useState(null);
   const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
 
-  // AI 指定排班設定
-  const [aiConfig, setAiConfig] = useState({
+  // 規則補空指定設定
+  const [ruleFillConfig, setRuleFillConfig] = useState({
     selectedStaffs: [],
     dateRange: { start: 1, end: 31 },
     targetShift: ''
@@ -891,9 +891,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
 
     if (Array.isArray(importedSchedulePayload.warnings) && importedSchedulePayload.warnings.length > 0) {
-      setAiFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過、修正或覆蓋`);
+      setRuleFillFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過、修正或覆蓋`);
     } else {
-      setAiFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份`);
+      setRuleFillFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份`);
     }
     onImportedScheduleApplied?.();
   }, [importedSchedulePayload, monthlySchedules, onImportedScheduleApplied, pendingOpenMonthKey, setMonthlySchedules, year, month]);
@@ -1027,7 +1027,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // 4. Excel 匯出 (ExcelJS 實現)
   // ==========================================
   const exportToExcel = async () => {
-    setAiFeedback("📊 正在產生高品質 Excel 報表...");
+    setRuleFillFeedback("📊 正在產生高品質 Excel 報表...");
     const ExcelJS = await loadExcelJS();
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
@@ -1155,7 +1155,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     a.download = `排班表_${year}年${month}月.xlsx`;
     a.click();
     setShowExportMenu(false);
-    setAiFeedback("✅ Excel 導出成功！");
+    setRuleFillFeedback("✅ Excel 導出成功！");
   };
 
 
@@ -1338,28 +1338,28 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     a.click();
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-    setAiFeedback("✅ Word 導出成功！");
+    setRuleFillFeedback("✅ Word 導出成功！");
   };
 
   // ==========================================
-  // 5. AI 指定排班功能
+  // 5. 規則式半智慧補班功能
   // ==========================================
-  const handleAiAutoSchedule = async (isPartial = false) => {
-    setIsAiLoading(true);
-    setAiFeedback(isPartial ? "🧩 系統正在依指定範圍補空..." : "🧩 系統正在依人力需求補全整月空白...");
+  const handleRuleBasedAutoSchedule = async (isPartial = false) => {
+    setIsRuleFillLoading(true);
+    setRuleFillFeedback(isPartial ? "🧩 系統正在依指定範圍進行規則補空..." : "🧩 系統正在依人力需求執行整月規則補空...");
 
     try {
       const mergedSchedule = JSON.parse(JSON.stringify(schedule));
-      const targetStaffIds = isPartial && aiConfig.selectedStaffs.length > 0
-        ? new Set(aiConfig.selectedStaffs)
+      const targetStaffIds = isPartial && ruleFillConfig.selectedStaffs.length > 0
+        ? new Set(ruleFillConfig.selectedStaffs)
         : new Set(staffs.map(s => s.id));
 
       const targetDays = daysInMonth.filter(d => {
         if (!isPartial) return true;
-        return d.day >= aiConfig.dateRange.start && d.day <= aiConfig.dateRange.end;
+        return d.day >= ruleFillConfig.dateRange.start && d.day <= ruleFillConfig.dateRange.end;
       });
 
-      const normalizedTargetShift = AI_MAIN_SHIFTS.includes(aiConfig.targetShift) ? aiConfig.targetShift : '';
+      const normalizedTargetShift = RULE_FILL_MAIN_SHIFTS.includes(ruleFillConfig.targetShift) ? ruleFillConfig.targetShift : '';
       const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
       const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
 
@@ -1607,12 +1607,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       setSchedule(mergedSchedule);
       saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
-      setAiFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
+      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
     } catch (error) {
       console.error(error);
-      setAiFeedback("❌ 規則補空失敗，請檢查設定。");
+      setRuleFillFeedback("❌ 規則補空失敗，請檢查設定。");
     } finally {
-      setIsAiLoading(false);
+      setIsRuleFillLoading(false);
     }
   };
 
@@ -1910,18 +1910,18 @@ const openSelectedCellFillModal = () => {
       [staff.id]: { ...prev[staff.id], [dateStr]: null }
     }));
     setSelectedGridCell(null);
-    setAiFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
+    setRuleFillFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
   };
 
   const clearRangeCells = () => {
-    if (aiConfig.selectedStaffs.length === 0) {
-      setAiFeedback('⚠️ 請先選擇要清除的人員');
+    if (ruleFillConfig.selectedStaffs.length === 0) {
+      setRuleFillFeedback('⚠️ 請先選擇要清除的人員');
       return;
     }
 
-    const start = Number(aiConfig.dateRange.start || 1);
-    const end = Number(aiConfig.dateRange.end || 31);
-    const targetStaffIds = new Set(aiConfig.selectedStaffs);
+    const start = Number(ruleFillConfig.dateRange.start || 1);
+    const end = Number(ruleFillConfig.dateRange.end || 31);
+    const targetStaffIds = new Set(ruleFillConfig.selectedStaffs);
 
     let cleared = 0;
     setSchedule(prev => {
@@ -1943,7 +1943,7 @@ const openSelectedCellFillModal = () => {
       return next;
     });
 
-    setAiFeedback(cleared > 0 ? `🧹 已清除 ${cleared} 格內容` : 'ℹ️ 指定範圍內沒有可清除的內容');
+    setRuleFillFeedback(cleared > 0 ? `🧹 已清除 ${cleared} 格內容` : 'ℹ️ 指定範圍內沒有可清除的內容');
   };
 
   const applyFillCandidate = (candidate) => {
@@ -2024,10 +2024,10 @@ const openSelectedCellFillModal = () => {
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-              智能排班｜智慧排班開發版
+              智慧排班｜規則補空開發版
               <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
             </h1>
-            <p className="text-slate-500 text-xs mt-1 italic">開發版開發使用</p>
+            <p className="text-slate-500 text-xs mt-1 italic">開發測試使用</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -2057,11 +2057,11 @@ const openSelectedCellFillModal = () => {
             <div className="w-px h-8 bg-slate-200 mx-2 hidden sm:block"></div>
 
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
-              <button onClick={() => handleAiAutoSchedule(false)} disabled={isAiLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
-                {isAiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 全月補空
+              <button onClick={() => handleRuleBasedAutoSchedule(false)} disabled={isRuleFillLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
+                {isRuleFillLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 規則全月補空
               </button>
-              <button onClick={() => setShowAiControl(!showAiControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showAiControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
-                <Calendar size={14} /> 指定補空
+              <button onClick={() => setShowRuleFillControl(!showRuleFillControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showRuleFillControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
+                <Calendar size={14} /> 規則指定補空
               </button>
               <button
                 type="button"
@@ -2082,10 +2082,10 @@ const openSelectedCellFillModal = () => {
             </div>
           </div>
         </div>
-        {aiFeedback && (
+        {ruleFillFeedback && (
           <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
             <Check size={16} className="text-green-600" />
-            {aiFeedback}
+            {ruleFillFeedback}
           </div>
         )}
         {selectedGridCell && (
@@ -2102,11 +2102,11 @@ const openSelectedCellFillModal = () => {
         )}
       </div>
 
-      {showAiControl && (
+      {showRuleFillControl && (
         <div className="max-w-[95vw] mx-auto mb-6 rounded-3xl border border-slate-200 bg-slate-100/90 px-5 py-5 shadow-sm animate-fade-in-down lg:px-6">
           <div className="mb-4 flex items-center gap-2 text-slate-800">
             <Sparkles size={18} className="text-blue-600" />
-            <h3 className="font-black">指定補空設定</h3>
+            <h3 className="font-black">規則指定補空設定</h3>
           </div>
 
           <div className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr_1.05fr_1.15fr]">
@@ -2115,7 +2115,7 @@ const openSelectedCellFillModal = () => {
               <div className="max-h-[296px] space-y-2 overflow-y-auto pr-1">
                 {groupedStaffs.map(({ group, staffs: groupStaffs }) => {
                   const groupIds = groupStaffs.map(s => s.id);
-                  const isGroupFullySelected = groupIds.length > 0 && groupIds.every(id => aiConfig.selectedStaffs.includes(id));
+                  const isGroupFullySelected = groupIds.length > 0 && groupIds.every(id => ruleFillConfig.selectedStaffs.includes(id));
 
                   return (
                     <div key={group} className="rounded-xl border border-blue-100 bg-white/75 px-3 py-2 shadow-sm">
@@ -2125,9 +2125,9 @@ const openSelectedCellFillModal = () => {
                           type="button"
                           onClick={() => {
                             const next = isGroupFullySelected
-                              ? aiConfig.selectedStaffs.filter(id => !groupIds.includes(id))
-                              : Array.from(new Set([...aiConfig.selectedStaffs, ...groupIds]));
-                            setAiConfig({ ...aiConfig, selectedStaffs: next });
+                              ? ruleFillConfig.selectedStaffs.filter(id => !groupIds.includes(id))
+                              : Array.from(new Set([...ruleFillConfig.selectedStaffs, ...groupIds]));
+                            setRuleFillConfig({ ...ruleFillConfig, selectedStaffs: next });
                           }}
                           className={`rounded-lg border px-2.5 py-1 text-[11px] font-black transition-all ${isGroupFullySelected ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                         >
@@ -2141,12 +2141,12 @@ const openSelectedCellFillModal = () => {
                             key={s.id}
                             type="button"
                             onClick={() => {
-                              const next = aiConfig.selectedStaffs.includes(s.id)
-                                ? aiConfig.selectedStaffs.filter(id => id !== s.id)
-                                : [...aiConfig.selectedStaffs, s.id];
-                              setAiConfig({ ...aiConfig, selectedStaffs: next });
+                              const next = ruleFillConfig.selectedStaffs.includes(s.id)
+                                ? ruleFillConfig.selectedStaffs.filter(id => id !== s.id)
+                                : [...ruleFillConfig.selectedStaffs, s.id];
+                              setRuleFillConfig({ ...ruleFillConfig, selectedStaffs: next });
                             }}
-                            className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold leading-tight transition-all ${aiConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'}`}
+                            className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold leading-tight transition-all ${ruleFillConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'}`}
                           >
                             {s.name}
                           </button>
@@ -2165,8 +2165,8 @@ const openSelectedCellFillModal = () => {
                   type="number"
                   min="1"
                   max="31"
-                  value={aiConfig.dateRange.start}
-                  onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
+                  value={ruleFillConfig.dateRange.start}
+                  onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, dateRange: { ...ruleFillConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
                   className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
                 />
                 <span className="shrink-0 text-sm font-bold text-slate-500">至</span>
@@ -2174,8 +2174,8 @@ const openSelectedCellFillModal = () => {
                   type="number"
                   min="1"
                   max="31"
-                  value={aiConfig.dateRange.end}
-                  onChange={(e) => setAiConfig({ ...aiConfig, dateRange: { ...aiConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
+                  value={ruleFillConfig.dateRange.end}
+                  onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, dateRange: { ...ruleFillConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
                   className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
                 />
               </div>
@@ -2184,12 +2184,12 @@ const openSelectedCellFillModal = () => {
             <div>
               <label className="mb-2 block text-xs font-bold text-blue-700">3. 指定班別（選填）</label>
               <select
-                value={aiConfig.targetShift}
-                onChange={(e) => setAiConfig({ ...aiConfig, targetShift: e.target.value })}
+                value={ruleFillConfig.targetShift}
+                onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, targetShift: e.target.value })}
                 className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
               >
                 <option value="">依群組需求自動補空</option>
-                {AI_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
+                {RULE_FILL_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
               </select>
             </div>
 
@@ -2208,15 +2208,15 @@ const openSelectedCellFillModal = () => {
 
               <div className="grid grid-cols-1 gap-3 pt-1">
                 <button
-                  disabled={isAiLoading || aiConfig.selectedStaffs.length === 0}
-                  onClick={() => handleAiAutoSchedule(true)}
+                  disabled={isRuleFillLoading || ruleFillConfig.selectedStaffs.length === 0}
+                  onClick={() => handleRuleBasedAutoSchedule(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-400 py-2.5 font-black text-white transition-all hover:bg-slate-500 active:scale-95 disabled:opacity-50 disabled:grayscale"
                 >
-                  {isAiLoading ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} 套用並補空
+                  {isRuleFillLoading ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} 套用規則補空
                 </button>
                 <button
                   type="button"
-                  disabled={aiConfig.selectedStaffs.length === 0}
+                  disabled={ruleFillConfig.selectedStaffs.length === 0}
                   onClick={clearRangeCells}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-slate-200/80 py-2.5 font-black text-slate-500 transition-all hover:bg-slate-300 disabled:opacity-50 disabled:grayscale"
                 >
@@ -2790,7 +2790,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
               </div>
             </SettingRow>
-            <SettingRow icon={UserCheck} title="補空需求設定" desc="設定平日 / 假日各班需求，作為全月補空與指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
+            <SettingRow icon={UserCheck} title="補空需求設定" desc="設定平日 / 假日各班需求，作為規則全月補空與規則指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
               <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
