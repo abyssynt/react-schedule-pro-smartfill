@@ -1320,38 +1320,34 @@ const callGemini = async (prompt, systemInstruction = "") => {
         </div>
       )}
 
-      <div className="max-w-[95vw] mx-auto mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-7 bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value) || year)}
-              className="w-24 border rounded-lg p-2 text-center font-bold"
-            />
-            <input
-              type="number"
-              min="1"
-              max="12"
-              value={month}
-              onChange={(e) => {
-                const raw = Number(e.target.value);
-                if (Number.isNaN(raw)) return;
-                const nextMonth = Math.min(12, Math.max(1, raw));
-                setMonth(nextMonth);
-              }}
-              className="w-20 border rounded-lg p-2 text-center font-bold"
-            />
-            <div className="border-l border-slate-200 pl-2 ml-1 flex items-center gap-2 min-w-[150px]">
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-500 tracking-wide">本月應休天數</span>
-                <span className="text-2xl font-black text-blue-600 leading-none">{requiredLeaves} <small className="text-sm font-bold text-blue-500">DAYS</small></span>
-              </div>
-            </div>
+      <div className="max-w-[95vw] mx-auto mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 inline-flex items-center gap-3 w-fit max-w-full flex-wrap">
+          <input
+            type="number"
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="w-24 border rounded-lg p-2 text-center font-bold"
+          />
+          <input
+            type="number"
+            min="1"
+            max="12"
+            value={month}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (Number.isNaN(value)) return;
+              setMonth(Math.min(12, Math.max(1, value)));
+            }}
+            className="w-20 border rounded-lg p-2 text-center font-bold"
+          />
+          <div className="h-10 w-px bg-slate-200 mx-1"></div>
+          <div className="flex flex-col leading-tight">
+            <span className="text-xs text-slate-500 tracking-wide">本月應休天數</span>
+            <span className="text-2xl font-black text-blue-600 leading-none">{requiredLeaves} <small className="text-sm font-bold text-blue-500">DAYS</small></span>
           </div>
         </div>
 
-        <div className="lg:col-span-5 flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
           <button onClick={() => changeScreen('entry')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <ArrowLeft size={18} className="text-slate-600" /> 回入口頁
           </button>
