@@ -2465,6 +2465,91 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
 }
 
 function EntryView({ changeScreen, goToLatestHistory }) {
+  const handleDownloadImportTemplate = async () => {
+    try {
+      const ExcelJS = await loadExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      const dataSheet = workbook.addWorksheet('班表匯入範本');
+      const guideSheet = workbook.addWorksheet('填寫說明');
+
+      const templateMonth = new Date().getMonth() + 1;
+      const dayHeaders = Array.from({ length: 31 }, (_, i) => `${i + 1}日`);
+      const headers = ['姓名', '班別群組', ...dayHeaders];
+
+      dataSheet.addRow([`${templateMonth}月班表匯入範本`]);
+      dataSheet.mergeCells(1, 1, 1, headers.length);
+      const titleCell = dataSheet.getCell(1, 1);
+      titleCell.font = { bold: true, size: 14 };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+      dataSheet.getRow(1).height = 24;
+
+      const headerRow = dataSheet.addRow(headers);
+      headerRow.height = 24;
+      headerRow.eachCell((cell, colNumber) => {
+        cell.font = { bold: true, size: 10 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+        if (colNumber === 1 || colNumber === 2) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        } else {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        }
+      });
+
+      const sampleRows = [
+        ['王小美', '白班'],
+        ['李小芳', '小夜'],
+        ['陳小君', '大夜']
+      ];
+      sampleRows.forEach((rowData) => {
+        const row = dataSheet.addRow(rowData);
+        row.eachCell((cell) => {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = {
+            top: { style: 'thin' }, left: { style: 'thin' },
+            bottom: { style: 'thin' }, right: { style: 'thin' }
+          };
+        });
+      });
+
+      dataSheet.columns = [
+        { width: 14 },
+        { width: 12 },
+        ...Array.from({ length: 31 }, () => ({ width: 6 }))
+      ];
+      dataSheet.views = [{ state: 'frozen', ySplit: 2, xSplit: 2 }];
+
+      const guideRows = [
+        ['排班匯入範本說明'],
+        ['1. 請依此範本填寫，避免欄位遺漏或格式不一致。'],
+        ['2. 必填欄位為：姓名、班別群組。'],
+        ['3. 班別群組請填：白班 / 小夜 / 大夜。'],
+        ['4. 日期欄可填班別代碼或假別代碼，例如：D、E、N、off、例、休。'],
+        ['5. 若當月不足31天，超出日期欄可留白。'],
+        ['6. 匯入功能完成後，建議保留此範本格式，不要自行增刪欄位。']
+      ];
+      guideRows.forEach(r => guideSheet.addRow(r));
+      guideSheet.getCell('A1').font = { bold: true, size: 13 };
+      guideSheet.getColumn(1).width = 90;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '排班匯入範本.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('下載匯入範本失敗:', error);
+      window.alert('下載匯入範本失敗，請稍後再試。');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans text-slate-800">
       <div className="mb-10 text-center">
@@ -2484,7 +2569,7 @@ function EntryView({ changeScreen, goToLatestHistory }) {
           <div className="mb-8 text-center">
             <h2 className="text-xl font-bold text-slate-900 mb-2">系統入口</h2>
             <p className="text-sm text-slate-500 leading-relaxed">
-              請選擇要進入的功能。此版本可直接進入排班作業，並可開啟最近班表或預留匯入備份入口。
+              請選擇要進入的功能。此版本可直接進入排班作業，並可開啟最近班表、匯入備份或先下載標準匯入範本。
             </p>
           </div>
 
@@ -2514,6 +2599,15 @@ function EntryView({ changeScreen, goToLatestHistory }) {
             >
               <Database className="w-4 h-4 text-slate-500" />
               匯入備份
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadImportTemplate}
+              className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
+            >
+              <Download className="w-4 h-4 text-slate-500" />
+              下載匯入範本
             </button>
 
             <button
