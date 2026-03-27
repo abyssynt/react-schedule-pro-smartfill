@@ -613,7 +613,49 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
 
-    const headerRow = ['班別', '日期/姓名', ...daysInMonth.map(d => `${d.day}\n(${d.weekStr})`), '上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
+    const statHeaders = ['上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
+    const totalColumns = 1 + daysInMonth.length + statHeaders.length;
+    const lastDateColumn = daysInMonth.length + 1;
+
+    const monthTitleRow = worksheet.addRow([]);
+    monthTitleRow.height = 26;
+
+    const titleStartCol = 2;
+    const titleEndCol = Math.max(2, lastDateColumn - 2);
+    const leaveStartCol = Math.max(titleEndCol + 1, lastDateColumn - 1);
+    const leaveEndCol = lastDateColumn;
+
+    if (titleEndCol >= titleStartCol) {
+      worksheet.mergeCells(1, titleStartCol, 1, titleEndCol);
+      const titleCell = monthTitleRow.getCell(titleStartCol);
+      titleCell.value = `${month}月班表`;
+      titleCell.font = { bold: true, size: 14 };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+    }
+
+    if (leaveEndCol >= leaveStartCol) {
+      if (leaveEndCol > leaveStartCol) worksheet.mergeCells(1, leaveStartCol, 1, leaveEndCol);
+      const leaveCell = monthTitleRow.getCell(leaveStartCol);
+      leaveCell.value = `應休${requiredLeaves}天`;
+      leaveCell.font = { bold: true, size: 11 };
+      leaveCell.alignment = { vertical: 'middle', horizontal: 'right' };
+      leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+    }
+
+    for (let col = 1; col <= totalColumns; col++) {
+      const cell = monthTitleRow.getCell(col);
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+      if (col === 1 || col > lastDateColumn) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+      }
+    }
+
+    const headerRow = ['姓名', ...daysInMonth.map(d => `${d.day}
+(${d.weekStr})`), ...statHeaders];
     const header = worksheet.addRow(headerRow);
     header.height = 30;
 
@@ -624,17 +666,20 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         top: { style: 'thin' }, left: { style: 'thin' },
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
-      if (colNumber > 2 && colNumber <= daysInMonth.length + 2) {
-        const d = daysInMonth[colNumber - 3];
+
+      if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
+        const d = daysInMonth[colNumber - 2];
         if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCACA' } };
         else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+        else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      } else {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
       }
     });
 
     staffs.forEach(staff => {
       const stats = getStaffStats(staff.id);
       const rowData = [
-        staff.group,
         staff.name,
         ...daysInMonth.map(d => {
           const cellData = schedule[staff.id]?.[d.date];
@@ -651,9 +696,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
-        if (colNumber > 2 && colNumber <= daysInMonth.length + 2) {
+
+        if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
           cell.numFmt = '@';
-          const d = daysInMonth[colNumber - 3];
+          const d = daysInMonth[colNumber - 2];
           if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E4' } };
           else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
         }
@@ -662,7 +708,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     ['D', 'E', 'N', 'totalLeave'].forEach(rowKey => {
       const label = rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`;
-      const rowData = ['', label, ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || '')];
+      const rowData = [label, ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || ''), ...Array(statHeaders.length).fill('')];
       const row = worksheet.addRow(rowData);
       row.eachCell((cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
@@ -670,12 +716,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
       });
     });
 
-    worksheet.getColumn(1).width = 10;
-    worksheet.getColumn(2).width = 15;
-    for (let i = 3; i <= daysInMonth.length + 2; i++) worksheet.getColumn(i).width = 5;
+    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
+
+    worksheet.getColumn(1).width = 15;
+    for (let i = 2; i <= daysInMonth.length + 1; i++) worksheet.getColumn(i).width = 5;
+    for (let i = daysInMonth.length + 2; i <= totalColumns; i++) worksheet.getColumn(i).width = 8;
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
@@ -689,6 +738,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setShowExportMenu(false);
     setAiFeedback("✅ Excel 導出成功！");
   };
+
 
   const exportToWord = () => {
     const html = `
