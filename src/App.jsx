@@ -870,18 +870,33 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   useEffect(() => {
     if (!importedSchedulePayload || !importedSchedulePayload.monthlySchedules) return;
-    setMonthlySchedules(prev => ({
-      ...prev,
+
+    const mergedSchedules = {
+      ...(monthlySchedules || {}),
       ...importedSchedulePayload.monthlySchedules
-    }));
+    };
+
+    setMonthlySchedules(mergedSchedules);
+
     const totalMonths = Object.keys(importedSchedulePayload.monthlySchedules || {}).length;
+    const targetMonthKey = pendingOpenMonthKey || importedSchedulePayload.firstMonthKey || buildMonthKey(year, month);
+    const [targetYear, targetMonth] = String(targetMonthKey).split('-').map(Number);
+
+    if (Number.isFinite(targetYear) && Number.isFinite(targetMonth)) {
+      monthSwitchSeedRef.current = targetMonthKey;
+      if (year !== targetYear) setYear(targetYear);
+      if (month !== targetMonth) setMonth(targetMonth);
+      loadMonthState(targetYear, targetMonth, mergedSchedules);
+      initializedMonthRef.current = true;
+    }
+
     if (Array.isArray(importedSchedulePayload.warnings) && importedSchedulePayload.warnings.length > 0) {
       setAiFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過、修正或覆蓋`);
     } else {
       setAiFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份`);
     }
     onImportedScheduleApplied?.();
-  }, [importedSchedulePayload, onImportedScheduleApplied, setMonthlySchedules]);
+  }, [importedSchedulePayload, monthlySchedules, onImportedScheduleApplied, pendingOpenMonthKey, setMonthlySchedules, year, month]);
 
   useEffect(() => {
     const currentKey = buildMonthKey(year, month);
@@ -970,9 +985,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }, {});
   };
 
-  const loadMonthState = (targetYear, targetMonth) => {
+  const loadMonthState = (targetYear, targetMonth, schedulesSource = monthlySchedules) => {
     const monthKey = buildMonthKey(targetYear, targetMonth);
-    const monthData = monthlySchedules?.[monthKey];
+    const monthData = schedulesSource?.[monthKey];
     monthLoadSkipRef.current = true;
 
     if (monthData) {
