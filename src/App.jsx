@@ -2024,7 +2024,7 @@ const openSelectedCellFillModal = () => {
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-              智慧排班｜規則補空開發版
+              智慧補班系統｜開發版
               <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
             </h1>
             <p className="text-slate-500 text-xs mt-1 italic">開發測試使用</p>
@@ -2790,7 +2790,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
               </div>
             </SettingRow>
-            <SettingRow icon={UserCheck} title="補空需求設定" desc="設定平日 / 假日各班需求，作為規則全月補空與規則指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
+            <SettingRow icon={UserCheck} title="規則補空需求設定" desc="設定平日 / 假日各班需求，作為規則全月補空與規則指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
               <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
@@ -2855,7 +2855,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
           </div>
         </section>
       </main>
-      <footer className="max-w-7xl mx-auto px-8 py-12 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-4"><div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div><span className="text-sm font-semibold text-gray-700">系統核心版本: v2.5.0-PRO</span></div><span className="text-gray-300">|</span><span className="text-sm text-gray-500">智慧排班引擎開發測試版</span></div><div className="text-sm text-gray-400">© 2024 Intelligent Scheduling System PRO. All rights reserved.</div></footer>
+      <footer className="max-w-7xl mx-auto px-8 py-12 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-4"><div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div><span className="text-sm font-semibold text-gray-700">系統核心版本: v2.5.0-PRO</span></div><span className="text-gray-300">|</span><span className="text-sm text-gray-500">規則式補班引擎開發測試版</span></div><div className="text-sm text-gray-400">© 2024 Intelligent Scheduling System PRO. All rights reserved.</div></footer>
     </div>
   );
 }
