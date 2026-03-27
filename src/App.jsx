@@ -1747,9 +1747,14 @@ const openSelectedCellFillModal = () => {
                         {index === 0 && (
                           <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
                             <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
-                              {showShiftLabels && (<span className={`font-black leading-tight tracking-[0.14em] [writing-mode:vertical-rl]`} style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}>
-                                {group}
-                              </span>)}
+                              {showShiftLabels && (
+                                <span
+                                  className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`}
+                                  style={{ color: shiftColumnFontColor }}
+                                >
+                                  {group}
+                                </span>
+                              )}
                             </div>
                           </td>
                         )}
