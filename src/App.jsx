@@ -2545,7 +2545,7 @@ export default function App() {
     pageBackgroundColor: '#f8fafc',
     tableFontSize: 'medium',
     tableFontColor: '#1f2937',
-    shiftColumnFontSize: 'large',
+    shiftColumnFontSize: 'medium',
     shiftColumnFontColor: '#1e293b',
     nameDateColumnFontSize: 'medium',
     nameDateColumnFontColor: '#1e293b',
