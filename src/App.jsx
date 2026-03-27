@@ -741,8 +741,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
 
   const exportToWord = () => {
-    const daysCount = daysInMonth.length;
-    const monthTitleColSpan = daysCount;
+    const statHeaders = ['上班', '假日休', '總休'];
+    const totalTitleColSpan = daysInMonth.length + statHeaders.length;
 
     const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -791,40 +791,56 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-weight: 700;
             background: #ffffff;
           }
-          .month-title-wrap {
+          .month-title-cell {
             position: relative;
             height: 24pt;
+            padding: 0 8pt;
           }
           .month-title {
-            font-size: 14pt;
-            text-align: center;
             display: block;
             width: 100%;
+            text-align: center;
+            font-size: 14pt;
+            font-weight: 700;
+            line-height: 24pt;
           }
           .leave-title {
             position: absolute;
-            right: 4pt;
+            right: 8pt;
             top: 50%;
             transform: translateY(-50%);
-            font-size: 10pt;
-            text-align: right;
+            font-size: 10.5pt;
+            font-weight: 700;
             white-space: nowrap;
           }
           .name-col {
-            width: 52pt;
-            min-width: 52pt;
+            width: 54pt;
+            min-width: 54pt;
             font-weight: 700;
           }
           .day-col {
             width: 18pt;
             min-width: 18pt;
           }
+          .stat-col {
+            width: 28pt;
+            min-width: 28pt;
+          }
           .header-cell {
             font-weight: 700;
             line-height: 1.1;
           }
-          .holiday { background-color: ${colors.holiday}; }
-          .weekend { background-color: ${colors.weekend}; }
+          .weekday-head { background-color: #f1f5f9; }
+          .holiday-head { background-color: ${colors.holiday}; }
+          .weekend-head { background-color: ${colors.weekend}; }
+          .holiday-cell { background-color: #ffe4e4; }
+          .weekend-cell { background-color: #f0fdf4; }
+          .stat-work-head { background-color: #dbeafe; color: #1d4ed8; }
+          .stat-holiday-head { background-color: #dcfce7; color: #15803d; }
+          .stat-total-head { background-color: #fee2e2; color: #b91c1c; }
+          .stat-work-cell { background-color: #eff6ff; }
+          .stat-holiday-cell { background-color: #f0fdf4; }
+          .stat-total-cell { background-color: #fef2f2; }
         </style>
       </head>
       <body>
@@ -832,31 +848,40 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           <table>
             <thead>
               <tr class="month-row">
-                <td></td>
-                <td colspan="${monthTitleColSpan}">
-                  <div class="month-title-wrap">
-                    <span class="month-title">${month}月班表</span>
-                    <span class="leave-title">應休${requiredLeaves}天</span>
-                  </div>
+                <td class="name-col"></td>
+                <td class="month-title-cell" colspan="${totalTitleColSpan}">
+                  <span class="month-title">${month}月班表</span>
+                  <span class="leave-title">應休${requiredLeaves}天</span>
                 </td>
               </tr>
               <tr>
                 <th class="name-col header-cell">姓名</th>
-                ${daysInMonth.map(d => `<th class="day-col header-cell ${d.isHoliday ? 'holiday' : (d.isWeekend ? 'weekend' : '')}">${d.day}<br/>(${d.weekStr})</th>`).join('')}
+                ${daysInMonth.map(d => {
+                  const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
+                  return `<th class="day-col header-cell ${headClass}">${d.day}<br/>(${d.weekStr})</th>`;
+                }).join('')}
+                <th class="stat-col header-cell stat-work-head">上班</th>
+                <th class="stat-col header-cell stat-holiday-head">假日休</th>
+                <th class="stat-col header-cell stat-total-head">總休</th>
               </tr>
             </thead>
             <tbody>
-              ${staffs.map(staff => `
+              ${staffs.map(staff => {
+                const stats = getStaffStats(staff.id);
+                return `
                 <tr>
                   <td class="name-col">${staff.name}</td>
                   ${daysInMonth.map(d => {
                     const cellData = schedule[staff.id]?.[d.date];
                     const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
-                    const cellClass = d.isHoliday ? 'holiday' : (d.isWeekend ? 'weekend' : '');
+                    const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
                     return `<td class="day-col ${cellClass}">${value}</td>`;
                   }).join('')}
-                </tr>
-              `).join('')}
+                  <td class="stat-col stat-work-cell">${stats.work || ''}</td>
+                  <td class="stat-col stat-holiday-cell">${stats.holidayLeave || ''}</td>
+                  <td class="stat-col stat-total-cell">${stats.totalLeave || ''}</td>
+                </tr>`;
+              }).join('')}
             </tbody>
           </table>
         </div>
