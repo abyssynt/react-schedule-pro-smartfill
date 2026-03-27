@@ -742,7 +742,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const exportToWord = () => {
     const statHeaders = ['上班', '假日休', '總休'];
-    const totalTitleColSpan = daysInMonth.length + statHeaders.length;
+    const titleColSpan = daysInMonth.length;
+    const leaveColSpan = statHeaders.length;
 
     const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -792,9 +793,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             background: #ffffff;
           }
           .month-title-cell {
-            position: relative;
             height: 24pt;
             padding: 0 8pt;
+            text-align: center;
           }
           .month-title {
             display: block;
@@ -804,11 +805,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-weight: 700;
             line-height: 24pt;
           }
-          .leave-title {
-            position: absolute;
-            right: 8pt;
-            top: 50%;
-            transform: translateY(-50%);
+          .leave-title-cell {
+            height: 24pt;
+            padding: 0 8pt;
+            text-align: right;
             font-size: 10.5pt;
             font-weight: 700;
             white-space: nowrap;
@@ -849,10 +849,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             <thead>
               <tr class="month-row">
                 <td class="name-col"></td>
-                <td class="month-title-cell" colspan="${totalTitleColSpan}">
+                <td class="month-title-cell" colspan="${titleColSpan}">
                   <span class="month-title">${month}月班表</span>
-                  <span class="leave-title">應休${requiredLeaves}天</span>
                 </td>
+                <td class="leave-title-cell" colspan="${leaveColSpan}">應休${requiredLeaves}天</td>
               </tr>
               <tr>
                 <th class="name-col header-cell">姓名</th>
