@@ -1668,8 +1668,8 @@ const openSelectedCellFillModal = () => {
         </div>
       </div>
 
-      <div className="max-w-[95vw] mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto pb-4">
+      <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto pb-4 rounded-2xl">
           <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
