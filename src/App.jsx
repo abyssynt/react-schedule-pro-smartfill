@@ -1539,25 +1539,30 @@ const openSelectedCellFillModal = () => {
           <div className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr_1.05fr_1.15fr]">
             <div className="min-w-0">
               <label className="mb-2 block text-xs font-bold text-blue-700">1. 選擇人員（補空範圍）</label>
-              <div className="max-h-[296px] space-y-3 overflow-y-auto pr-1">
+              <div className="max-h-[296px] space-y-2 overflow-y-auto pr-1">
                 {groupedStaffs.map(({ group, staffs: groupStaffs }) => {
                   const groupIds = groupStaffs.map(s => s.id);
                   const isGroupFullySelected = groupIds.length > 0 && groupIds.every(id => aiConfig.selectedStaffs.includes(id));
 
                   return (
-                    <div key={group} className="rounded-2xl border border-blue-100 bg-white/75 p-3 shadow-sm">
-                      <div className="mb-2 flex items-center gap-2">
+                    <div key={group} className="rounded-xl border border-blue-100 bg-white/75 px-3 py-2 shadow-sm">
+                      <div className="mb-1.5 flex items-center gap-2">
                         <span className="text-sm font-black text-slate-700">{group}：</span>
                         <button
                           type="button"
-                          onClick={() => setAiConfig({ ...aiConfig, selectedStaffs: groupIds })}
-                          className={`rounded-xl border px-3 py-1 text-xs font-black transition-all ${isGroupFullySelected ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                          onClick={() => {
+                            const next = isGroupFullySelected
+                              ? aiConfig.selectedStaffs.filter(id => !groupIds.includes(id))
+                              : Array.from(new Set([...aiConfig.selectedStaffs, ...groupIds]));
+                            setAiConfig({ ...aiConfig, selectedStaffs: next });
+                          }}
+                          className={`rounded-lg border px-2.5 py-1 text-[11px] font-black transition-all ${isGroupFullySelected ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                         >
                           全選
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-3 gap-1.5">
                         {groupStaffs.map(s => (
                           <button
                             key={s.id}
@@ -1568,7 +1573,7 @@ const openSelectedCellFillModal = () => {
                                 : [...aiConfig.selectedStaffs, s.id];
                               setAiConfig({ ...aiConfig, selectedStaffs: next });
                             }}
-                            className={`min-h-[42px] rounded-xl border px-3 py-2 text-left text-xs font-bold transition-all ${aiConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'}`}
+                            className={`min-h-[38px] rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold leading-tight transition-all ${aiConfig.selectedStaffs.includes(s.id) ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'}`}
                           >
                             {s.name}
                           </button>
