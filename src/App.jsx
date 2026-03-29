@@ -2737,6 +2737,7 @@ const openSelectedCellFillModal = () => {
                                       if (isMultiRangeSelection && inRangeSelection) applyValueToSelection(displayValue, { quiet: true });
                                       else commitCellValue(staff.id, d.date, displayValue);
                                       e.currentTarget.blur();
+                                      return;
                                     }
                                     if (e.key === 'Escape') {
                                       setCellDrafts(prev => {
@@ -2747,7 +2748,7 @@ const openSelectedCellFillModal = () => {
                                       e.currentTarget.blur();
                                     }
                                   }}
-                                  className={`w-full ${densityConfig.cellHeightClass} pl-5 pr-7 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
+                                  className={`w-full ${densityConfig.cellHeightClass} pl-5 pr-6 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
                                   style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
                                   title="可直接輸入代碼，Enter 確認"
                                 />
@@ -2766,16 +2767,15 @@ const openSelectedCellFillModal = () => {
                                     setSelectionAnchor({ staffId: staff.id, dateStr: d.date });
                                     setRangeSelection({ start: { staffId: staff.id, dateStr: d.date }, end: { staffId: staff.id, dateStr: d.date } });
                                   }}
-                                  className={`absolute right-1 top-1/2 -translate-y-1/2 h-5 w-4 cursor-pointer border-none bg-transparent font-bold ${tableFontSizeClass}`}
-                                  style={{ color: tableFontColor }}
+                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] text-slate-500 opacity-90 hover:opacity-100"
                                   title="下拉選單"
                                 >
-                                  <option value="" style={{ color: '#111827' }}>▾</option>
+                                  <option value="">▾</option>
                                   <optgroup label="上班">
-                                    {DICT.SHIFTS.map(s => <option key={s} value={s} style={{ color: '#111827' }}>{s}</option>)}
+                                    {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
                                   </optgroup>
                                   <optgroup label="休假">
-                                    {mergedLeaveCodes.map(l => <option key={l} value={l} style={{ color: '#111827' }}>{l}</option>)}
+                                    {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
                                   </optgroup>
                                 </select>
 
