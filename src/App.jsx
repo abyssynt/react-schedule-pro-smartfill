@@ -2740,66 +2740,30 @@ const openSelectedCellFillModal = () => {
                               }}
                             >
                               <div className="relative">
+                                <div
+                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
+                                  style={{ color: tableFontColor, pointerEvents: 'none' }}
+                                >
+                                  {val}
+                                </div>
                                 <select
                                   value={val}
                                   onChange={(e) => {
                                     handleCellChange(staff.id, d.date, e.target.value);
                                     startRangeSelection(staff, d.date);
+                                    e.currentTarget.blur();
                                   }}
-                                  onFocus={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     startRangeSelection(staff, d.date);
                                   }}
                                   onMouseDown={(e) => {
-                                    setIsRangeDragging(true);
+                                    e.stopPropagation();
                                     startRangeSelection(staff, d.date, e);
                                   }}
-                                  onKeyDown={(e) => {
-                                    startRangeSelection(staff, d.date, e);
-                                    const lowerKey = e.key.toLowerCase();
-                                    if ((e.ctrlKey || e.metaKey) && lowerKey === 'c') {
-                                      e.preventDefault();
-                                      copySelectionToClipboard();
-                                      return;
-                                    }
-                                    if ((e.ctrlKey || e.metaKey) && lowerKey === 'v') {
-                                      e.preventDefault();
-                                      pasteGridToSelection();
-                                      return;
-                                    }
-                                    if (e.key === 'Escape') {
-                                      e.preventDefault();
-                                      resetKeyInputBuffer();
-                                      setRangeSelection(null);
-                                      setSelectionAnchor(null);
-                                      setSelectedGridCell(null);
-                                      e.currentTarget.blur();
-                                      return;
-                                    }
-                                    if (e.key === 'Delete' || e.key === 'Backspace') {
-                                      e.preventDefault();
-                                      clearSelectionContents();
-                                      return;
-                                    }
-                                    if (e.key.length === 1 && !e.altKey && !e.ctrlKey && !e.metaKey) {
-                                      const nextBuffer = `${keyInputBuffer}${e.key}`;
-                                      const { normalized, isValid } = normalizeManualShiftCode(nextBuffer, mergedLeaveCodes);
-                                      if (isValid) {
-                                        e.preventDefault();
-                                        applyValueToCells(selectedRangeCells.length > 0 ? selectedRangeCells : [{ staffId: staff.id, dateStr: d.date }], normalized);
-                                        setCellDrafts(prev => {
-                                          const next = { ...prev };
-                                          delete next[cellKey];
-                                          return next;
-                                        });
-                                        resetKeyInputBuffer();
-                                      } else {
-                                        setKeyInputBuffer(nextBuffer);
-                                        keepKeyInputBufferAlive();
-                                      }
-                                    }
-                                  }}
-                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`}
+                                  className={`absolute right-0 top-0 h-full w-5 border-none bg-transparent cursor-pointer opacity-0 ${tableFontSizeClass}`}
                                   style={{ color: tableFontColor }}
+                                  title="選擇班別/假別"
                                 >
                                   <option value=""></option>
                                   <optgroup label="上班">
