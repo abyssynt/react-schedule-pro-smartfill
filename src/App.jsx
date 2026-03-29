@@ -1252,14 +1252,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const selection = getEffectiveSelection();
     const rect = getRectFromSelection(selection, staffs, daysInMonth);
     if (!rect) return;
+
     const grid = [];
     for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
       const row = [];
+      const staff = rect.scopedStaffs[rowIndex];
       for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
-        row.push(getCellCode(staffs[rowIndex]?.id, daysInMonth[colIndex]?.date) || '');
+        const day = daysInMonth[colIndex];
+        row.push(getCellCode(staff?.id, day?.date) || '');
       }
       grid.push(row);
     }
+
     setClipboardGrid(grid);
     const text = grid.map(row => row.join('\t')).join('\n');
     try {
@@ -1312,7 +1316,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
         const targetRow = rect.rowStart + rowOffset;
         const targetCol = rect.colStart + colOffset;
-        const staff = staffs[targetRow];
+        const staff = rect.scopedStaffs[targetRow];
         const day = daysInMonth[targetCol];
         if (!staff || !day) continue;
         const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
