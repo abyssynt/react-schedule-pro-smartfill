@@ -1189,7 +1189,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return next;
     });
     resetRangeInputBuffer();
-    if (!options.quiet) setRuleFillFeedback(`✅ 已套用 ${normalized || '空白'} 到 ${targetCells.length} 格`);
     return true;
   };
 
@@ -1232,27 +1231,53 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const selectionColCount = rect.colEnd - rect.colStart + 1;
     const sourceRowCount = grid.length;
     const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
-    const singleCellSource = sourceRowCount === 1 && sourceColCount === 1;
+    const selectionCellCount = selectionRowCount * selectionColCount;
+    const sourceCellCount = sourceRowCount * sourceColCount;
+    const shouldConfineToSelection = selectionCellCount > 1;
 
-    const targetRowCount = singleCellSource ? selectionRowCount : Math.min(sourceRowCount, selectionRowCount);
-    const targetColCount = singleCellSource ? selectionColCount : Math.min(sourceColCount, selectionColCount);
+    let targetRowCount = sourceRowCount;
+    let targetColCount = sourceColCount;
+
+    if (shouldConfineToSelection) {
+      if (sourceRowCount === 1 && sourceColCount === 1) {
+        targetRowCount = selectionRowCount;
+        targetColCount = selectionColCount;
+      } else {
+        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
+        targetColCount = Math.min(sourceColCount, selectionColCount);
+      }
+    }
 
     const updates = [];
+    let invalidCount = 0;
+    let skippedOverflowCount = 0;
+
     for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
       for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
+        const sourceRow = sourceRowCount === 1 && sourceColCount === 1 ? 0 : rowOffset;
+        const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
         const targetRow = rect.rowStart + rowOffset;
         const targetCol = rect.colStart + colOffset;
         const staff = staffs[targetRow];
         const day = daysInMonth[targetCol];
         if (!staff || !day) continue;
-        const rawValue = singleCellSource ? (grid[0]?.[0] ?? '') : (grid[rowOffset]?.[colOffset] ?? '');
+        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
         const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
-        if (!isValid) continue;
+        if (!isValid) {
+          invalidCount += 1;
+          continue;
+        }
         updates.push({ staffId: staff.id, dateStr: day.date, value: normalized });
       }
     }
 
-    if (updates.length === 0) return;
+    if (shouldConfineToSelection && !(sourceRowCount === 1 && sourceColCount === 1)) {
+      skippedOverflowCount = Math.max(0, sourceCellCount - (targetRowCount * targetColCount));
+    }
+
+    if (updates.length === 0) {
+      return;
+    }
 
     setSchedule(prev => {
       const next = JSON.parse(JSON.stringify(prev));
@@ -1263,6 +1288,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return next;
     });
     resetRangeInputBuffer();
+
+    const notes = [];
+    if (invalidCount > 0) notes.push(`略過 ${invalidCount} 格非法值`);
+    if (skippedOverflowCount > 0) notes.push(`超出選取範圍 ${skippedOverflowCount} 格未貼上`);
   };
 
   const fillSelectionFromTopLeft = () => {
@@ -1281,7 +1310,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setRangeSelection({ start: point, end: point });
     }
     setSelectedGridCell({ staff, dateStr });
-    window.requestAnimationFrame(() => gridContainerRef.current?.focus());
   };
 
   useEffect(() => {
@@ -2595,7 +2623,7 @@ const openSelectedCellFillModal = () => {
       </div>
 
       <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
-        <div ref={gridContainerRef} tabIndex={0} className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)] focus:outline-none">
+        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
           <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
@@ -2698,13 +2726,14 @@ const openSelectedCellFillModal = () => {
                           const cellKey = makeCellKey(staff.id, d.date);
                           const draftValue = cellDrafts[cellKey];
                           const displayValue = draftValue !== undefined ? draftValue : val;
-                          const isSelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date && !isCellInSelectionRect(rangeSelection, staffs, daysInMonth, staff.id, d.date);
+                          const isSelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date;
                           const inRangeSelection = isCellInSelectionRect(rangeSelection, staffs, daysInMonth, staff.id, d.date);
                           const isInvalid = Boolean(invalidCellKeys[cellKey]);
+                          const showSingleSelection = isSelected && !inRangeSelection;
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
+                              className={`border-r p-0 relative overflow-hidden ${showSingleSelection ? 'ring-2 ring-blue-500 ring-inset' : ''} ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                               onMouseDown={(e) => {
                                 setIsRangeDragging(true);
@@ -2760,15 +2789,16 @@ const openSelectedCellFillModal = () => {
                                       return next;
                                     });
                                   }}
-                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] opacity-70 hover:opacity-100"
+                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] text-slate-700 opacity-70 hover:opacity-100 focus:outline-none"
+                                  style={{ color: '#334155' }}
                                   title="下拉選單"
                                 >
-                                  <option value="">▾</option>
+                                  <option value="" style={{ color: '#334155', backgroundColor: '#ffffff' }}>▾</option>
                                   <optgroup label="上班">
-                                    {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                    {DICT.SHIFTS.map(s => <option key={s} value={s} style={{ color: '#111827', backgroundColor: '#ffffff' }}>{s}</option>)}
                                   </optgroup>
                                   <optgroup label="休假">
-                                    {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
+                                    {mergedLeaveCodes.map(l => <option key={l} value={l} style={{ color: '#111827', backgroundColor: '#ffffff' }}>{l}</option>)}
                                   </optgroup>
                                 </select>
 
