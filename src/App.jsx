@@ -857,8 +857,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [rangeSelection, setRangeSelection] = useState(null);
   const [selectionAnchor, setSelectionAnchor] = useState(null);
   const [isRangeDragging, setIsRangeDragging] = useState(false);
-  const [batchInputValue, setBatchInputValue] = useState('');
   const [clipboardGrid, setClipboardGrid] = useState([]);
+  const [rangeInputBuffer, setRangeInputBuffer] = useState('');
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -877,6 +877,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
   const gridContainerRef = useRef(null);
+  const rangeInputTimerRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -1156,6 +1157,22 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const hasRangeSelection = selectedRangeCells.length > 0;
   const isMultiRangeSelection = selectedRangeCells.length > 1;
 
+  const resetRangeInputBuffer = () => {
+    setRangeInputBuffer('');
+    if (rangeInputTimerRef.current) {
+      window.clearTimeout(rangeInputTimerRef.current);
+      rangeInputTimerRef.current = null;
+    }
+  };
+
+  const keepRangeInputBufferAlive = () => {
+    if (rangeInputTimerRef.current) window.clearTimeout(rangeInputTimerRef.current);
+    rangeInputTimerRef.current = window.setTimeout(() => {
+      setRangeInputBuffer('');
+      rangeInputTimerRef.current = null;
+    }, 2200);
+  };
+
   const applyValueToSelection = (rawValue, options = {}) => {
     const targetCells = selectedRangeCells;
     if (targetCells.length === 0) return false;
@@ -1173,7 +1190,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       });
       return next;
     });
-    setBatchInputValue(normalized);
+    resetRangeInputBuffer();
     if (!options.quiet) setRuleFillFeedback(`✅ 已套用 ${normalized || '空白'} 到 ${targetCells.length} 格`);
     return true;
   };
@@ -1246,6 +1263,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       });
       return next;
     });
+    resetRangeInputBuffer();
     setRuleFillFeedback(`✅ 已貼上 ${updates.length} 格${invalidCount > 0 ? `，略過 ${invalidCount} 格非法值` : ''}`);
   };
 
@@ -1276,18 +1294,76 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (!hasRangeSelection) return;
+      const target = event.target;
+      const tagName = String(target?.tagName || '').toLowerCase();
+      const isTypingTarget = tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target?.isContentEditable;
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
         event.preventDefault();
         copySelectionToClipboard();
+        return;
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
         event.preventDefault();
         pasteGridToSelection();
+        return;
+      }
+      if (isTypingTarget) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        resetRangeInputBuffer();
+        setRangeSelection(null);
+        setSelectionAnchor(null);
+        return;
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && !rangeInputBuffer) {
+        event.preventDefault();
+        setSchedule(prev => {
+          const next = JSON.parse(JSON.stringify(prev));
+          selectedRangeCells.forEach(({ staffId, dateStr }) => {
+            if (!next[staffId]) next[staffId] = {};
+            next[staffId][dateStr] = null;
+          });
+          return next;
+        });
+        setRuleFillFeedback(`🧹 已清除 ${selectedRangeCells.length} 格內容`);
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        if (!rangeInputBuffer) return;
+        event.preventDefault();
+        applyValueToSelection(rangeInputBuffer);
+        return;
+      }
+
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        const nextBuffer = rangeInputBuffer.slice(0, -1);
+        setRangeInputBuffer(nextBuffer);
+        if (nextBuffer) {
+          keepRangeInputBufferAlive();
+          setRuleFillFeedback(`⌨️ 範圍輸入中：${nextBuffer}　按 Enter 套用，Ctrl+C / Ctrl+V 可直接複製貼上`);
+        } else {
+          resetRangeInputBuffer();
+          setRuleFillFeedback(`已選取 ${selectedRangeCells.length} 格。可直接 Ctrl+C / Ctrl+V，或輸入代碼後按 Enter 套用。`);
+        }
+        return;
+      }
+
+      if (event.key.length === 1 && !event.altKey) {
+        event.preventDefault();
+        const nextBuffer = `${rangeInputBuffer}${event.key}`;
+        setRangeInputBuffer(nextBuffer);
+        keepRangeInputBufferAlive();
+        setRuleFillFeedback(`⌨️ 範圍輸入中：${nextBuffer}　按 Enter 套用，Ctrl+C / Ctrl+V 可直接複製貼上`);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasRangeSelection, rangeSelection, clipboardGrid, staffs, daysInMonth, mergedLeaveCodes]);
+  }, [hasRangeSelection, rangeSelection, clipboardGrid, staffs, daysInMonth, mergedLeaveCodes, rangeInputBuffer, selectedRangeCells]);
 
 
   // ==========================================
@@ -2357,46 +2433,21 @@ const openSelectedCellFillModal = () => {
         )}
         {selectedGridCell && (
           <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
-            <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
+            <div>
+              <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
+              {isMultiRangeSelection && (
+                <div className="mt-1 text-xs text-blue-800/80">
+                  已框選 <span className="font-bold">{selectedRangeCells.length}</span> 格，可直接 <span className="font-bold">Ctrl+C / Ctrl+V</span>，或直接輸入代碼後按 <span className="font-bold">Enter</span> 套用。
+                </div>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => { setSelectedGridCell(null); setRangeSelection(null); setSelectionAnchor(null); }}
+              onClick={() => { setSelectedGridCell(null); setRangeSelection(null); setSelectionAnchor(null); resetRangeInputBuffer(); }}
               className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
             >
               取消選取
             </button>
-          </div>
-        )}
-        {hasRangeSelection && (
-          <div className="mt-4 bg-violet-50 border border-violet-200 p-4 rounded-xl text-violet-900 text-sm space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                已選取範圍：<span className="font-bold">{selectedRangeCells.length}</span> 格
-                {isMultiRangeSelection && <span className="ml-2 text-violet-700/80">可批次輸入、複製、貼上、填滿</span>}
-              </div>
-              <button
-                type="button"
-                onClick={() => { setRangeSelection(null); setSelectionAnchor(null); setBatchInputValue(''); }}
-                className="px-3 py-1.5 rounded-lg border border-violet-200 bg-white text-violet-700 hover:bg-violet-100 transition-colors text-xs font-bold"
-              >
-                清除範圍
-              </button>
-            </div>
-            <div className="flex flex-col lg:flex-row gap-2 lg:items-center">
-              <input
-                type="text"
-                value={batchInputValue}
-                onChange={(e) => setBatchInputValue(e.target.value)}
-                placeholder="輸入代碼後批次套用，例如 D / E / N / off"
-                className="flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
-              />
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => applyValueToSelection(batchInputValue)} className="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700">批次填入</button>
-                <button type="button" onClick={copySelectionToClipboard} className="px-3 py-2 rounded-xl border border-violet-200 bg-white text-violet-700 text-xs font-bold hover:bg-violet-100">複製</button>
-                <button type="button" onClick={pasteGridToSelection} className="px-3 py-2 rounded-xl border border-violet-200 bg-white text-violet-700 text-xs font-bold hover:bg-violet-100">貼上</button>
-                <button type="button" onClick={fillSelectionFromTopLeft} className="px-3 py-2 rounded-xl border border-violet-200 bg-white text-violet-700 text-xs font-bold hover:bg-violet-100">向範圍填滿</button>
-              </div>
-            </div>
           </div>
         )}
       </div>
