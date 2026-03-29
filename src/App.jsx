@@ -1388,19 +1388,45 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       if (event.key === 'Backspace') {
         event.preventDefault();
-        const nextBuffer = rangeInputBuffer.slice(0, -1);
-        setRangeInputBuffer(nextBuffer);
-        if (nextBuffer) {
-          keepRangeInputBufferAlive();
-        } else {
+        if (!rangeInputBuffer) {
+          setSchedule(prev => {
+            const next = JSON.parse(JSON.stringify(prev));
+            selectedRangeCells.forEach(({ staffId, dateStr }) => {
+              if (!next[staffId]) next[staffId] = {};
+              next[staffId][dateStr] = null;
+            });
+            return next;
+          });
           resetRangeInputBuffer();
+          return;
         }
+        const nextBuffer = rangeInputBuffer.slice(0, -1);
+        if (!nextBuffer) {
+          resetRangeInputBuffer();
+          return;
+        }
+        setRangeInputBuffer(nextBuffer);
+        const parsed = normalizeManualShiftCode(nextBuffer, mergedLeaveCodes);
+        if (parsed.isValid) {
+          if (selectedRangeCells.length > 1) applyValueToSelection(nextBuffer, { quiet: true });
+          else if (selectedRangeCells[0]) commitCellValue(selectedRangeCells[0].staffId, selectedRangeCells[0].dateStr, nextBuffer, { quiet: true });
+          resetRangeInputBuffer();
+          return;
+        }
+        keepRangeInputBufferAlive();
         return;
       }
 
       if (event.key.length === 1 && !event.altKey) {
         event.preventDefault();
         const nextBuffer = `${rangeInputBuffer}${event.key}`;
+        const parsed = normalizeManualShiftCode(nextBuffer, mergedLeaveCodes);
+        if (parsed.isValid) {
+          if (selectedRangeCells.length > 1) applyValueToSelection(nextBuffer, { quiet: true });
+          else if (selectedRangeCells[0]) commitCellValue(selectedRangeCells[0].staffId, selectedRangeCells[0].dateStr, nextBuffer, { quiet: true });
+          resetRangeInputBuffer();
+          return;
+        }
         setRangeInputBuffer(nextBuffer);
         keepRangeInputBufferAlive();
       }
@@ -2810,8 +2836,15 @@ const openSelectedCellFillModal = () => {
                                   }}
                                   className={`block min-w-0 w-full ${densityConfig.cellHeightClass} px-1 text-center bg-transparent border-none font-bold ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
                                   style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
-                                  title="雙擊可手動輸入代碼，Enter 確認"
+                                  title="雙擊可手動輸入代碼，直接輸入代碼或 Delete 清空"
                                 />
+                                {showBlueDots && (
+                                  <span
+                                    className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
+                                  >
+                                    <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${isSelected ? 'bg-blue-700 scale-110' : inRangeSelection ? 'bg-violet-600 scale-110' : 'bg-blue-300/90'}`}></span>
+                                  </span>
+                                )}
                                 <select
                                   ref={(el) => {
                                     if (el) cellSelectRefs.current[cellKey] = el;
