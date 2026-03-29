@@ -878,6 +878,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const monthSwitchSeedRef = useRef('');
   const gridContainerRef = useRef(null);
   const rangeInputTimerRef = useRef(null);
+  const cellSelectRefs = useRef({});
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -1120,6 +1121,26 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return next;
       });
     }, 1400);
+  };
+
+  const openCellSelectMenu = (staffId, dateStr) => {
+    const key = makeCellKey(staffId, dateStr);
+    const selectEl = cellSelectRefs.current[key];
+    if (!selectEl) return;
+    try {
+      if (typeof selectEl.showPicker === 'function') {
+        selectEl.showPicker();
+        return;
+      }
+    } catch (error) {
+      // ignore and fall back
+    }
+    try {
+      selectEl.focus();
+      selectEl.click();
+    } catch (error) {
+      // ignore
+    }
   };
 
   const commitCellValue = (staffId, dateStr, rawValue, options = {}) => {
@@ -2745,11 +2766,23 @@ const openSelectedCellFillModal = () => {
                               }}
                               onClick={(e) => {
                                 setSelectedGridCell({ staff, dateStr: d.date });
-                                if (selectionMode === 'cell') startRangeSelection(staff, d.date, e);
+                                startRangeSelection(staff, d.date, e);
+                                if (!isRangeDragging) {
+                                  window.setTimeout(() => openCellSelectMenu(staff.id, d.date), 0);
+                                }
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                const input = e.currentTarget.querySelector('input[data-cell-input="true"]');
+                                if (input) {
+                                  input.focus();
+                                  input.select?.();
+                                }
                               }}
                             >
                               <div className="relative flex items-center w-full" style={{ minWidth: densityConfig.dayMinWidth, width: densityConfig.dayMinWidth, maxWidth: densityConfig.dayMinWidth }}>
                                 <input
+                                  data-cell-input="true"
                                   type="text"
                                   value={displayValue}
                                   onChange={(e) => setCellDrafts(prev => ({ ...prev, [cellKey]: e.target.value }))}
@@ -2775,11 +2808,15 @@ const openSelectedCellFillModal = () => {
                                       e.currentTarget.blur();
                                     }
                                   }}
-                                  className={`block min-w-0 w-full ${densityConfig.cellHeightClass} pr-5 pl-4 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
+                                  className={`block min-w-0 w-full ${densityConfig.cellHeightClass} px-1 text-center bg-transparent border-none font-bold ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
                                   style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
-                                  title="可直接輸入代碼，Enter 確認"
+                                  title="雙擊可手動輸入代碼，Enter 確認"
                                 />
                                 <select
+                                  ref={(el) => {
+                                    if (el) cellSelectRefs.current[cellKey] = el;
+                                    else delete cellSelectRefs.current[cellKey];
+                                  }}
                                   value={val}
                                   onChange={(e) => {
                                     handleCellChange(staff.id, d.date, e.target.value);
@@ -2789,11 +2826,10 @@ const openSelectedCellFillModal = () => {
                                       return next;
                                     });
                                   }}
-                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] text-slate-700 opacity-70 hover:opacity-100 focus:outline-none"
-                                  style={{ color: '#334155' }}
+                                  className="absolute inset-0 h-full w-full cursor-pointer border-none bg-transparent opacity-0 focus:outline-none"
                                   title="下拉選單"
                                 >
-                                  <option value="" style={{ color: '#334155', backgroundColor: '#ffffff' }}>▾</option>
+                                  <option value="" style={{ color: '#334155', backgroundColor: '#ffffff' }}></option>
                                   <optgroup label="上班">
                                     {DICT.SHIFTS.map(s => <option key={s} value={s} style={{ color: '#111827', backgroundColor: '#ffffff' }}>{s}</option>)}
                                   </optgroup>
@@ -2801,21 +2837,6 @@ const openSelectedCellFillModal = () => {
                                     {mergedLeaveCodes.map(l => <option key={l} value={l} style={{ color: '#111827', backgroundColor: '#ffffff' }}>{l}</option>)}
                                   </optgroup>
                                 </select>
-
-                                {showBlueDots && selectionMode === 'dot' && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    startRangeSelection(staff, d.date, e);
-                                  }}
-                                  className="absolute left-0.5 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
-                                  aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
-                                  title={`選取 ${staff.name} ${d.date} 儲存格`}
-                                >
-                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${isSelected ? 'bg-blue-700 scale-110' : inRangeSelection ? 'bg-violet-600 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
-                                </button>
-                                )}
                               </div>
                             </td>
                           );
