@@ -1231,41 +1231,16 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const rect = getRectFromSelection(rangeSelection, staffs, daysInMonth);
     if (!rect || !grid || grid.length === 0) return;
 
-    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
-    const selectionColCount = rect.colEnd - rect.colStart + 1;
-    const sourceRowCount = grid.length;
-    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
-    const selectionCellCount = selectionRowCount * selectionColCount;
-    const sourceCellCount = sourceRowCount * sourceColCount;
-    const shouldConfineToSelection = selectionCellCount > 1;
-
-    let targetRowCount = sourceRowCount;
-    let targetColCount = sourceColCount;
-
-    if (shouldConfineToSelection) {
-      if (sourceRowCount === 1 && sourceColCount === 1) {
-        targetRowCount = selectionRowCount;
-        targetColCount = selectionColCount;
-      } else {
-        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
-        targetColCount = Math.min(sourceColCount, selectionColCount);
-      }
-    }
-
     const updates = [];
     let invalidCount = 0;
-    let skippedOverflowCount = 0;
-
-    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
-        const sourceRow = sourceRowCount === 1 && sourceColCount === 1 ? 0 : rowOffset;
-        const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
+    for (let rowOffset = 0; rowOffset < grid.length; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < (grid[rowOffset] || []).length; colOffset += 1) {
         const targetRow = rect.rowStart + rowOffset;
         const targetCol = rect.colStart + colOffset;
         const staff = staffs[targetRow];
         const day = daysInMonth[targetCol];
         if (!staff || !day) continue;
-        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
+        const rawValue = grid[rowOffset][colOffset];
         const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
         if (!isValid) {
           invalidCount += 1;
@@ -1273,10 +1248,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
         updates.push({ staffId: staff.id, dateStr: day.date, value: normalized });
       }
-    }
-
-    if (shouldConfineToSelection && !(sourceRowCount === 1 && sourceColCount === 1)) {
-      skippedOverflowCount = Math.max(0, sourceCellCount - (targetRowCount * targetColCount));
     }
 
     if (updates.length === 0) {
@@ -1293,10 +1264,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return next;
     });
     resetRangeInputBuffer();
-
-    const notes = [];
-    if (invalidCount > 0) notes.push(`略過 ${invalidCount} 格非法值`);
-    if (skippedOverflowCount > 0) notes.push(`超出選取範圍 ${skippedOverflowCount} 格未貼上`);
+    setRuleFillFeedback(`✅ 已貼上 ${updates.length} 格${invalidCount > 0 ? `，略過 ${invalidCount} 格非法值` : ''}`);
   };
 
   const fillSelectionFromTopLeft = () => {
@@ -2457,6 +2425,31 @@ const openSelectedCellFillModal = () => {
             </div>
           </div>
         </div>
+        {ruleFillFeedback && (
+          <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
+            <Check size={16} className="text-green-600" />
+            {ruleFillFeedback}
+          </div>
+        )}
+        {selectedGridCell && (
+          <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
+            <div>
+              <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
+              {isMultiRangeSelection && (
+                <div className="mt-1 text-xs text-blue-800/80">
+                  已框選 <span className="font-bold">{selectedRangeCells.length}</span> 格，可直接 <span className="font-bold">Ctrl+C / Ctrl+V</span>，或直接輸入代碼後按 <span className="font-bold">Enter</span> 套用。
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setSelectedGridCell(null); setRangeSelection(null); setSelectionAnchor(null); resetRangeInputBuffer(); }}
+              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
+            >
+              取消選取
+            </button>
+          </div>
+        )}
       </div>
 
       {showRuleFillControl && (
@@ -2757,36 +2750,6 @@ const openSelectedCellFillModal = () => {
                               }}
                             >
                               <div className="relative flex items-center">
-                                <input
-                                  type="text"
-                                  value={displayValue}
-                                  onChange={(e) => setCellDrafts(prev => ({ ...prev, [cellKey]: e.target.value }))}
-                                  onFocus={() => {
-                                    setSelectedGridCell({ staff, dateStr: d.date });
-                                    setSelectionAnchor({ staffId: staff.id, dateStr: d.date });
-                                    setRangeSelection({ start: { staffId: staff.id, dateStr: d.date }, end: { staffId: staff.id, dateStr: d.date } });
-                                  }}
-                                  onBlur={(e) => commitCellValue(staff.id, d.date, e.target.value, { quiet: true })}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      if (isMultiRangeSelection && inRangeSelection) applyValueToSelection(displayValue, { quiet: true });
-                                      else commitCellValue(staff.id, d.date, displayValue);
-                                      e.currentTarget.blur();
-                                    }
-                                    if (e.key === 'Escape') {
-                                      setCellDrafts(prev => {
-                                        const next = { ...prev };
-                                        delete next[cellKey];
-                                        return next;
-                                      });
-                                      e.currentTarget.blur();
-                                    }
-                                  }}
-                                  className={`w-full ${densityConfig.cellHeightClass} pr-7 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
-                                  style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
-                                  title="可直接輸入代碼，Enter 確認"
-                                />
                                 <select
                                   value={val}
                                   onChange={(e) => {
@@ -2797,10 +2760,59 @@ const openSelectedCellFillModal = () => {
                                       return next;
                                     });
                                   }}
-                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] opacity-70 hover:opacity-100"
-                                  title="下拉選單"
+                                  onFocus={() => {
+                                    setSelectedGridCell({ staff, dateStr: d.date });
+                                    setSelectionAnchor({ staffId: staff.id, dateStr: d.date });
+                                    setRangeSelection({ start: { staffId: staff.id, dateStr: d.date }, end: { staffId: staff.id, dateStr: d.date } });
+                                  }}
+                                  onBlur={() => {
+                                    const draft = cellDrafts[cellKey];
+                                    if (draft !== undefined) commitCellValue(staff.id, d.date, draft, { quiet: true });
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if ((e.ctrlKey || e.metaKey) && ['c', 'v'].includes(e.key.toLowerCase())) return;
+                                    if (e.key === 'Enter') {
+                                      const draft = cellDrafts[cellKey];
+                                      if (draft === undefined) return;
+                                      e.preventDefault();
+                                      if (isMultiRangeSelection && inRangeSelection) applyValueToSelection(draft, { quiet: true });
+                                      else commitCellValue(staff.id, d.date, draft);
+                                      e.currentTarget.blur();
+                                      return;
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setCellDrafts(prev => {
+                                        const next = { ...prev };
+                                        delete next[cellKey];
+                                        return next;
+                                      });
+                                      return;
+                                    }
+                                    if (e.key === 'Backspace') {
+                                      e.preventDefault();
+                                      setCellDrafts(prev => {
+                                        const base = prev[cellKey] !== undefined ? prev[cellKey] : val;
+                                        const next = { ...prev };
+                                        const trimmed = String(base || '').slice(0, -1);
+                                        if (trimmed) next[cellKey] = trimmed;
+                                        else delete next[cellKey];
+                                        return next;
+                                      });
+                                      return;
+                                    }
+                                    if (e.key.length === 1 && !e.altKey) {
+                                      e.preventDefault();
+                                      setCellDrafts(prev => {
+                                        const base = prev[cellKey] !== undefined ? prev[cellKey] : '';
+                                        return { ...prev, [cellKey]: `${base}${e.key}` };
+                                      });
+                                    }
+                                  }}
+                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass} text-transparent`}
+                                  style={{ color: 'transparent' }}
+                                  title="可直接輸入代碼，Enter 確認"
                                 >
-                                  <option value="">▾</option>
+                                  <option value=""></option>
                                   <optgroup label="上班">
                                     {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
                                   </optgroup>
@@ -2808,6 +2820,12 @@ const openSelectedCellFillModal = () => {
                                     {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
                                   </optgroup>
                                 </select>
+                                <span
+                                  className={`pointer-events-none absolute inset-0 flex items-center justify-center font-bold ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
+                                  style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
+                                >
+                                  {displayValue}
+                                </span>
 
                                 {showBlueDots && selectionMode === 'dot' && (
                                 <button
@@ -2816,7 +2834,7 @@ const openSelectedCellFillModal = () => {
                                     e.stopPropagation();
                                     startRangeSelection(staff, d.date, e);
                                   }}
-                                  className="absolute left-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
                                   aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
                                   title={`選取 ${staff.name} ${d.date} 儲存格`}
                                 >
