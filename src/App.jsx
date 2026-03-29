@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Plus, Minus, Settings, Sparkles, Loader2,
@@ -6,6 +7,7 @@ import {
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
   Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2
 } from 'lucide-react';
+
 // ==========================================
 // 1. 系統代碼字典
 // ==========================================
@@ -13,6 +15,7 @@ const DICT = {
   SHIFTS: ['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16'],
   LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
 };
+
 const SMART_RULES = {
   maxConsecutiveWorkDays: 5,
   allowCrossGroupAssignment: false,
@@ -30,7 +33,9 @@ const SMART_RULES = {
     sameGroup: 1
   }
 };
+
 const SHIFT_GROUPS = ['白班', '小夜', '大夜'];
+
 const ANNOUNCED_CALENDAR_OVERRIDES = {
   2024: {
     holidays: ['2024-01-01', '2024-02-08', '2024-02-09', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-28', '2024-04-04', '2024-04-05', '2024-06-10', '2024-09-17', '2024-10-10'],
@@ -45,16 +50,19 @@ const ANNOUNCED_CALENDAR_OVERRIDES = {
     workdays: []
   }
 };
+
 const CHINESE_MONTH_MAP = {
   '正月': 1, '一月': 1, '二月': 2, '三月': 3, '四月': 4, '五月': 5, '六月': 6,
   '七月': 7, '八月': 8, '九月': 9, '十月': 10, '十一月': 11, '十二月': 12,
   '臘月': 12
 };
+
 const CHINESE_DAY_MAP = {
   '初一': 1, '初二': 2, '初三': 3, '初四': 4, '初五': 5, '初六': 6, '初七': 7, '初八': 8, '初九': 9, '初十': 10,
   '十一': 11, '十二': 12, '十三': 13, '十四': 14, '十五': 15, '十六': 16, '十七': 17, '十八': 18, '十九': 19, '二十': 20,
   '廿一': 21, '廿二': 22, '廿三': 23, '廿四': 24, '廿五': 25, '廿六': 26, '廿七': 27, '廿八': 28, '廿九': 29, '三十': 30
 };
+
 const normalizeLunarMonth = (label = '') => {
   const cleaned = String(label).trim().replace(/^閏/, '').replace(/月$/, '');
   if (CHINESE_MONTH_MAP[String(label).trim().replace(/^閏/, '')]) {
@@ -64,29 +72,36 @@ const normalizeLunarMonth = (label = '') => {
   if (CHINESE_MONTH_MAP[`${cleaned}月`]) return CHINESE_MONTH_MAP[`${cleaned}月`];
   return null;
 };
+
 const normalizeLunarDay = (label = '') => {
   const cleaned = String(label).trim();
   if (CHINESE_DAY_MAP[cleaned]) return CHINESE_DAY_MAP[cleaned];
   if (/^\d+$/.test(cleaned)) return Number(cleaned);
   return null;
 };
+
 const formatDateKey = (date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
+
 const parseDateKey = (dateKey) => {
   const [y, m, d] = dateKey.split('-').map(Number);
   return new Date(y, m - 1, d);
 };
+
 const addDays = (date, amount) => {
   const next = new Date(date);
   next.setDate(next.getDate() + amount);
   return next;
 };
+
 const isWeekendDate = (date) => date.getDay() === 0 || date.getDay() === 6;
+
 const uniqueSortedDates = (dates = []) => Array.from(new Set(dates)).sort();
+
 const getChineseCalendarInfo = (date) => {
   const formatter = new Intl.DateTimeFormat('zh-TW-u-ca-chinese', {
     year: 'numeric',
@@ -99,6 +114,7 @@ const getChineseCalendarInfo = (date) => {
   const dayPart = parts.find((part) => part.type === 'day');
   const rawMonth = String(monthPart?.value || '').trim();
   const rawDay = String(dayPart?.value || '').trim();
+
   return {
     relatedYear: Number(yearPart?.value || date.getFullYear()),
     leapMonth: rawMonth.startsWith('閏'),
@@ -108,10 +124,12 @@ const getChineseCalendarInfo = (date) => {
     dayNumber: normalizeLunarDay(rawDay)
   };
 };
+
 const matchesLunarDate = (date, lunarMonth, lunarDay, options = {}) => {
   const info = getChineseCalendarInfo(date);
   return info.monthNumber === lunarMonth && info.dayNumber === lunarDay && Boolean(info.leapMonth) === Boolean(options.leap);
 };
+
 const findGregorianDateByLunarInYear = (year, lunarMonth, lunarDay, options = {}) => {
   const start = new Date(year, 0, 1);
   const end = new Date(year, 11, 31);
@@ -120,6 +138,7 @@ const findGregorianDateByLunarInYear = (year, lunarMonth, lunarDay, options = {}
   }
   return null;
 };
+
 const getQingmingDate = (year) => {
   if (year >= 2000 && year <= 2099) {
     const y = year % 100;
@@ -128,6 +147,7 @@ const getQingmingDate = (year) => {
   }
   return new Date(year, 3, 4);
 };
+
 const getFixedSolarHolidayDates = (year) => {
   const fixed = [
     [1, 1],   // 開國紀念日
@@ -141,14 +161,19 @@ const getFixedSolarHolidayDates = (year) => {
   ];
   return fixed.map(([month, day]) => formatDateKey(new Date(year, month - 1, day)));
 };
+
 const getRuleBasedHolidayDates = (year) => {
   const holidaySet = new Set(getFixedSolarHolidayDates(year));
+
   const qingming = getQingmingDate(year);
   holidaySet.add(formatDateKey(qingming));
+
   const dragonBoat = findGregorianDateByLunarInYear(year, 5, 5);
   if (dragonBoat) holidaySet.add(formatDateKey(dragonBoat));
+
   const midAutumn = findGregorianDateByLunarInYear(year, 8, 15);
   if (midAutumn) holidaySet.add(formatDateKey(midAutumn));
+
   const lunarNewYearDay = findGregorianDateByLunarInYear(year, 1, 1);
   if (lunarNewYearDay) {
     const springHoliday = [
@@ -162,6 +187,7 @@ const getRuleBasedHolidayDates = (year) => {
       .filter((date) => date.getFullYear() === year)
       .forEach((date) => holidaySet.add(formatDateKey(date)));
   }
+
   const childrensDayKey = formatDateKey(new Date(year, 3, 4));
   const qingmingKey = formatDateKey(qingming);
   if (childrensDayKey === qingmingKey) {
@@ -169,8 +195,10 @@ const getRuleBasedHolidayDates = (year) => {
     const extraHoliday = qingmingWeekday === 4 ? addDays(qingming, 1) : addDays(qingming, -1);
     holidaySet.add(formatDateKey(extraHoliday));
   }
+
   return uniqueSortedDates([...holidaySet]);
 };
+
 const findNearestWorkday = (startDate, direction, occupiedHolidays, workdayOverrides) => {
   let cursor = addDays(startDate, direction);
   while (true) {
@@ -181,9 +209,11 @@ const findNearestWorkday = (startDate, direction, occupiedHolidays, workdayOverr
     cursor = addDays(cursor, direction);
   }
 };
+
 const applyCompensatoryHolidays = (holidayDates, workdayDates = []) => {
   const holidaySet = new Set(uniqueSortedDates(holidayDates));
   const workdaySet = new Set(uniqueSortedDates(workdayDates));
+
   const baseDates = [...holidaySet].sort();
   baseDates.forEach((dateKey) => {
     const date = parseDateKey(dateKey);
@@ -193,8 +223,10 @@ const applyCompensatoryHolidays = (holidayDates, workdayDates = []) => {
       holidaySet.add(findNearestWorkday(date, 1, holidaySet, workdaySet));
     }
   });
+
   return uniqueSortedDates([...holidaySet]);
 };
+
 const getSystemHolidayCalendar = (year, options = {}) => {
   const {
     customHolidays = [],
@@ -202,16 +234,21 @@ const getSystemHolidayCalendar = (year, options = {}) => {
     specialWorkdays = [],
     unitAdjustments = { holidays: [], workdays: [] }
   } = options;
+
   const announced = announcedOverrides[year];
   const overrideHolidays = announced?.holidays || [];
   const overrideWorkdays = announced?.workdays || [];
+
   const unitHolidayDates = (unitAdjustments.holidays || []).filter((date) => date.startsWith(`${year}-`));
   const unitWorkdayDates = (unitAdjustments.workdays || []).filter((date) => date.startsWith(`${year}-`));
   const customHolidayDates = customHolidays.filter((date) => date.startsWith(`${year}-`));
   const specialWorkdayDates = specialWorkdays.filter((date) => date.startsWith(`${year}-`));
+
   let holidayDates = overrideHolidays.length > 0 ? overrideHolidays : applyCompensatoryHolidays(getRuleBasedHolidayDates(year), [...overrideWorkdays, ...specialWorkdayDates, ...unitWorkdayDates]);
   let workdayDates = uniqueSortedDates([...overrideWorkdays, ...specialWorkdayDates, ...unitWorkdayDates]);
+
   holidayDates = uniqueSortedDates([...holidayDates, ...customHolidayDates, ...unitHolidayDates]).filter((date) => !workdayDates.includes(date));
+
   return {
     holidays: holidayDates,
     workdays: workdayDates
@@ -219,6 +256,7 @@ const getSystemHolidayCalendar = (year, options = {}) => {
 };
 const STORAGE_KEY = 'schedule_app_history';
 const ACTIVE_DRAFT_KEY = 'schedule_app_active_draft';
+
 // 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
 const loadExcelJS = () => {
   return new Promise((resolve) => {
@@ -229,6 +267,7 @@ const loadExcelJS = () => {
     document.head.appendChild(script);
   });
 };
+
 const loadSheetJS = () => {
   return new Promise((resolve, reject) => {
     if (window.XLSX) return resolve(window.XLSX);
@@ -246,11 +285,14 @@ const loadSheetJS = () => {
     document.head.appendChild(script);
   });
 };
+
 const normalizeImportedShiftCode = (rawValue = '') => {
   const value = String(rawValue ?? '').trim();
   if (!value) return '';
+
   const normalizedWhitespace = value.replace(/\s+/g, '');
   const lower = normalizedWhitespace.toLowerCase();
+
   const directMap = {
     d: 'D',
     e: 'E',
@@ -264,20 +306,104 @@ const normalizeImportedShiftCode = (rawValue = '') => {
     '白8-8': '白8-8',
     '夜8-8': '夜8-8'
   };
+
   if (directMap[lower]) return directMap[lower];
   if (DICT.LEAVES.includes(normalizedWhitespace) || DICT.SHIFTS.includes(normalizedWhitespace)) return normalizedWhitespace;
   return value;
 };
+
+const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
+  const value = String(rawValue ?? '').trim();
+  if (!value) return { normalized: '', isValid: true };
+
+  const collapsed = value.replace(/\s+/g, '');
+  const lower = collapsed.toLowerCase();
+  const allowedCodes = Array.from(new Set([...(DICT.SHIFTS || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
+  const directMap = {
+    d: 'D',
+    e: 'E',
+    n: 'N',
+    off: 'off',
+    of: 'off',
+    am: 'AM',
+    pm: 'PM',
+    '8-12': '8-12',
+    '12-16': '12-16',
+    '白8-8': '白8-8',
+    '夜8-8': '夜8-8'
+  };
+
+  if (directMap[lower]) return { normalized: directMap[lower], isValid: allowedCodes.includes(directMap[lower]) };
+  const directAllowed = allowedCodes.find(code => String(code).toLowerCase() === lower);
+  if (directAllowed) return { normalized: directAllowed, isValid: true };
+
+  return { normalized: value, isValid: false };
+};
+
+const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
+
+const parseClipboardGrid = (text = '') => {
+  const raw = String(text || '').replace(/\r/g, '');
+  if (!raw.trim()) return [];
+  return raw.split('\n').map(row => row.split('\t'));
+};
+
+const getRectFromSelection = (selection, staffs = [], daysInMonth = []) => {
+  if (!selection?.start || !selection?.end) return null;
+  const staffIndexMap = new Map(staffs.map((staff, index) => [staff.id, index]));
+  const dayIndexMap = new Map(daysInMonth.map((day, index) => [day.date, index]));
+
+  const startRow = staffIndexMap.get(selection.start.staffId);
+  const endRow = staffIndexMap.get(selection.end.staffId);
+  const startCol = dayIndexMap.get(selection.start.dateStr);
+  const endCol = dayIndexMap.get(selection.end.dateStr);
+
+  if ([startRow, endRow, startCol, endCol].some(v => v === undefined)) return null;
+
+  return {
+    rowStart: Math.min(startRow, endRow),
+    rowEnd: Math.max(startRow, endRow),
+    colStart: Math.min(startCol, endCol),
+    colEnd: Math.max(startCol, endCol)
+  };
+};
+
+const expandSelectionCells = (selection, staffs = [], daysInMonth = []) => {
+  const rect = getRectFromSelection(selection, staffs, daysInMonth);
+  if (!rect) return [];
+  const cells = [];
+  for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
+    for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
+      const staff = staffs[rowIndex];
+      const day = daysInMonth[colIndex];
+      if (staff && day) cells.push({ staffId: staff.id, dateStr: day.date, rowIndex, colIndex });
+    }
+  }
+  return cells;
+};
+
+const isCellInSelectionRect = (selection, staffs = [], daysInMonth = [], staffId, dateStr) => {
+  const rect = getRectFromSelection(selection, staffs, daysInMonth);
+  if (!rect) return false;
+  const rowIndex = staffs.findIndex(staff => staff.id === staffId);
+  const colIndex = daysInMonth.findIndex(day => day.date === dateStr);
+  if (rowIndex === -1 || colIndex === -1) return false;
+  return rowIndex >= rect.rowStart && rowIndex <= rect.rowEnd && colIndex >= rect.colStart && colIndex <= rect.colEnd;
+};
+
 const buildMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
+
 const extractYearMonthCandidates = (...sources) => {
   const patterns = [
     /(\d{4})\s*年\s*(\d{1,2})\s*月/,
     /(\d{4})[\/_\-.](\d{1,2})/,
     /(\d{1,2})\s*月/
   ];
+
   for (const source of sources) {
     const text = String(source || '').trim();
     if (!text) continue;
+
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (!match) continue;
@@ -292,10 +418,13 @@ const extractYearMonthCandidates = (...sources) => {
       }
     }
   }
+
   return { year: null, month: null };
 };
+
 const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => {
   if (!Array.isArray(rows) || rows.length === 0) return null;
+
   let headerRowIndex = -1;
   let headerMap = {};
   for (let rowIndex = 0; rowIndex < Math.min(20, rows.length); rowIndex += 1) {
@@ -311,9 +440,12 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
       break;
     }
   }
+
   if (headerRowIndex === -1) return null;
+
   const validGroups = new Set(SHIFT_GROUPS);
   const validCodes = new Set([...DICT.SHIFTS, ...DICT.LEAVES]);
+
   const dayColumnPairs = Object.entries(headerMap)
     .map(([label, colNumber]) => {
       const match = String(label).match(/^(\d{1,2})日$/);
@@ -321,21 +453,27 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
     })
     .filter(Boolean)
     .sort((a, b) => a.day - b.day);
+
   if (dayColumnPairs.length === 0) {
     throw new Error(`工作表「${sheetName}」找不到日期欄（格式需為 1日、2日 ...）`);
   }
+
   const importedStaffs = [];
   const importedSchedule = {};
   const invalidMessages = [];
+
   for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
     const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
     const rawName = String(row[headerMap['姓名']] ?? '').trim();
     const rawGroup = String(row[headerMap['班別群組']] ?? '').trim();
+
     const hasAnyContent = row.some((value) => String(value ?? '').trim() !== '');
     if (!hasAnyContent || !rawName) continue;
+
     const normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
     const rowNumber = rowIndex + 1;
     const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
+
     importedStaffs.push({
       id: staffId,
       name: rawName,
@@ -343,21 +481,27 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
       pregnant: false
     });
     importedSchedule[staffId] = {};
+
     if (rawGroup && !validGroups.has(rawGroup)) {
       invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，已自動改為白班`);
     }
+
     dayColumnPairs.forEach(({ day, colNumber }) => {
       const rawValue = String(row[colNumber] ?? '').trim();
       if (!rawValue) return;
+
       const normalizedCode = normalizeImportedShiftCode(rawValue);
       if (!validCodes.has(normalizedCode)) {
         invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的 ${day}日 代碼「${rawValue}」無法匯入，已略過`);
         return;
       }
+
       importedSchedule[staffId][day] = { value: normalizedCode, source: 'manual' };
     });
   }
+
   if (importedStaffs.length === 0) return null;
+
   const scanTexts = [];
   const maxRowsToScan = Math.min(rows.length, 8);
   for (let r = 0; r < maxRowsToScan; r += 1) {
@@ -367,12 +511,15 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
       if (cellText) scanTexts.push(cellText);
     }
   }
+
   const detected = extractYearMonthCandidates(...scanTexts, sheetName, fileName);
   const month = detected.month;
   const year = detected.year || fallbackYear;
+
   if (!month) {
     throw new Error(`工作表「${sheetName}」無法辨識月份，請確認表頭、sheet 名稱或檔名包含幾月資訊`);
   }
+
   const monthKey = buildMonthKey(year, month);
   const importedScheduleByDate = Object.fromEntries(
     Object.entries(importedSchedule).map(([staffId, dayMap]) => [
@@ -385,6 +532,7 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
       )
     ])
   );
+
   return {
     year,
     month,
@@ -402,23 +550,28 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
     }
   };
 };
+
 const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().getFullYear()) => {
   const XLSX = await loadSheetJS();
   const fileList = Array.from(files || []);
   const monthlySchedules = {};
   const warnings = [];
   let firstMonthKey = '';
+
   for (const file of fileList) {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
+
     for (const sheetName of workbook.SheetNames) {
       const worksheet = workbook.Sheets[sheetName];
       if (!worksheet || !worksheet['!ref']) continue;
+
       const rows = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
         raw: false,
         defval: ''
       });
+
       try {
         const parsed = parseImportedWorksheet({
           rows,
@@ -426,7 +579,9 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
           fileName: file.name,
           fallbackYear
         });
+
         if (!parsed) continue;
+
         const monthKey = buildMonthKey(parsed.year, parsed.month);
         const existing = monthlySchedules[monthKey];
         if (existing) {
@@ -443,35 +598,44 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
           monthlySchedules[monthKey] = parsed;
           if (!firstMonthKey) firstMonthKey = monthKey;
         }
+
         warnings.push(...(parsed.warnings || []));
       } catch (error) {
         warnings.push(error?.message || `檔案「${file.name}」工作表「${sheetName}」無法匯入`);
       }
     }
   }
+
   const keys = Object.keys(monthlySchedules).sort();
   if (keys.length === 0) {
     throw new Error('匯入失敗：找不到可匯入的月份資料，請確認檔案使用系統範本或至少包含「姓名」、「班別群組」、「1日~31日」欄位');
   }
+
   return {
     monthlySchedules,
     firstMonthKey: firstMonthKey || keys[0],
     warnings
   };
 };
+
+
+
 const normalizeStaffGroup = (staffList = []) => {
   if (!Array.isArray(staffList) || staffList.length === 0) return [];
+
   const fallbackGroups = [
     '白班', '白班', '白班', '白班', '白班',
     '小夜', '小夜', '小夜', '小夜', '小夜',
     '大夜', '大夜', '大夜', '大夜', '大夜'
   ];
+
   return staffList.map((staff, index) => ({
     ...staff,
     pregnant: Boolean(staff.pregnant),
     group: SHIFT_GROUPS.includes(staff.group) ? staff.group : (fallbackGroups[index] || '白班')
   }));
 };
+
 const createBlankMonthStaffs = (targetYear, targetMonth) => {
   const monthKey = buildMonthKey(targetYear, targetMonth);
   const blankStaffs = Array.from({ length: 15 }, (_, index) => ({
@@ -482,6 +646,7 @@ const createBlankMonthStaffs = (targetYear, targetMonth) => {
   }));
   return normalizeStaffGroup(blankStaffs);
 };
+
 const createBlankMonthState = (targetYear, targetMonth) => {
   const blankStaffs = createBlankMonthStaffs(targetYear, targetMonth);
   const blankSchedule = blankStaffs.reduce((acc, staff) => {
@@ -495,6 +660,8 @@ const createBlankMonthState = (targetYear, targetMonth) => {
     schedulingRulesText: ''
   };
 };
+
+
 const getCodePrefix = (rawCode = '') => {
   const code = String(rawCode || '').trim();
   if (!code) return '';
@@ -503,43 +670,54 @@ const getCodePrefix = (rawCode = '') => {
   if (direct) return direct;
   return code;
 };
+
 const getShiftGroupByCode = (code = '') => {
   if (['D', '白8-8', '8-12', '12-16'].includes(code)) return '白班';
   if (['E', '夜8-8'].includes(code)) return '小夜';
   if (['N'].includes(code)) return '大夜';
   return null;
 };
+
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
 const isShiftCode = (code = '') => DICT.SHIFTS.includes(code);
+
 const GROUP_TO_DEMAND_KEY = {
   '白班': 'white',
   '小夜': 'evening',
   '大夜': 'night'
 };
+
 const DEFAULT_SHIFT_BY_GROUP = {
   '白班': 'D',
   '小夜': 'E',
   '大夜': 'N'
 };
+
 const RULE_FILL_MAIN_SHIFTS = ['D', 'E', 'N'];
+
 const HOSPITAL_LEVEL_LABELS = {
   medical: '醫學中心',
   regional: '區域醫院',
   local: '地區醫院'
 };
+
 const HOSPITAL_RATIO_HINTS = {
   medical: { white: '1:6', evening: '1:9', night: '1:11' },
   regional: { white: '1:7', evening: '1:11', night: '1:13' },
   local: { white: '1:10', evening: '1:13', night: '1:15' }
 };
+
+
 const UI_FONT_SIZE_OPTIONS = {
   small: { label: '小', className: 'text-xs', shiftLabelSize: '1.45rem', shiftCellLabelSize: '1.55rem' },
   medium: { label: '標準', className: 'text-sm', shiftLabelSize: '1.95rem', shiftCellLabelSize: '2.05rem' },
   large: { label: '大', className: 'text-base', shiftLabelSize: '2.45rem', shiftCellLabelSize: '2.55rem' }
 };
+
 const getUiFontSizeClass = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.className || UI_FONT_SIZE_OPTIONS.medium.className;
 const getShiftLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.shiftLabelSize || UI_FONT_SIZE_OPTIONS.medium.shiftLabelSize;
 const getShiftCellLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.shiftCellLabelSize || UI_FONT_SIZE_OPTIONS.medium.shiftCellLabelSize;
+
 const UI_DENSITY_OPTIONS = {
   compact: {
     shiftWidth: 58,
@@ -584,7 +762,10 @@ const UI_DENSITY_OPTIONS = {
     rowMinHeight: 96
   }
 };
+
 const getUiDensityConfig = (densityKey = 'standard') => UI_DENSITY_OPTIONS[densityKey] || UI_DENSITY_OPTIONS.standard;
+
+
 const UI_THEME_PRESETS = {
   classic: {
     pageBackgroundColor: '#f8fafc',
@@ -631,6 +812,7 @@ const UI_THEME_PRESETS = {
     demandOverColor: '#78350f'
   }
 };
+
 const WIDTH_ADJUST_MAP = { narrow: -12, standard: 0, wide: 12 };
 const HEIGHT_ADJUST_MAP = { compact: -4, standard: 0, roomy: 4 };
 const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
@@ -648,14 +830,19 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
     selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
   };
 };
+
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
   const [isRuleFillLoading, setIsRuleFillLoading] = useState(false);
+
+
   const [unitAdjustmentDraft, setUnitAdjustmentDraft] = useState({ holidays: [], workdays: [] });
+
   const [showRuleFillControl, setShowRuleFillControl] = useState(false);
   const [ruleFillFeedback, setRuleFillFeedback] = useState("");
+
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyList, setHistoryList] = useState([]);
   const [showDraftPrompt, setShowDraftPrompt] = useState(false);
@@ -671,16 +858,16 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [selectionAnchor, setSelectionAnchor] = useState(null);
   const [isRangeDragging, setIsRangeDragging] = useState(false);
   const [clipboardGrid, setClipboardGrid] = useState([]);
-  const rangeInputTimerRef = useRef(null);
-  const rangeInputBufferRef = useRef('');
-  const singleCellInputTimerRef = useRef(null);
-  const singleCellInputBufferRef = useRef('');
+  const [rangeInputBuffer, setRangeInputBuffer] = useState('');
+  const [singleCellInputBuffer, setSingleCellInputBuffer] = useState('');
+
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
     selectedStaffs: [],
     dateRange: { start: 1, end: 31 },
     targetShift: ''
   });
+
   const tableFontSizeClass = getUiFontSizeClass(uiSettings?.tableFontSize);
   const shiftColumnFontSizeClass = getUiFontSizeClass(uiSettings?.shiftColumnFontSize);
   const nameDateColumnFontSizeClass = getUiFontSizeClass(uiSettings?.nameDateColumnFontSize);
@@ -690,6 +877,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const monthLoadSkipRef = useRef(false);
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
+  const gridContainerRef = useRef(null);
+  const rangeInputTimerRef = useRef(null);
+  const singleCellInputTimerRef = useRef(null);
+
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
   const shiftColumnFontColor = uiSettings?.shiftColumnFontColor || '#1e293b';
@@ -710,6 +901,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const prefix = getCodePrefix(code);
     return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
   };
+
   // ==========================================
   // 3. 初始載入與自動帶入
   // ==========================================
@@ -727,13 +919,16 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       }
     }
   }, []);
+
   useEffect(() => {
     if (!loadLatestOnEnter) return;
+
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
       onLatestLoaded?.();
       return;
     }
+
     try {
       const parsed = JSON.parse(stored);
       if (parsed && parsed.length > 0) {
@@ -746,6 +941,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       onLatestLoaded?.();
     }
   }, [loadLatestOnEnter, onLatestLoaded]);
+
   useEffect(() => {
     if (!pendingOpenMonthKey) return;
     const [nextYear, nextMonth] = String(pendingOpenMonthKey).split('-').map(Number);
@@ -758,16 +954,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setMonth(nextMonth);
     onPendingOpenHandled?.();
   }, [pendingOpenMonthKey, onPendingOpenHandled]);
+
   useEffect(() => {
     if (!importedSchedulePayload || !importedSchedulePayload.monthlySchedules) return;
+
     const mergedSchedules = {
       ...(monthlySchedules || {}),
       ...importedSchedulePayload.monthlySchedules
     };
+
     setMonthlySchedules(mergedSchedules);
+
     const totalMonths = Object.keys(importedSchedulePayload.monthlySchedules || {}).length;
     const targetMonthKey = pendingOpenMonthKey || importedSchedulePayload.firstMonthKey || buildMonthKey(year, month);
     const [targetYear, targetMonth] = String(targetMonthKey).split('-').map(Number);
+
     if (Number.isFinite(targetYear) && Number.isFinite(targetMonth)) {
       monthSwitchSeedRef.current = targetMonthKey;
       if (year !== targetYear) setYear(targetYear);
@@ -775,6 +976,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       loadMonthState(targetYear, targetMonth, mergedSchedules);
       initializedMonthRef.current = true;
     }
+
     if (Array.isArray(importedSchedulePayload.warnings) && importedSchedulePayload.warnings.length > 0) {
       setRuleFillFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過、修正或覆蓋`);
     } else {
@@ -782,6 +984,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
     onImportedScheduleApplied?.();
   }, [importedSchedulePayload, monthlySchedules, onImportedScheduleApplied, pendingOpenMonthKey, setMonthlySchedules, year, month]);
+
   useEffect(() => {
     const currentKey = buildMonthKey(year, month);
     if (!initializedMonthRef.current) {
@@ -790,11 +993,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       monthSwitchSeedRef.current = currentKey;
       return;
     }
+
     if (monthSwitchSeedRef.current !== currentKey) {
       loadMonthState(year, month);
       monthSwitchSeedRef.current = currentKey;
     }
   }, [year, month]);
+
   useEffect(() => {
     if (monthLoadSkipRef.current) return;
     const monthKey = buildMonthKey(year, month);
@@ -819,6 +1024,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       }
     }));
   }, [year, month, staffs, schedule, customColumnValues, schedulingRulesText, setMonthlySchedules]);
+
   const holidayCalendar = useMemo(() => {
     return getSystemHolidayCalendar(year, {
       customHolidays,
@@ -826,14 +1032,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       unitAdjustments: medicalCalendarAdjustments
     });
   }, [year, customHolidays, specialWorkdays, medicalCalendarAdjustments]);
+
   const holidays = holidayCalendar.holidays;
   const workdays = holidayCalendar.workdays;
+
   const daysInMonth = useMemo(() => {
     const days = [];
     const daysCount = new Date(year, month, 0).getDate();
     const weekNames = ['日', '一', '二', '三', '四', '五', '六'];
     const holidaySet = new Set(holidays);
     const workdaySet = new Set(workdays);
+
     for (let i = 1; i <= daysCount; i++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       const weekNum = new Date(year, month - 1, i).getDay();
@@ -850,20 +1059,24 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
     return days;
   }, [year, month, holidays, workdays]);
+
   const requiredLeaves = useMemo(
     () => daysInMonth.filter(d => d.isWeekend || d.isHoliday).length,
     [daysInMonth]
   );
+
   const createBlankScheduleForStaffs = (staffList = []) => {
     return staffList.reduce((acc, staff) => {
       acc[staff.id] = {};
       return acc;
     }, {});
   };
+
   const loadMonthState = (targetYear, targetMonth, schedulesSource = monthlySchedules) => {
     const monthKey = buildMonthKey(targetYear, targetMonth);
     const monthData = schedulesSource?.[monthKey];
     monthLoadSkipRef.current = true;
+
     if (monthData) {
       const normalizedMonthStaffs = normalizeStaffGroup(monthData.staffs || []);
       const legacyScheduleByDay = monthData.scheduleByDay || {};
@@ -878,6 +1091,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           )
         ])
       );
+
       setStaffs(normalizedMonthStaffs);
       setSchedule(rebuiltScheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
       setCustomColumnValues(monthData.customColumnValues || {});
@@ -889,36 +1103,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setCustomColumnValues(blankMonthState.customColumnValues);
       setSchedulingRulesText(blankMonthState.schedulingRulesText);
     }
+
     setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setCellDrafts({});
+    setInvalidCellKeys({});
+    resetSingleCellInputBuffer();
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
   };
-  const selectedRangeCells = useMemo(() => expandSelectionCells(rangeSelection, staffs, daysInMonth), [rangeSelection, staffs, daysInMonth]);
-  const hasRangeSelection = selectedRangeCells.length > 0;
-  const hasMultiRangeSelection = selectedRangeCells.length > 1;
-  const resetRangeInputBuffer = () => {
-    rangeInputBufferRef.current = '';
-    if (rangeInputTimerRef.current) {
-      window.clearTimeout(rangeInputTimerRef.current);
-      rangeInputTimerRef.current = null;
-    }
-  };
-  const keepRangeInputBufferAlive = () => {
-    if (rangeInputTimerRef.current) window.clearTimeout(rangeInputTimerRef.current);
-    rangeInputTimerRef.current = window.setTimeout(() => resetRangeInputBuffer(), 1200);
-  };
-  const resetSingleCellInputBuffer = () => {
-    singleCellInputBufferRef.current = '';
-    if (singleCellInputTimerRef.current) {
-      window.clearTimeout(singleCellInputTimerRef.current);
-      singleCellInputTimerRef.current = null;
-    }
-  };
-  const keepSingleCellInputBufferAlive = () => {
-    if (singleCellInputTimerRef.current) window.clearTimeout(singleCellInputTimerRef.current);
-    singleCellInputTimerRef.current = window.setTimeout(() => resetSingleCellInputBuffer(), 1200);
-  };
+
   const clearInvalidCellLater = (cellKey) => {
     window.setTimeout(() => {
       setInvalidCellKeys(prev => {
@@ -926,63 +1122,111 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         delete next[cellKey];
         return next;
       });
-    }, 1200);
+    }, 1400);
   };
-  const commitCellValue = (staffId, dateStr, rawValue) => {
+
+  const commitCellValue = (staffId, dateStr, rawValue, options = {}) => {
+    const { quiet = false } = options;
     const cellKey = makeCellKey(staffId, dateStr);
     const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+
     if (!isValid) {
       setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
       clearInvalidCellLater(cellKey);
+      setCellDrafts(prev => {
+        const next = { ...prev };
+        delete next[cellKey];
+        return next;
+      });
+      if (!quiet) setRuleFillFeedback(`⚠️ ${rawValue} 不是合法班別/假別代碼，已還原原值`);
+      resetSingleCellInputBuffer();
       return false;
     }
+
     handleCellChange(staffId, dateStr, normalized);
+    setCellDrafts(prev => {
+      const next = { ...prev };
+      delete next[cellKey];
+      return next;
+    });
     setInvalidCellKeys(prev => {
       const next = { ...prev };
       delete next[cellKey];
       return next;
     });
+    resetSingleCellInputBuffer();
     return true;
   };
-  const applyValueToSelection = (rawValue) => {
-    if (selectedRangeCells.length === 0) return false;
+
+  const selectedRangeCells = useMemo(() => expandSelectionCells(rangeSelection, staffs, daysInMonth), [rangeSelection, staffs, daysInMonth]);
+  const hasRangeSelection = selectedRangeCells.length > 0;
+  const isMultiRangeSelection = selectedRangeCells.length > 1;
+
+  const resetRangeInputBuffer = () => {
+    setRangeInputBuffer('');
+    if (rangeInputTimerRef.current) {
+      window.clearTimeout(rangeInputTimerRef.current);
+      rangeInputTimerRef.current = null;
+    }
+  };
+
+  const keepRangeInputBufferAlive = () => {
+    if (rangeInputTimerRef.current) window.clearTimeout(rangeInputTimerRef.current);
+    rangeInputTimerRef.current = window.setTimeout(() => {
+      setRangeInputBuffer('');
+      rangeInputTimerRef.current = null;
+    }, 2200);
+  };
+
+  const resetSingleCellInputBuffer = () => {
+    setSingleCellInputBuffer('');
+    if (singleCellInputTimerRef.current) {
+      window.clearTimeout(singleCellInputTimerRef.current);
+      singleCellInputTimerRef.current = null;
+    }
+  };
+
+  const keepSingleCellInputBufferAlive = () => {
+    if (singleCellInputTimerRef.current) window.clearTimeout(singleCellInputTimerRef.current);
+    singleCellInputTimerRef.current = window.setTimeout(() => {
+      setSingleCellInputBuffer('');
+      singleCellInputTimerRef.current = null;
+    }, 1800);
+  };
+
+  const applyValueToSelection = (rawValue, options = {}) => {
+    const targetCells = selectedRangeCells;
+    if (targetCells.length === 0) return false;
     const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
-    if (!isValid) return false;
+    if (!isValid) {
+      if (!options.quiet) setRuleFillFeedback(`⚠️ ${rawValue} 不是合法班別/假別代碼，未套用到選取範圍`);
+      return false;
+    }
+
     setSchedule(prev => {
       const next = JSON.parse(JSON.stringify(prev));
-      selectedRangeCells.forEach(({ staffId, dateStr }) => {
+      targetCells.forEach(({ staffId, dateStr }) => {
         if (!next[staffId]) next[staffId] = {};
         next[staffId][dateStr] = normalized ? { value: normalized, source: 'manual' } : null;
       });
       return next;
     });
+    resetRangeInputBuffer();
+    resetSingleCellInputBuffer();
+    if (!options.quiet) setRuleFillFeedback(`✅ 已套用 ${normalized || '空白'} 到 ${targetCells.length} 格`);
     return true;
   };
-  const startRangeSelection = (staff, dateStr, event = {}) => {
-    const point = { staffId: staff.id, dateStr };
-    if (event.shiftKey && selectionAnchor) {
-      setRangeSelection({ start: selectionAnchor, end: point });
-    } else {
-      setSelectionAnchor(point);
-      setRangeSelection({ start: point, end: point });
-    }
-    setSelectedGridCell({ staff, dateStr });
-  };
-  const copyCurrentSelectionOrCell = async () => {
-    let grid = [];
+
+  const copySelectionToClipboard = async () => {
     const rect = getRectFromSelection(rangeSelection, staffs, daysInMonth);
-    if (rect) {
-      for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
-        const row = [];
-        for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
-          row.push(getCellCode(staffs[rowIndex]?.id, daysInMonth[colIndex]?.date) || '');
-        }
-        grid.push(row);
+    if (!rect) return;
+    const grid = [];
+    for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
+      const row = [];
+      for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
+        row.push(getCellCode(staffs[rowIndex]?.id, daysInMonth[colIndex]?.date) || '');
       }
-    } else if (selectedGridCell) {
-      grid = [[getCellCode(selectedGridCell.staff.id, selectedGridCell.dateStr) || '']];
-    } else {
-      return;
+      grid.push(row);
     }
     setClipboardGrid(grid);
     const text = grid.map(row => row.join('\t')).join('\n');
@@ -991,7 +1235,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     } catch (error) {
       console.error('寫入剪貼簿失敗', error);
     }
+    setRuleFillFeedback(`📋 已複製 ${grid.length}×${grid[0]?.length || 0} 範圍`);
   };
+
   const pasteGridToSelection = async () => {
     let grid = clipboardGrid;
     if (!grid || grid.length === 0) {
@@ -1004,21 +1250,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         console.error('讀取剪貼簿失敗', error);
       }
     }
-    if (!grid || grid.length === 0) return;
-    let rect = getRectFromSelection(rangeSelection, staffs, daysInMonth);
-    if (!rect && selectedGridCell) {
-      const rowIndex = staffs.findIndex(item => item.id === selectedGridCell.staff.id);
-      const colIndex = daysInMonth.findIndex(day => day.date === selectedGridCell.dateStr);
-      if (rowIndex !== -1 && colIndex !== -1) rect = { rowStart: rowIndex, rowEnd: rowIndex, colStart: colIndex, colEnd: colIndex };
-    }
-    if (!rect) return;
+    const rect = getRectFromSelection(rangeSelection, staffs, daysInMonth);
+    if (!rect || !grid || grid.length === 0) return;
+
     const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
     const selectionColCount = rect.colEnd - rect.colStart + 1;
     const sourceRowCount = grid.length;
     const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
+    const selectionCellCount = selectionRowCount * selectionColCount;
+    const sourceCellCount = sourceRowCount * sourceColCount;
+    const shouldConfineToSelection = selectionCellCount > 1;
+
     let targetRowCount = sourceRowCount;
     let targetColCount = sourceColCount;
-    if (selectionRowCount * selectionColCount > 1) {
+
+    if (shouldConfineToSelection) {
       if (sourceRowCount === 1 && sourceColCount === 1) {
         targetRowCount = selectionRowCount;
         targetColCount = selectionColCount;
@@ -1027,49 +1273,100 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         targetColCount = Math.min(sourceColCount, selectionColCount);
       }
     }
+
+    const updates = [];
+    let invalidCount = 0;
+    let skippedOverflowCount = 0;
+
+    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
+        const sourceRow = sourceRowCount === 1 && sourceColCount === 1 ? 0 : rowOffset;
+        const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
+        const targetRow = rect.rowStart + rowOffset;
+        const targetCol = rect.colStart + colOffset;
+        const staff = staffs[targetRow];
+        const day = daysInMonth[targetCol];
+        if (!staff || !day) continue;
+        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
+        const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+        if (!isValid) {
+          invalidCount += 1;
+          continue;
+        }
+        updates.push({ staffId: staff.id, dateStr: day.date, value: normalized });
+      }
+    }
+
+    if (shouldConfineToSelection && !(sourceRowCount === 1 && sourceColCount === 1)) {
+      skippedOverflowCount = Math.max(0, sourceCellCount - (targetRowCount * targetColCount));
+    }
+
+    if (updates.length === 0) {
+      setRuleFillFeedback('⚠️ 剪貼簿內容沒有可貼上的合法代碼');
+      return;
+    }
+
     setSchedule(prev => {
       const next = JSON.parse(JSON.stringify(prev));
-      for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
-        for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
-          const sourceRow = sourceRowCount === 1 && sourceColCount === 1 ? 0 : rowOffset;
-          const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
-          const staff = staffs[rect.rowStart + rowOffset];
-          const day = daysInMonth[rect.colStart + colOffset];
-          if (!staff || !day) continue;
-          const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
-          const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
-          if (!isValid) continue;
-          if (!next[staff.id]) next[staff.id] = {};
-          next[staff.id][day.date] = normalized ? { value: normalized, source: 'manual' } : null;
-        }
-      }
+      updates.forEach(({ staffId, dateStr, value }) => {
+        if (!next[staffId]) next[staffId] = {};
+        next[staffId][dateStr] = value ? { value, source: 'manual' } : null;
+      });
       return next;
     });
+    resetRangeInputBuffer();
+    resetSingleCellInputBuffer();
+
+    const notes = [];
+    if (invalidCount > 0) notes.push(`略過 ${invalidCount} 格非法值`);
+    if (skippedOverflowCount > 0) notes.push(`超出選取範圍 ${skippedOverflowCount} 格未貼上`);
   };
+
+  const fillSelectionFromTopLeft = () => {
+    const rect = getRectFromSelection(rangeSelection, staffs, daysInMonth);
+    if (!rect) return;
+    const topLeftValue = getCellCode(staffs[rect.rowStart]?.id, daysInMonth[rect.colStart]?.date);
+    applyValueToSelection(topLeftValue, { quiet: false });
+  };
+
+  const startRangeSelection = (staff, dateStr, event = {}) => {
+    const point = { staffId: staff.id, dateStr };
+    if (event.shiftKey && selectionAnchor) {
+      setRangeSelection({ start: selectionAnchor, end: point });
+    } else {
+      setSelectionAnchor(point);
+      setRangeSelection({ start: point, end: point });
+    }
+    setSelectedGridCell({ staff, dateStr });
+  };
+
   useEffect(() => {
     const stopDrag = () => setIsRangeDragging(false);
     window.addEventListener('mouseup', stopDrag);
     return () => window.removeEventListener('mouseup', stopDrag);
   }, []);
+
   useEffect(() => {
     const handleKeyDown = (event) => {
+      if (!hasRangeSelection) return;
       const target = event.target;
       const tagName = String(target?.tagName || '').toLowerCase();
       const isTypingTarget = tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target?.isContentEditable;
+      const isSingleSelection = selectedRangeCells.length === 1;
+      const selectedCell = isSingleSelection ? selectedRangeCells[0] : null;
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
-        if (!selectedGridCell && !hasRangeSelection) return;
         event.preventDefault();
-        copyCurrentSelectionOrCell();
+        copySelectionToClipboard();
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
-        if (!selectedGridCell && !hasRangeSelection) return;
         event.preventDefault();
         pasteGridToSelection();
         return;
       }
       if (isTypingTarget) return;
-      if (!selectedGridCell && !hasRangeSelection) return;
+
       if (event.key === 'Escape') {
         event.preventDefault();
         resetRangeInputBuffer();
@@ -1078,50 +1375,90 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         setSelectionAnchor(null);
         return;
       }
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        event.preventDefault();
-        resetRangeInputBuffer();
-        resetSingleCellInputBuffer();
-        if (hasMultiRangeSelection) {
-          setSchedule(prev => {
-            const next = JSON.parse(JSON.stringify(prev));
-            selectedRangeCells.forEach(({ staffId, dateStr }) => {
-              if (!next[staffId]) next[staffId] = {};
-              next[staffId][dateStr] = null;
-            });
-            return next;
-          });
-        } else if (selectedGridCell) {
-          handleCellChange(selectedGridCell.staff.id, selectedGridCell.dateStr, '');
+
+      if (isSingleSelection) {
+        if ((event.key === 'Delete' || event.key === 'Backspace') && !singleCellInputBuffer) {
+          event.preventDefault();
+          setSchedule(prev => ({
+            ...prev,
+            [selectedCell.staffId]: { ...prev[selectedCell.staffId], [selectedCell.dateStr]: null }
+          }));
+          resetSingleCellInputBuffer();
+          return;
         }
-        return;
-      }
-      if (event.key.length === 1 && !event.altKey) {
-        event.preventDefault();
-        if (hasMultiRangeSelection) {
-          const nextBuffer = `${rangeInputBufferRef.current}${event.key}`;
-          rangeInputBufferRef.current = nextBuffer;
-          keepRangeInputBufferAlive();
-          const parsed = normalizeManualShiftCode(nextBuffer, mergedLeaveCodes);
-          if (parsed.isValid && parsed.normalized) {
-            applyValueToSelection(parsed.normalized);
-            resetRangeInputBuffer();
+
+        if (event.key === 'Backspace' && singleCellInputBuffer) {
+          event.preventDefault();
+          const nextBuffer = singleCellInputBuffer.slice(0, -1);
+          if (nextBuffer) {
+            setSingleCellInputBuffer(nextBuffer);
+            keepSingleCellInputBufferAlive();
+          } else {
+            resetSingleCellInputBuffer();
           }
           return;
         }
-        const nextBuffer = `${singleCellInputBufferRef.current}${event.key}`;
-        singleCellInputBufferRef.current = nextBuffer;
-        keepSingleCellInputBufferAlive();
-        const parsed = normalizeManualShiftCode(nextBuffer, mergedLeaveCodes);
-        if (parsed.isValid) {
-          commitCellValue(selectedGridCell.staff.id, selectedGridCell.dateStr, parsed.normalized);
-          resetSingleCellInputBuffer();
+
+        if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          event.preventDefault();
+          const nextBuffer = `${singleCellInputBuffer}${event.key}`;
+          const normalizedResult = normalizeManualShiftCode(nextBuffer, mergedLeaveCodes);
+          if (normalizedResult.isValid) {
+            commitCellValue(selectedCell.staffId, selectedCell.dateStr, nextBuffer, { quiet: true });
+            resetSingleCellInputBuffer();
+          } else {
+            setSingleCellInputBuffer(nextBuffer);
+            keepSingleCellInputBufferAlive();
+          }
+          return;
         }
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && !rangeInputBuffer) {
+        event.preventDefault();
+        setSchedule(prev => {
+          const next = JSON.parse(JSON.stringify(prev));
+          selectedRangeCells.forEach(({ staffId, dateStr }) => {
+            if (!next[staffId]) next[staffId] = {};
+            next[staffId][dateStr] = null;
+          });
+          return next;
+        });
+        resetRangeInputBuffer();
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        if (!rangeInputBuffer) return;
+        event.preventDefault();
+        applyValueToSelection(rangeInputBuffer, { quiet: true });
+        return;
+      }
+
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        const nextBuffer = rangeInputBuffer.slice(0, -1);
+        if (nextBuffer) {
+          setRangeInputBuffer(nextBuffer);
+          keepRangeInputBufferAlive();
+        } else {
+          resetRangeInputBuffer();
+        }
+        return;
+      }
+
+      if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        const nextBuffer = `${rangeInputBuffer}${event.key}`;
+        setRangeInputBuffer(nextBuffer);
+        keepRangeInputBufferAlive();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedGridCell, hasRangeSelection, hasMultiRangeSelection, selectedRangeCells, rangeSelection, clipboardGrid, staffs, daysInMonth, mergedLeaveCodes]);
+  }, [hasRangeSelection, clipboardGrid, staffs, daysInMonth, mergedLeaveCodes, rangeInputBuffer, selectedRangeCells, singleCellInputBuffer]);
+
+
   // ==========================================
   // 4. Excel 匯出 (ExcelJS 實現)
   // ==========================================
@@ -1130,15 +1467,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const ExcelJS = await loadExcelJS();
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
+
     const statHeaders = ['上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
     const lastDateColumn = daysInMonth.length + 1;
+
     const monthTitleRow = worksheet.addRow([]);
     monthTitleRow.height = 26;
+
     const titleStartCol = 2;
     const titleEndCol = Math.max(2, lastDateColumn - 2);
     const leaveStartCol = Math.max(titleEndCol + 1, lastDateColumn - 1);
     const leaveEndCol = lastDateColumn;
+
     if (titleEndCol >= titleStartCol) {
       worksheet.mergeCells(1, titleStartCol, 1, titleEndCol);
       const titleCell = monthTitleRow.getCell(titleStartCol);
@@ -1147,6 +1488,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
       titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
     }
+
     if (leaveEndCol >= leaveStartCol) {
       if (leaveEndCol > leaveStartCol) worksheet.mergeCells(1, leaveStartCol, 1, leaveEndCol);
       const leaveCell = monthTitleRow.getCell(leaveStartCol);
@@ -1155,6 +1497,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       leaveCell.alignment = { vertical: 'middle', horizontal: 'right' };
       leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
     }
+
     for (let col = 1; col <= totalColumns; col++) {
       const cell = monthTitleRow.getCell(col);
       cell.border = {
@@ -1165,10 +1508,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
       }
     }
+
     const headerRow = ['姓名', ...daysInMonth.map(d => `${d.day}
 (${d.weekStr})`), ...statHeaders];
     const header = worksheet.addRow(headerRow);
     header.height = 30;
+
     header.eachCell((cell, colNumber) => {
       cell.font = { bold: true, size: 10 };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
@@ -1176,6 +1521,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         top: { style: 'thin' }, left: { style: 'thin' },
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
+
       if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
         const d = daysInMonth[colNumber - 2];
         if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCACA' } };
@@ -1185,6 +1531,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
       }
     });
+
     staffs.forEach(staff => {
       const stats = getStaffStats(staff.id);
       const rowData = [
@@ -1197,12 +1544,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''), ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
       ];
       const row = worksheet.addRow(rowData);
+
       row.eachCell((cell, colNumber) => {
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
+
         if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
           cell.numFmt = '@';
           const d = daysInMonth[colNumber - 2];
@@ -1211,6 +1560,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
       });
     });
+
     ['D', 'E', 'N', 'totalLeave'].forEach(rowKey => {
       const label = rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`;
       const rowData = [label, ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || ''), ...Array(statHeaders.length).fill('')];
@@ -1224,10 +1574,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
       });
     });
+
     worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
+
     worksheet.getColumn(1).width = 15;
     for (let i = 2; i <= daysInMonth.length + 1; i++) worksheet.getColumn(i).width = 5;
     for (let i = daysInMonth.length + 2; i <= totalColumns; i++) worksheet.getColumn(i).width = 8;
+
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -1240,6 +1593,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setShowExportMenu(false);
     setRuleFillFeedback("✅ Excel 導出成功！");
   };
+
+
   const exportToWord = () => {
     const statHeaders = ['上班', '假日休', '總休'];
     const titleColSpan = daysInMonth.length;
@@ -1252,6 +1607,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const schedulingRulesHtml = schedulingRuleLines.length > 0
       ? `排班規則：<br/>${schedulingRuleLines.map((line, index) => `${index + 1}. ${line}`).join('<br/>')}`
       : '排班規則：';
+
     const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
           xmlns:w="urn:schemas-microsoft-com:office:word"
@@ -1409,6 +1765,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         </div>
       </body>
     </html>`;
+
     const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1419,44 +1776,53 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setShowExportMenu(false);
     setRuleFillFeedback("✅ Word 導出成功！");
   };
+
   // ==========================================
   // 5. 規則式半智慧補班功能
   // ==========================================
   const handleRuleBasedAutoSchedule = async (isPartial = false) => {
     setIsRuleFillLoading(true);
     setRuleFillFeedback(isPartial ? "🧩 系統正在依指定範圍進行規則補空..." : "🧩 系統正在依人力需求執行整月規則補空...");
+
     try {
       const mergedSchedule = JSON.parse(JSON.stringify(schedule));
       const targetStaffIds = isPartial && ruleFillConfig.selectedStaffs.length > 0
         ? new Set(ruleFillConfig.selectedStaffs)
         : new Set(staffs.map(s => s.id));
+
       const targetDays = daysInMonth.filter(d => {
         if (!isPartial) return true;
         return d.day >= ruleFillConfig.dateRange.start && d.day <= ruleFillConfig.dateRange.end;
       });
+
       const normalizedTargetShift = RULE_FILL_MAIN_SHIFTS.includes(ruleFillConfig.targetShift) ? ruleFillConfig.targetShift : '';
       const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
       const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
+
       const getScheduleCode = (snapshot, staffId, dateStr) => {
         const cellData = snapshot[staffId]?.[dateStr];
         return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
       };
+
       const setScheduleCode = (snapshot, staffId, dateStr, value, source = 'auto') => {
         if (!snapshot[staffId]) snapshot[staffId] = {};
         snapshot[staffId][dateStr] = value ? { value, source } : null;
       };
+
       const getDemandType = (day) => (day.isWeekend || day.isHoliday) ? 'holiday' : 'weekday';
       const getDemandForGroup = (day, group) => {
         const bucket = getDemandType(day);
         const key = GROUP_TO_DEMAND_KEY[group];
         return Number(staffingConfig?.requiredStaffing?.[bucket]?.[key] || 0);
       };
+
       const getAssignedCountByGroup = (snapshot, dateStr, group) => {
         return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
           const code = getScheduleCode(snapshot, s.id, dateStr);
           return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
         }, 0);
       };
+
       const countConsecutiveBeforeFromSnapshot = (snapshot, staffId, dateStr) => {
         let count = 0;
         let cursor = addDays(parseDateKey(dateStr), -1);
@@ -1469,6 +1835,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
         return count;
       };
+
       const canAssignWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
         const reasons = [];
         const currentCode = getScheduleCode(snapshot, staff.id, dateStr);
@@ -1487,30 +1854,37 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) reasons.push('懷孕標記人員不可排 N / 夜8-8');
         return { allowed: reasons.length === 0, reasons };
       };
+
       const getWorkCountFromSnapshot = (snapshot, staffId) => {
         return daysInMonth.reduce((sum, d) => sum + (isShiftCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
       };
+
       const getShiftCountFromSnapshot = (snapshot, staffId, shiftCode) => {
         return daysInMonth.reduce((sum, d) => sum + (getScheduleCode(snapshot, staffId, d.date) === shiftCode ? 1 : 0), 0);
       };
+
       const getLeaveCountFromSnapshot = (snapshot, staffId) => {
         return daysInMonth.reduce((sum, d) => sum + (isConfiguredLeaveCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
       };
+
       const getBlankCountFromSnapshot = (snapshot, staffId) => {
         return daysInMonth.reduce((sum, d) => sum + (!getScheduleCode(snapshot, staffId, d.date) ? 1 : 0), 0);
       };
+
       const canStillMeetRequiredLeavesAfterAssign = (snapshot, staffId) => {
         const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
         const remainingBlanks = getBlankCountFromSnapshot(snapshot, staffId);
         const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
         return remainingBlanks >= remainingLeavesNeeded;
       };
+
       const canStillMeetRequiredLeavesIfAssignShift = (snapshot, staffId) => {
         const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
         const remainingBlanks = getBlankCountFromSnapshot(snapshot, staffId);
         const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
         return (remainingBlanks - 1) >= remainingLeavesNeeded;
       };
+
       const getRecentWorkPressure = (snapshot, staffId, dateStr, lookback = 3) => {
         let count = 0;
         let cursor = addDays(parseDateKey(dateStr), -1);
@@ -1521,6 +1895,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
         return count;
       };
+
       const getRecentLeavePressure = (snapshot, staffId, dateStr, lookback = 4) => {
         let count = 0;
         let cursor = addDays(parseDateKey(dateStr), -1);
@@ -1531,6 +1906,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
         return count;
       };
+
       const getNearbyLeavePressure = (snapshot, staffId, dateStr, radius = 2) => {
         let count = 0;
         const center = parseDateKey(dateStr);
@@ -1542,6 +1918,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
         return count;
       };
+
       const getDaysSinceLastLeave = (snapshot, staffId, dateStr, maxLookback = 10) => {
         let cursor = addDays(parseDateKey(dateStr), -1);
         for (let i = 1; i <= maxLookback; i += 1) {
@@ -1551,12 +1928,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
         return maxLookback + 1;
       };
+
       const getGroupLeaveLoad = (snapshot, dateStr, group) => {
         return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
           const code = getScheduleCode(snapshot, s.id, dateStr);
           return sum + (isLeaveCode(code) ? 1 : 0);
         }, 0);
       };
+
       const getConsecutiveLeavePattern = (snapshot, staffId, dateStr) => {
         const prevCode = getScheduleCode(snapshot, staffId, formatDateKey(addDays(parseDateKey(dateStr), -1)));
         const nextCode = getScheduleCode(snapshot, staffId, formatDateKey(addDays(parseDateKey(dateStr), 1)));
@@ -1568,6 +1947,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           adjacentLeaveCount: (prevIsLeave ? 1 : 0) + (nextIsLeave ? 1 : 0)
         };
       };
+
       const scoreCandidateWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
         let score = 0;
         score += (999 - getShiftCountFromSnapshot(snapshot, staff.id, shiftCode)) * SMART_RULES.fillPriorityWeights.sameShiftCount;
@@ -1576,6 +1956,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         score -= getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 18;
         return score;
       };
+
       const scoreLeaveCandidateWithSnapshot = (snapshot, staff, dateStr) => {
         const leaveDeficit = Math.max(0, requiredLeaves - getLeaveCountFromSnapshot(snapshot, staff.id));
         const workCount = getWorkCountFromSnapshot(snapshot, staff.id);
@@ -1597,17 +1978,22 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (consecutiveLeavePattern.adjacentLeaveCount >= 2) score -= 12;
         return score;
       };
+
       for (const day of targetDays) {
         for (const group of SHIFT_GROUPS) {
           if (restrictedGroup && restrictedGroup !== group) continue;
+
           const shiftCode = normalizedTargetShift && getShiftGroupByCode(normalizedTargetShift) === group
             ? normalizedTargetShift
             : DEFAULT_SHIFT_BY_GROUP[group];
+
           const demand = getDemandForGroup(day, group);
           const alreadyAssigned = getAssignedCountByGroup(mergedSchedule, day.date, group);
           const needed = Math.max(0, demand - alreadyAssigned);
+
           const groupStaffs = staffs.filter(s => (s.group || '白班') === group && targetStaffIds.has(s.id));
           const groupStaffIds = new Set(groupStaffs.map(s => s.id));
+
           // 逐格補主班別，補到需求就停
           for (let slot = 0; slot < needed; slot += 1) {
             const assignableCandidates = groupStaffs
@@ -1623,20 +2009,24 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
               })
               .filter(item => item.allowed)
               .sort((a, b) => b.score - a.score);
+
             if (assignableCandidates.length === 0) {
               summary.skipped += 1;
               continue;
             }
+
             const picked = assignableCandidates[0];
             setScheduleCode(mergedSchedule, picked.staff.id, day.date, shiftCode, 'auto');
             summary.workFilled += 1;
           }
+
           // 需求已滿後，只替休假不足者補 off；其他空白保留
           const leaveCandidates = groupStaffs
             .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
             .filter(staff => getLeaveCountFromSnapshot(mergedSchedule, staff.id) < requiredLeaves)
             .map(staff => ({ staff, score: scoreLeaveCandidateWithSnapshot(mergedSchedule, staff, day.date) }))
             .sort((a, b) => b.score - a.score);
+
           if (leaveCandidates.length > 0) {
             const currentLeaveLoad = getGroupLeaveLoad(mergedSchedule, day.date, group);
             const maxLeaveForDay = Math.max(0, groupStaffIds.size - demand);
@@ -1650,6 +2040,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           }
         }
       }
+
       setSchedule(mergedSchedule);
       saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
       setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
@@ -1660,6 +2051,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setIsRuleFillLoading(false);
     }
   };
+
+
   // ==========================================
   // 6. 輔助統計與操作
   // ==========================================
@@ -1670,11 +2063,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       totalLeave: 0,
       leaveDetails: Object.fromEntries(mergedLeaveCodes.map(l => [l, 0]))
     };
+
     const mySchedule = schedule[staffId] || {};
     daysInMonth.forEach(d => {
       const cellData = mySchedule[d.date];
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
+
       if (DICT.SHIFTS.includes(code)) stats.work += 1;
       if (isConfiguredLeaveCode(code)) {
         stats.totalLeave += 1;
@@ -1684,12 +2079,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
     return stats;
   };
+
   const getDailyStats = (dateStr) => {
     const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
+
     staffs.forEach(staff => {
       const cellData = schedule[staff.id]?.[dateStr];
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
+
       if (['D', '白8-8', '8-12', '12-16'].includes(code)) {
         stats.D += 1;
       } else if (['E', '夜8-8'].includes(code)) {
@@ -1700,8 +2098,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         stats.totalLeave += 1;
       }
     });
+
     return stats;
   };
+
   const getRequiredCountForDate = (dateStr, rowKey) => {
     const dayInfo = daysInMonth.find(d => d.date === dateStr);
     if (!dayInfo) return null;
@@ -1711,6 +2111,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (rowKey === 'N') return Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0);
     return null;
   };
+
   const getDemandHighlightStyle = (dateStr, rowKey, actualCount) => {
     if (!['D', 'E', 'N'].includes(rowKey)) return {};
     const requiredCount = getRequiredCountForDate(dateStr, rowKey);
@@ -1718,6 +2119,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (actualCount > requiredCount) return { backgroundColor: demandOverColor };
     return {};
   };
+
   const saveToHistory = (label, currentSchedule = schedule) => {
     const newRecord = {
       id: Date.now(),
@@ -1725,12 +2127,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       timestamp: new Date().toLocaleString(),
       state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText }
     };
+
     setHistoryList(prev => {
       const updated = [newRecord, ...prev].slice(0, 10);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
   };
+
   const loadHistory = (record) => {
     const { state } = record;
     setYear(state.year);
@@ -1750,28 +2154,33 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setShowHistoryModal(false);
     setShowDraftPrompt(false);
   };
+
   const clearHistory = () => {
     if (window.confirm("確定要清空所有歷史紀錄嗎？")) {
       localStorage.removeItem(STORAGE_KEY);
       setHistoryList([]);
     }
   };
+
   const handleCellChange = (staffId, dateStr, value) => {
     setSchedule(prev => ({
       ...prev,
       [staffId]: { ...prev[staffId], [dateStr]: value ? { value, source: 'manual' } : null }
     }));
   };
+
   const getCellCode = (staffId, dateStr) => {
     const cellData = schedule[staffId]?.[dateStr];
     return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
   };
+
   const getCellSource = (staffId, dateStr) => {
     const cellData = schedule[staffId]?.[dateStr];
     if (!cellData) return '';
     if (typeof cellData === 'object' && cellData !== null) return cellData.source || 'manual';
     return 'manual';
   };
+
   const countConsecutiveWorkDaysBefore = (staffId, dateStr) => {
     let count = 0;
     let cursor = addDays(parseDateKey(dateStr), -1);
@@ -1784,39 +2193,48 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
     return count;
   };
+
   const canAssign = (staff, dateStr, shiftCode) => {
     const reasons = [];
     const currentCode = getCellCode(staff.id, dateStr);
     if (currentCode) {
       reasons.push('該格已有排班或休假代碼');
     }
+
     const prefix = getCodePrefix(currentCode);
     if (isConfiguredLeaveCode(currentCode)) {
       reasons.push('該格已有休假，不可再排班');
     }
+
     const staffGroup = staff.group || '白班';
     const shiftGroup = getShiftGroupByCode(shiftCode);
     if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
       reasons.push('不可跨群組排班');
     }
+
     const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
     const prevCode = getCellCode(staff.id, prevKey);
     const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
     if (disallowed.includes(shiftCode)) {
       reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
     }
+
     const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
     if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
       reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
     }
+
     if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
       reasons.push('懷孕標記人員不可排 N / 夜8-8');
     }
+
     return { allowed: reasons.length === 0, reasons };
   };
+
   const getShiftCountForStaff = (staffId, shiftCode) => {
     return daysInMonth.reduce((sum, d) => sum + (getCellCode(staffId, d.date) === shiftCode ? 1 : 0), 0);
   };
+
   const scoreCandidate = (staff, dateStr, shiftCode) => {
     let score = 0;
     const stats = getStaffStats(staff.id);
@@ -1827,6 +2245,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
     return score;
   };
+
   const getCurrentConsecutiveLeavePattern = (staffId, dateStr) => {
     const prevCode = getCellCode(staffId, formatDateKey(addDays(parseDateKey(dateStr), -1)));
     const nextCode = getCellCode(staffId, formatDateKey(addDays(parseDateKey(dateStr), 1)));
@@ -1838,6 +2257,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       adjacentLeaveCount: (prevIsLeave ? 1 : 0) + (nextIsLeave ? 1 : 0)
     };
   };
+
   const openFillModal = (staff, dateStr) => {
     const group = staff.group || '白班';
     const shiftCode = DEFAULT_SHIFT_BY_GROUP[group];
@@ -1849,12 +2269,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }, 0);
     const leaveCount = daysInMonth.reduce((sum, d) => sum + (isLeaveCode(getCellCode(staff.id, d.date)) ? 1 : 0), 0);
     const leaveDeficit = Math.max(0, requiredLeaves - leaveCount);
+
     const shiftResult = canAssign(staff, dateStr, shiftCode);
     const currentLeaves = leaveCount;
     const remainingBlanks = daysInMonth.reduce((sum, d) => sum + (!getCellCode(staff.id, d.date) ? 1 : 0), 0);
     const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
     const canKeepLeaveTarget = (remainingBlanks - 1) >= remainingLeavesNeeded;
+
     const candidates = [];
+
     if (alreadyAssigned < demand && shiftResult.allowed && canKeepLeaveTarget) {
       const reasonBits = [
         `${group}缺額尚未補滿`,
@@ -1871,6 +2294,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         reasons: reasonBits
       });
     }
+
     if (alreadyAssigned >= demand && leaveDeficit > 0) {
       const sameDayLeaveLoad = staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => sum + (isLeaveCode(getCellCode(s.id, dateStr)) ? 1 : 0), 0);
       const recentWorkPressure = (() => {
@@ -1897,21 +2321,26 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         reasons: ['本月休假尚未達標', `當日群組需求已滿，優先補休（${defaultAutoLeaveCode}）`]
       });
     }
+
     candidates.sort((a, b) => b.score - a.score);
+
     setSelectedFillCell({ staffId: staff.id, staffName: staff.name, dateStr, group: staff.group });
     setFillCandidates(candidates);
     setShowFillModal(true);
   };
+
 const openSelectedCellFillModal = () => {
     if (!selectedGridCell) return;
     openFillModal(selectedGridCell.staff, selectedGridCell.dateStr);
   };
+
   const clearSelectedCell = () => {
     if (!selectedGridCell) return;
     const { staff, dateStr } = selectedGridCell;
     const currentCode = getCellCode(staff.id, dateStr);
     if (!currentCode) return;
     if (!window.confirm(`確定清除此格內容？\n${staff.name}｜${dateStr}｜${currentCode}`)) return;
+
     setSchedule(prev => ({
       ...prev,
       [staff.id]: { ...prev[staff.id], [dateStr]: null }
@@ -1919,14 +2348,17 @@ const openSelectedCellFillModal = () => {
     setSelectedGridCell(null);
     setRuleFillFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
   };
+
   const clearRangeCells = () => {
     if (ruleFillConfig.selectedStaffs.length === 0) {
       setRuleFillFeedback('⚠️ 請先選擇要清除的人員');
       return;
     }
+
     const start = Number(ruleFillConfig.dateRange.start || 1);
     const end = Number(ruleFillConfig.dateRange.end || 31);
     const targetStaffIds = new Set(ruleFillConfig.selectedStaffs);
+
     let cleared = 0;
     setSchedule(prev => {
       const next = JSON.parse(JSON.stringify(prev));
@@ -1936,16 +2368,20 @@ const openSelectedCellFillModal = () => {
           if (day.day < start || day.day > end) return;
           const cellData = next[staff.id]?.[day.date];
           if (!cellData) return;
+
           const source = typeof cellData === 'object' && cellData !== null ? (cellData.source || 'manual') : 'manual';
           if (rangeClearMode === 'autoOnly' && source !== 'auto') return;
+
           next[staff.id][day.date] = null;
           cleared += 1;
         });
       });
       return next;
     });
+
     setRuleFillFeedback(cleared > 0 ? `🧹 已清除 ${cleared} 格內容` : 'ℹ️ 指定範圍內沒有可清除的內容');
   };
+
   const applyFillCandidate = (candidate) => {
     if (!selectedFillCell) return;
     handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode);
@@ -1954,11 +2390,13 @@ const openSelectedCellFillModal = () => {
     setFillCandidates([]);
     setSelectedGridCell(null);
   };
+
   const addStaff = (group = '白班') => {
     const newId = 's' + Date.now();
     setStaffs(prev => [...prev, { id: newId, name: '新成員', group }]);
     setSchedule(prev => ({ ...prev, [newId]: {} }));
   };
+
   const removeStaff = (staffId) => {
     if (!window.confirm("確定要刪除此人員嗎？")) return;
     setStaffs(prev => prev.filter(s => s.id !== staffId));
@@ -1968,28 +2406,34 @@ const openSelectedCellFillModal = () => {
       return next;
     });
   };
+
   const moveStaffInGroup = (staffId, direction) => {
     const newStaffs = [...staffs];
     const currentIndex = newStaffs.findIndex(s => s.id === staffId);
     if (currentIndex === -1) return;
+
     const currentGroup = newStaffs[currentIndex].group;
     const groupIndexes = newStaffs
       .map((staff, index) => ({ staff, index }))
       .filter(item => item.staff.group === currentGroup)
       .map(item => item.index);
+
     const currentGroupPos = groupIndexes.indexOf(currentIndex);
     const targetGroupPos = direction === 'up' ? currentGroupPos - 1 : currentGroupPos + 1;
     if (targetGroupPos < 0 || targetGroupPos >= groupIndexes.length) return;
+
     const targetIndex = groupIndexes[targetGroupPos];
     [newStaffs[currentIndex], newStaffs[targetIndex]] = [newStaffs[targetIndex], newStaffs[currentIndex]];
     setStaffs(newStaffs);
   };
+
   const groupedStaffs = useMemo(() => {
     return SHIFT_GROUPS.map(group => ({
       group,
       staffs: staffs.filter(staff => (staff.group || '白班') === group)
     }));
   }, [staffs]);
+
   return (
     <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
@@ -1998,6 +2442,7 @@ const openSelectedCellFillModal = () => {
         .animate-pulse-once { animation: pulse-once 0.5s ease-out forwards; }
         .animate-fade-in-down { animation: fade-in-down 0.3s ease-out forwards; }
       `}</style>
+
       {showDraftPrompt && (
         <div className="max-w-[95vw] mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
           <div className="flex items-center gap-1.5">
@@ -2010,6 +2455,7 @@ const openSelectedCellFillModal = () => {
           </div>
         </div>
       )}
+
       <div className="max-w-[95vw] mx-auto mb-6">
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
@@ -2019,6 +2465,7 @@ const openSelectedCellFillModal = () => {
             </h1>
             <p className="text-slate-500 text-xs mt-1 italic">開發測試使用</p>
           </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Save size={16} /> 暫存
@@ -2026,6 +2473,7 @@ const openSelectedCellFillModal = () => {
             <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Clock size={16} /> 歷史
             </button>
+
             <div className="relative">
               <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-2 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm">
                 <Download size={16} /> 匯出
@@ -2041,7 +2489,9 @@ const openSelectedCellFillModal = () => {
                 </div>
               )}
             </div>
+
             <div className="w-px h-8 bg-slate-200 mx-2 hidden sm:block"></div>
+
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
               <button onClick={() => handleRuleBasedAutoSchedule(false)} disabled={isRuleFillLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
                 {isRuleFillLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 規則全月補空
@@ -2068,31 +2518,15 @@ const openSelectedCellFillModal = () => {
             </div>
           </div>
         </div>
-        {ruleFillFeedback && (
-          <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
-            <Check size={16} className="text-green-600" />
-            {ruleFillFeedback}
-          </div>
-        )}
-        {selectedGridCell && (
-          <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
-            <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
-            <button
-              type="button"
-              onClick={() => setSelectedGridCell(null)}
-              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
-            >
-              取消選取
-            </button>
-          </div>
-        )}
       </div>
+
       {showRuleFillControl && (
         <div className="max-w-[95vw] mx-auto mb-6 rounded-3xl border border-slate-200 bg-slate-100/90 px-5 py-5 shadow-sm animate-fade-in-down lg:px-6">
           <div className="mb-4 flex items-center gap-2 text-slate-800">
             <Sparkles size={18} className="text-blue-600" />
             <h3 className="font-black">規則指定補空設定</h3>
           </div>
+
           <div className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr_1.05fr_1.15fr]">
             <div className="min-w-0">
               <label className="mb-2 block text-xs font-bold text-blue-700">1. 選擇人員（補空範圍）</label>
@@ -2100,6 +2534,7 @@ const openSelectedCellFillModal = () => {
                 {groupedStaffs.map(({ group, staffs: groupStaffs }) => {
                   const groupIds = groupStaffs.map(s => s.id);
                   const isGroupFullySelected = groupIds.length > 0 && groupIds.every(id => ruleFillConfig.selectedStaffs.includes(id));
+
                   return (
                     <div key={group} className="rounded-xl border border-blue-100 bg-white/75 px-3 py-2 shadow-sm">
                       <div className="mb-1.5 flex items-center gap-2">
@@ -2117,6 +2552,7 @@ const openSelectedCellFillModal = () => {
                           全選
                         </button>
                       </div>
+
                       <div className="grid grid-cols-3 gap-1.5">
                         {groupStaffs.map(s => (
                           <button
@@ -2139,6 +2575,7 @@ const openSelectedCellFillModal = () => {
                 })}
               </div>
             </div>
+
             <div>
               <label className="mb-2 block text-xs font-bold text-blue-700">2. 日期範圍（1 ~ 31 號）</label>
               <div className="flex items-center gap-3">
@@ -2161,6 +2598,7 @@ const openSelectedCellFillModal = () => {
                 />
               </div>
             </div>
+
             <div>
               <label className="mb-2 block text-xs font-bold text-blue-700">3. 指定班別（選填）</label>
               <select
@@ -2172,6 +2610,7 @@ const openSelectedCellFillModal = () => {
                 {RULE_FILL_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
               </select>
             </div>
+
             <div className="space-y-3">
               <div>
                 <label className="mb-2 block text-xs font-bold text-blue-700">4. 範圍清除模式</label>
@@ -2184,6 +2623,7 @@ const openSelectedCellFillModal = () => {
                   <option value="all">清除範圍內全部內容</option>
                 </select>
               </div>
+
               <div className="grid grid-cols-1 gap-3 pt-1">
                 <button
                   disabled={isRuleFillLoading || ruleFillConfig.selectedStaffs.length === 0}
@@ -2205,6 +2645,7 @@ const openSelectedCellFillModal = () => {
           </div>
         </div>
       )}
+
       <div className="max-w-[95vw] mx-auto mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-7 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-5">
@@ -2216,6 +2657,7 @@ const openSelectedCellFillModal = () => {
                 className="w-24 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
               />
               <span className="shrink-0">年</span>
+
               <input
                 type="number"
                 min="1"
@@ -2230,13 +2672,16 @@ const openSelectedCellFillModal = () => {
                 className="w-20 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
               />
               <span className="shrink-0">月</span>
+
               <div className="hidden lg:block w-px h-7 bg-slate-200 mx-2"></div>
+
               <span className="shrink-0 text-slate-600">應休天數</span>
               <span className="text-base font-black text-slate-800 tabular-nums">{requiredLeaves}</span>
               <span className="shrink-0">天</span>
             </div>
           </div>
         </div>
+
         <div className="lg:col-span-5 flex items-center justify-end gap-2">
           <button onClick={() => changeScreen('entry')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <ArrowLeft size={18} className="text-slate-600" /> 回入口頁
@@ -2246,6 +2691,7 @@ const openSelectedCellFillModal = () => {
           </button>
         </div>
       </div>
+
       <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
         <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
           <table className="w-max min-w-full border-collapse">
@@ -2278,6 +2724,7 @@ const openSelectedCellFillModal = () => {
                 ))}
               </tr>
             </thead>
+
             <tbody>
               {groupedStaffs.map(({ group, staffs: groupStaffList }) => (
                 <React.Fragment key={group}>
@@ -2285,6 +2732,7 @@ const openSelectedCellFillModal = () => {
                     const stats = getStaffStats(staff.id);
                     const groupCount = groupStaffList.length + 1;
                     const groupIndex = groupStaffList.findIndex(s => s.id === staff.id);
+
                     return (
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
@@ -2301,6 +2749,7 @@ const openSelectedCellFillModal = () => {
                             </div>
                           </td>
                         )}
+
                         <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                           <div className="flex items-center gap-2">
                             <div className="flex flex-col items-center justify-center shrink-0 w-5">
@@ -2319,6 +2768,7 @@ const openSelectedCellFillModal = () => {
                                 <ArrowDown size={14} />
                               </button>
                             </div>
+
                             <input
                               type="text"
                               value={staff.name}
@@ -2330,6 +2780,7 @@ const openSelectedCellFillModal = () => {
                               }}
                               className={`flex-1 min-w-0 text-center py-1.5 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
                             />
+
                             <button
                               onClick={() => removeStaff(staff.id)}
                               className="text-slate-400 hover:text-red-500 shrink-0 w-6 flex items-center justify-center"
@@ -2338,16 +2789,20 @@ const openSelectedCellFillModal = () => {
                             </button>
                           </div>
                         </td>
+
                         {daysInMonth.map(d => {
                           const cellData = schedule[staff.id]?.[d.date];
                           const val = typeof cellData === 'object' && cellData !== null ? (cellData?.value || '') : (cellData || '');
+                          const cellKey = makeCellKey(staff.id, d.date);
+                          const draftValue = cellDrafts[cellKey];
+                          const displayValue = draftValue !== undefined ? draftValue : val;
                           const isSelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date;
                           const inRangeSelection = isCellInSelectionRect(rangeSelection, staffs, daysInMonth, staff.id, d.date);
-                          const isInvalid = Boolean(invalidCellKeys[makeCellKey(staff.id, d.date)]);
+                          const isInvalid = Boolean(invalidCellKeys[cellKey]);
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${isSelected && !inRangeSelection ? 'ring-2 ring-blue-500 ring-inset' : ''} ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
+                              className={`border-r p-0 relative overflow-hidden ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                               onMouseDown={(e) => {
                                 setIsRangeDragging(true);
@@ -2357,22 +2812,56 @@ const openSelectedCellFillModal = () => {
                                 if (!isRangeDragging || !selectionAnchor) return;
                                 setRangeSelection({ start: selectionAnchor, end: { staffId: staff.id, dateStr: d.date } });
                               }}
+                              onClick={(e) => {
+                                setSelectedGridCell({ staff, dateStr: d.date });
+                                if (selectionMode === 'cell') startRangeSelection(staff, d.date, e);
+                              }}
                             >
-                              <div className="relative">
+                              <div className="relative flex items-center">
+                                <input
+                                  type="text"
+                                  value={displayValue}
+                                  onChange={(e) => setCellDrafts(prev => ({ ...prev, [cellKey]: e.target.value }))}
+                                  onFocus={() => {
+                                    setSelectedGridCell({ staff, dateStr: d.date });
+                                    setSelectionAnchor({ staffId: staff.id, dateStr: d.date });
+                                    setRangeSelection({ start: { staffId: staff.id, dateStr: d.date }, end: { staffId: staff.id, dateStr: d.date } });
+                                  }}
+                                  onBlur={(e) => commitCellValue(staff.id, d.date, e.target.value, { quiet: true })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (isMultiRangeSelection && inRangeSelection) applyValueToSelection(displayValue, { quiet: true });
+                                      else commitCellValue(staff.id, d.date, displayValue);
+                                      e.currentTarget.blur();
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setCellDrafts(prev => {
+                                        const next = { ...prev };
+                                        delete next[cellKey];
+                                        return next;
+                                      });
+                                      e.currentTarget.blur();
+                                    }
+                                  }}
+                                  className={`w-full ${densityConfig.cellHeightClass} pr-7 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
+                                  style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
+                                  title="可直接輸入代碼，Enter 確認"
+                                />
                                 <select
                                   value={val}
                                   onChange={(e) => {
                                     handleCellChange(staff.id, d.date, e.target.value);
-                                    resetSingleCellInputBuffer();
+                                    setCellDrafts(prev => {
+                                      const next = { ...prev };
+                                      delete next[cellKey];
+                                      return next;
+                                    });
                                   }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedGridCell({ staff, dateStr: d.date });
-                                  }}
-                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`}
-                                  style={{ color: tableFontColor }}
+                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] opacity-70 hover:opacity-100"
+                                  title="下拉選單"
                                 >
-                                  <option value=""></option>
+                                  <option value="">▾</option>
                                   <optgroup label="上班">
                                     {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
                                   </optgroup>
@@ -2380,25 +2869,26 @@ const openSelectedCellFillModal = () => {
                                     {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
                                   </optgroup>
                                 </select>
+
                                 {showBlueDots && selectionMode === 'dot' && (
                                 <button
                                   type="button"
-                                  onMouseDown={(e) => {
+                                  onClick={(e) => {
                                     e.stopPropagation();
-                                    setIsRangeDragging(true);
                                     startRangeSelection(staff, d.date, e);
                                   }}
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
+                                  className="absolute left-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
                                   aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
                                   title={`選取 ${staff.name} ${d.date} 儲存格`}
                                 >
-                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${isSelected && !inRangeSelection ? 'bg-blue-700 scale-110' : inRangeSelection ? 'bg-violet-600 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
+                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${isSelected ? 'bg-blue-700 scale-110' : inRangeSelection ? 'bg-violet-600 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
                                 </button>
                                 )}
                               </div>
                             </td>
                           );
                         })}
+
                         {showRightStats && (
                         <>
                         <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.work}</td>
@@ -2425,6 +2915,7 @@ const openSelectedCellFillModal = () => {
                       </tr>
                     );
                   })}
+
                   <tr className="border-b border-slate-200 bg-slate-50/70">
                     <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
@@ -2436,6 +2927,7 @@ const openSelectedCellFillModal = () => {
                         </button>
                       </div>
                     </td>
+
                     {daysInMonth.map(d => (
                       <td
                         key={d.date}
@@ -2443,11 +2935,13 @@ const openSelectedCellFillModal = () => {
                         style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                       ></td>
                     ))}
+
                     <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
                   </tr>
                 </React.Fragment>
               ))}
             </tbody>
+
             {showBottomStats && (
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
               {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
@@ -2476,6 +2970,8 @@ const openSelectedCellFillModal = () => {
           </table>
         </div>
       </div>
+
+
       {showFillModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-pulse-once">
@@ -2509,6 +3005,7 @@ const openSelectedCellFillModal = () => {
           </div>
         </div>
       )}
+
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-pulse-once">
@@ -2518,6 +3015,7 @@ const openSelectedCellFillModal = () => {
                 <X />
               </button>
             </div>
+
             <div className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
               {historyList.length === 0 ? (
                 <p className="text-center py-10 text-slate-400 font-bold">目前尚無存檔紀錄</p>
@@ -2538,6 +3036,7 @@ const openSelectedCellFillModal = () => {
                 ))
               )}
             </div>
+
             <div className="p-4 bg-slate-50 border-t flex gap-3">
               <button onClick={clearHistory} className="flex-1 py-3 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors">清空所有紀錄</button>
               <button onClick={() => setShowHistoryModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-600 bg-white border rounded-xl hover:bg-slate-100 transition-colors">關閉</button>
@@ -2548,6 +3047,8 @@ const openSelectedCellFillModal = () => {
     </div>
   );
 }
+
+
 function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', iconColor = 'text-blue-600' }) {
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -2563,6 +3064,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
     </div>
   );
 }
+
 function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
@@ -2636,6 +3138,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   </div>
                 </div>
               </div>
+
             </SettingRow>
             <SettingRow icon={Settings} title="使用偏好" desc="快速切換主題、欄位顯示、操作方式與預設補休代碼。" iconBg="bg-violet-50" iconColor="text-violet-600">
               <div className="space-y-6">
@@ -2677,6 +3180,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                     ))}
                   </div>
                 </div>
+
                 <div>
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄位顯示</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2700,6 +3204,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                     ))}
                   </div>
                 </div>
+
                 <div>
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄寬與高度</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2709,6 +3214,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">儲存格高度</span><select value={uiSettings.cellHeightMode} onChange={(e)=>setUiSettings(prev=>({...prev, cellHeightMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="compact">緊湊</option><option value="standard">標準</option><option value="roomy">寬鬆</option></select></div>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">系統補休預設代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2">{mergedLeaveCodes.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">選格操作模式</span><select value={uiSettings.selectionMode} onChange={(e)=>setUiSettings(prev=>({...prev, selectionMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="dot">點藍點選格</option><option value="cell">點格選取</option></select></div>
@@ -2783,6 +3289,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                       </div>
                     </div>
                   </div>
+
                   <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
                     <h4 className="font-bold text-gray-800 mb-4">假日需求</h4>
                     <div className="grid grid-cols-3 gap-3">
@@ -2807,6 +3314,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                     </div>
                   </div>
                 </div>
+
                 <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
                   <div className="font-semibold text-gray-800 mb-1">目前補空依據</div>
                   <div>平日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.night}</span> 人</div>
@@ -2824,15 +3332,19 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
     </div>
   );
 }
+
 function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDraft, activeDraftMeta, restoreActiveDraft, discardActiveDraft }) {
   const importInputRef = useRef(null);
+
   const handleImportButtonClick = () => {
     importInputRef.current?.click();
   };
+
   const handleImportInputChange = async (event) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
     if (files.length === 0) return;
+
     const invalidFile = files.find((file) => {
       const fileName = String(file.name || '').toLowerCase();
       return !fileName.endsWith('.xlsx') && !fileName.endsWith('.xls');
@@ -2841,6 +3353,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
       window.alert('目前僅支援 Excel 檔案（.xlsx / .xls）');
       return;
     }
+
     try {
       await onImportFiles?.(files);
     } catch (error) {
@@ -2848,15 +3361,18 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
       window.alert(error?.message || '匯入檔案失敗，請確認是否使用系統範本。');
     }
   };
+
   const handleDownloadImportTemplate = async () => {
     try {
       const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const dataSheet = workbook.addWorksheet('班表匯入範本');
       const guideSheet = workbook.addWorksheet('填寫說明');
+
       const templateMonth = new Date().getMonth() + 1;
       const dayHeaders = Array.from({ length: 31 }, (_, i) => `${i + 1}日`);
       const headers = ['姓名', '班別群組', ...dayHeaders];
+
       dataSheet.addRow([`${templateMonth}月班表匯入範本`]);
       dataSheet.mergeCells(1, 1, 1, headers.length);
       const titleCell = dataSheet.getCell(1, 1);
@@ -2864,6 +3380,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
       titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
       dataSheet.getRow(1).height = 24;
+
       const headerRow = dataSheet.addRow(headers);
       headerRow.height = 24;
       headerRow.eachCell((cell, colNumber) => {
@@ -2879,6 +3396,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
         }
       });
+
       const sampleRows = [
         ['王小美', '白班'],
         ['李小芳', '小夜'],
@@ -2894,12 +3412,14 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
           };
         });
       });
+
       dataSheet.columns = [
         { width: 14 },
         { width: 12 },
         ...Array.from({ length: 31 }, () => ({ width: 6 }))
       ];
       dataSheet.views = [{ state: 'frozen', ySplit: 2, xSplit: 2 }];
+
       const guideRows = [
         ['排班匯入範本說明'],
         ['1. 請依此範本填寫，避免欄位遺漏或格式不一致。'],
@@ -2912,6 +3432,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
       guideRows.forEach(r => guideSheet.addRow(r));
       guideSheet.getCell('A1').font = { bold: true, size: 13 };
       guideSheet.getColumn(1).width = 90;
+
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
@@ -2925,6 +3446,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
       window.alert('下載匯入範本失敗，請稍後再試。');
     }
   };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans text-slate-800">
       <div className="mb-10 text-center">
@@ -2938,6 +3460,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
           </div>
         </div>
       </div>
+
       <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] border border-slate-200/60 overflow-hidden">
         <div className="p-10">
           {hasActiveDraft && (
@@ -2975,6 +3498,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
               請選擇要進入的功能。
             </p>
           </div>
+
           <input
             ref={importInputRef}
             type="file"
@@ -2983,6 +3507,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
             className="hidden"
             onChange={handleImportInputChange}
           />
+
           <div className="space-y-4">
             <button
               type="button"
@@ -2992,6 +3517,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
               <ShieldCheck className="w-4.5 h-4.5" />
               進入排班系統
             </button>
+
             <button
               type="button"
               onClick={goToLatestHistory}
@@ -3000,6 +3526,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
               <Clock className="w-4 h-4 text-slate-500" />
               開啟最近班表
             </button>
+
             <button
               type="button"
               onClick={handleImportButtonClick}
@@ -3008,6 +3535,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
               <Database className="w-4 h-4 text-slate-500" />
               匯入檔案
             </button>
+
             <button
               type="button"
               onClick={handleDownloadImportTemplate}
@@ -3016,6 +3544,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
               <Download className="w-4 h-4 text-slate-500" />
               下載匯入範本
             </button>
+
             <button
               type="button"
               onClick={() => window.alert('建議定期匯出 Excel / Word 或後續備份檔，以保留班表資料。')}
@@ -3027,12 +3556,14 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
           </div>
         </div>
       </div>
+
       <div className="mt-12 text-center">
         <p className="text-xs text-slate-400 font-medium tracking-[0.1em] uppercase">&copy; {new Date().getFullYear()} 智能排班系統 PRO. ALL RIGHTS RESERVED.</p>
       </div>
     </div>
   );
 }
+
 export default function App() {
   const [screen, setScreen] = useState('entry');
   const [colors, setColors] = useState({ weekend: '#dcfce7', holiday: '#fca5a5' });
@@ -3090,12 +3621,14 @@ export default function App() {
   const [activeDraftMeta, setActiveDraftMeta] = useState(null);
   const activeDraftHydratedRef = useRef(false);
   const activeDraftSaveReadyRef = useRef(false);
+
   const formatDraftSavedAt = (isoString) => {
     if (!isoString) return '';
     const date = new Date(isoString);
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleString();
   };
+
   const applyWorkspaceState = (state = {}) => {
     setColors(state.colors || { weekend: '#dcfce7', holiday: '#fca5a5' });
     setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
@@ -3149,6 +3682,7 @@ export default function App() {
     setPendingOpenMonthKey('');
     setLoadLatestOnEnter(false);
   };
+
   useEffect(() => {
     try {
       const storedDraft = localStorage.getItem(ACTIVE_DRAFT_KEY);
@@ -3172,12 +3706,14 @@ export default function App() {
       activeDraftHydratedRef.current = true;
     }
   }, []);
+
   useEffect(() => {
     if (!activeDraftHydratedRef.current) return;
     if (!activeDraftSaveReadyRef.current) {
       activeDraftSaveReadyRef.current = true;
       return;
     }
+
     const savedAt = new Date().toISOString();
     const payload = {
       savedAt,
@@ -3199,6 +3735,7 @@ export default function App() {
         schedule
       }
     };
+
     try {
       localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
       setHasActiveDraft(true);
@@ -3207,6 +3744,7 @@ export default function App() {
       console.error('寫入自動暫存失敗', error);
     }
   }, [colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, year, month, staffs, schedule]);
+
   const restoreActiveDraft = () => {
     try {
       const storedDraft = localStorage.getItem(ACTIVE_DRAFT_KEY);
@@ -3227,12 +3765,14 @@ export default function App() {
       window.alert('恢復未完成進度失敗，請稍後再試。');
     }
   };
+
   const discardActiveDraft = () => {
     if (!window.confirm('確定要捨棄上次未完成進度嗎？')) return;
     localStorage.removeItem(ACTIVE_DRAFT_KEY);
     setHasActiveDraft(false);
     setActiveDraftMeta(null);
   };
+
   const handleImportFiles = async (files) => {
     const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
     setImportedSchedulePayload(imported);
@@ -3240,16 +3780,19 @@ export default function App() {
     setLoadLatestOnEnter(false);
     setScreen('schedule');
   };
+
   const goToSchedule = () => {
     setLoadLatestOnEnter(false);
     setPendingOpenMonthKey('');
     setScreen('schedule');
   };
+
   const goToLatestHistory = () => {
     setLoadLatestOnEnter(true);
     setPendingOpenMonthKey('');
     setScreen('schedule');
   };
+
   if (screen === 'schedule') {
     return (
       <ScheduleView
@@ -3293,6 +3836,7 @@ export default function App() {
       />
     );
   }
+
   if (screen === 'settings') {
     return (
       <SettingsView
@@ -3318,6 +3862,7 @@ export default function App() {
       />
     );
   }
+
   return (
     <EntryView
       changeScreen={(target) => {
