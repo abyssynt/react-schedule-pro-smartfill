@@ -2457,16 +2457,6 @@ const openSelectedCellFillModal = () => {
             </div>
           </div>
         </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => { setSelectedGridCell(null); setRangeSelection(null); setSelectionAnchor(null); resetRangeInputBuffer(); }}
-              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
-            >
-              取消選取
-            </button>
-          </div>
-        )}
       </div>
 
       {showRuleFillControl && (
