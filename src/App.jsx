@@ -737,7 +737,7 @@ const UI_DENSITY_OPTIONS = {
   standard: {
     shiftWidth: 76,
     nameWidth: 122,
-    dayMinWidth: 50,
+    dayMinWidth: 58,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
     statHeaderClass: 'p-3',
     leaveHeaderClass: 'p-1.5',
@@ -751,7 +751,7 @@ const UI_DENSITY_OPTIONS = {
   relaxed: {
     shiftWidth: 100,
     nameWidth: 156,
-    dayMinWidth: 56,
+    dayMinWidth: 62,
     dayHeaderClass: 'px-2 py-2.5 text-sm',
     statHeaderClass: 'p-4',
     leaveHeaderClass: 'p-2',
@@ -2316,6 +2316,11 @@ const openSelectedCellFillModal = () => {
     const newId = 's' + Date.now();
     setStaffs(prev => [...prev, { id: newId, name: '新成員', group }]);
     setSchedule(prev => ({ ...prev, [newId]: {} }));
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
   };
 
   const removeStaff = (staffId) => {
@@ -2326,6 +2331,11 @@ const openSelectedCellFillModal = () => {
       delete next[staffId];
       return next;
     });
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
   };
 
   const moveStaffInGroup = (staffId, direction) => {
@@ -2346,6 +2356,11 @@ const openSelectedCellFillModal = () => {
     const targetIndex = groupIndexes[targetGroupPos];
     [newStaffs[currentIndex], newStaffs[targetIndex]] = [newStaffs[targetIndex], newStaffs[currentIndex]];
     setStaffs(newStaffs);
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
   };
 
   const groupedStaffs = useMemo(() => {
@@ -2615,7 +2630,7 @@ const openSelectedCellFillModal = () => {
 
       <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
         <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
-          <table className="w-max min-w-full border-collapse">
+          <table className="w-max min-w-full border-collapse select-none">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
                 <th className={`sticky left-0 top-0 z-50 border-r font-black shadow-sm ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
@@ -2731,6 +2746,7 @@ const openSelectedCellFillModal = () => {
                               className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                               onMouseDown={(e) => {
+                                e.preventDefault();
                                 setIsRangeDragging(true);
                                 startRangeSelection(staff, d.date, e);
                               }}
