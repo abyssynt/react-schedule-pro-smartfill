@@ -2734,7 +2734,7 @@ const openSelectedCellFillModal = () => {
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
+                              className={`border-r p-0 relative overflow-hidden ${isSelected && !inRangeSelection ? 'ring-2 ring-blue-500 ring-inset' : ''} ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                               onMouseDown={(e) => {
                                 setIsRangeDragging(true);
@@ -2812,12 +2812,12 @@ const openSelectedCellFillModal = () => {
                                   style={{ color: 'transparent' }}
                                   title="可直接輸入代碼，Enter 確認"
                                 >
-                                  <option value=""></option>
+                                  <option value="" style={{ color: '#111827' }}></option>
                                   <optgroup label="上班">
-                                    {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                    {DICT.SHIFTS.map(s => <option key={s} value={s} style={{ color: '#111827' }}>{s}</option>)}
                                   </optgroup>
                                   <optgroup label="休假">
-                                    {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
+                                    {mergedLeaveCodes.map(l => <option key={l} value={l} style={{ color: '#111827' }}>{l}</option>)}
                                   </optgroup>
                                 </select>
                                 <span
@@ -2838,7 +2838,7 @@ const openSelectedCellFillModal = () => {
                                   aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
                                   title={`選取 ${staff.name} ${d.date} 儲存格`}
                                 >
-                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${isSelected ? 'bg-blue-700 scale-110' : inRangeSelection ? 'bg-violet-600 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
+                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${inRangeSelection ? 'bg-violet-600 scale-110' : isSelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
                                 </button>
                                 )}
                               </div>
