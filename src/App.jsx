@@ -1221,7 +1221,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const startRangeSelection = (staff, dateStr, event = {}) => {
-    const point = { staffId: staff.id, dateStr };
+    const point = { staffId: staff.id, dateStr, group: staff.group || '白班' };
     if (event.shiftKey && selectionAnchor) {
       setRangeSelection({ start: selectionAnchor, end: point });
     } else {
@@ -1234,7 +1234,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const updateRangeSelection = (staff, dateStr) => {
     if (!isRangeDragging || !selectionAnchor) return;
-    setRangeSelection({ start: selectionAnchor, end: { staffId: staff.id, dateStr } });
+    const anchorGroup = selectionAnchor.group || '白班';
+    const targetGroup = staff.group || '白班';
+    if (anchorGroup !== targetGroup) return;
+    setRangeSelection({ start: selectionAnchor, end: { staffId: staff.id, dateStr, group: targetGroup } });
   };
 
   const copySelectionToClipboard = async () => {
