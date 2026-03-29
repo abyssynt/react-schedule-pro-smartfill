@@ -737,7 +737,7 @@ const UI_DENSITY_OPTIONS = {
   standard: {
     shiftWidth: 76,
     nameWidth: 122,
-    dayMinWidth: 42,
+    dayMinWidth: 50,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
     statHeaderClass: 'p-3',
     leaveHeaderClass: 'p-1.5',
@@ -2746,56 +2746,44 @@ const openSelectedCellFillModal = () => {
                                 >
                                   {val}
                                 </div>
-                                <select
-                                  value={val}
-                                  onChange={(e) => {
-                                    handleCellChange(staff.id, d.date, e.target.value);
-                                    startRangeSelection(staff, d.date);
-                                    e.currentTarget.blur();
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    startRangeSelection(staff, d.date);
-                                  }}
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    startRangeSelection(staff, d.date, e);
-                                  }}
-                                  className={`absolute right-0 top-0 h-full w-5 border-none bg-transparent cursor-pointer opacity-0 ${tableFontSizeClass}`}
-                                  style={{ color: tableFontColor }}
+                                <div
+                                  className={`absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center ${selectionMode === 'dot' ? 'z-20' : 'z-10'}`}
                                   title="選擇班別/假別"
                                 >
-                                  <option value=""></option>
-                                  <optgroup label="上班">
-                                    {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
-                                  </optgroup>
-                                  <optgroup label="休假">
-                                    {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
-                                  </optgroup>
-                                </select>
-
-                                {showBlueDots && (
-                                  <button
-                                    type="button"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      setIsRangeDragging(true);
-                                      startRangeSelection(staff, d.date, e);
+                                  <select
+                                    value={val}
+                                    onChange={(e) => {
+                                      handleCellChange(staff.id, d.date, e.target.value);
+                                      startRangeSelection(staff, d.date);
+                                      e.currentTarget.blur();
                                     }}
-                                    onMouseEnter={() => updateRangeSelection(staff, d.date)}
                                     onClick={(e) => {
-                                      e.preventDefault();
                                       e.stopPropagation();
                                       startRangeSelection(staff, d.date);
                                     }}
-                                    className={`absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center ${selectionMode === 'dot' ? 'z-20' : 'z-10 pointer-events-none opacity-0'}`}
-                                    aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
-                                    title={`選取 ${staff.name} ${d.date} 儲存格`}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      startRangeSelection(staff, d.date, e);
+                                    }}
+                                    className="absolute inset-0 w-full h-full border-none bg-transparent cursor-pointer opacity-0"
+                                    style={{ color: tableFontColor }}
+                                    aria-label={`選擇 ${staff.name} ${d.date} 班別/假別`}
                                   >
-                                    <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${inRangeSelection ? 'bg-violet-600 scale-110' : isPrimarySelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
-                                  </button>
-                                )}
+                                    <option value=""></option>
+                                    <optgroup label="上班">
+                                      {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </optgroup>
+                                    <optgroup label="休假">
+                                      {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
+                                    </optgroup>
+                                  </select>
+
+                                  {showBlueDots && (
+                                    <span
+                                      className={`${densityConfig.selectorDotClass} rounded-full transition-all pointer-events-none ${inRangeSelection ? 'bg-violet-600 scale-110' : isPrimarySelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90'}`}
+                                    ></span>
+                                  )}
+                                </div>
                               </div>
                             </td>
                           );
