@@ -1349,8 +1349,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return;
       }
 
-      if (isTypingTarget) return;
       if (!hasSelection) return;
+      if (isTypingTarget) return;
 
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -2731,13 +2731,12 @@ const openSelectedCellFillModal = () => {
                               className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                               onMouseDown={(e) => {
-                                if (selectionMode !== 'cell') return;
                                 setIsRangeDragging(true);
                                 startRangeSelection(staff, d.date, e);
                               }}
                               onMouseEnter={() => updateRangeSelection(staff, d.date)}
                               onClick={() => {
-                                if (selectionMode === 'cell') startRangeSelection(staff, d.date);
+                                startRangeSelection(staff, d.date);
                               }}
                             >
                               <div className="relative">
@@ -2747,10 +2746,57 @@ const openSelectedCellFillModal = () => {
                                     handleCellChange(staff.id, d.date, e.target.value);
                                     startRangeSelection(staff, d.date);
                                   }}
+                                  onFocus={() => {
+                                    startRangeSelection(staff, d.date);
+                                  }}
                                   onMouseDown={(e) => {
-                                    if (selectionMode !== 'cell') return;
                                     setIsRangeDragging(true);
                                     startRangeSelection(staff, d.date, e);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    startRangeSelection(staff, d.date, e);
+                                    const lowerKey = e.key.toLowerCase();
+                                    if ((e.ctrlKey || e.metaKey) && lowerKey === 'c') {
+                                      e.preventDefault();
+                                      copySelectionToClipboard();
+                                      return;
+                                    }
+                                    if ((e.ctrlKey || e.metaKey) && lowerKey === 'v') {
+                                      e.preventDefault();
+                                      pasteGridToSelection();
+                                      return;
+                                    }
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      resetKeyInputBuffer();
+                                      setRangeSelection(null);
+                                      setSelectionAnchor(null);
+                                      setSelectedGridCell(null);
+                                      e.currentTarget.blur();
+                                      return;
+                                    }
+                                    if (e.key === 'Delete' || e.key === 'Backspace') {
+                                      e.preventDefault();
+                                      clearSelectionContents();
+                                      return;
+                                    }
+                                    if (e.key.length === 1 && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                                      const nextBuffer = `${keyInputBuffer}${e.key}`;
+                                      const { normalized, isValid } = normalizeManualShiftCode(nextBuffer, mergedLeaveCodes);
+                                      if (isValid) {
+                                        e.preventDefault();
+                                        applyValueToCells(selectedRangeCells.length > 0 ? selectedRangeCells : [{ staffId: staff.id, dateStr: d.date }], normalized);
+                                        setCellDrafts(prev => {
+                                          const next = { ...prev };
+                                          delete next[cellKey];
+                                          return next;
+                                        });
+                                        resetKeyInputBuffer();
+                                      } else {
+                                        setKeyInputBuffer(nextBuffer);
+                                        keepKeyInputBufferAlive();
+                                      }
+                                    }
                                   }}
                                   className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`}
                                   style={{ color: tableFontColor }}
