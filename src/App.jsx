@@ -737,7 +737,7 @@ const UI_DENSITY_OPTIONS = {
   standard: {
     shiftWidth: 76,
     nameWidth: 122,
-    dayMinWidth: 58,
+    dayMinWidth: 64,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
     statHeaderClass: 'p-3',
     leaveHeaderClass: 'p-1.5',
@@ -751,7 +751,7 @@ const UI_DENSITY_OPTIONS = {
   relaxed: {
     shiftWidth: 100,
     nameWidth: 156,
-    dayMinWidth: 62,
+    dayMinWidth: 68,
     dayHeaderClass: 'px-2 py-2.5 text-sm',
     statHeaderClass: 'p-4',
     leaveHeaderClass: 'p-2',
@@ -2370,6 +2370,14 @@ const openSelectedCellFillModal = () => {
     }));
   }, [staffs]);
 
+  useEffect(() => {
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
+  }, [staffs.length]);
+
   return (
     <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
@@ -2763,7 +2771,7 @@ const openSelectedCellFillModal = () => {
                                   {val}
                                 </div>
                                 <div
-                                  className={`absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center ${selectionMode === 'dot' ? 'z-20' : 'z-10'}`}
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
                                   title="選擇班別/假別"
                                 >
                                   <select
