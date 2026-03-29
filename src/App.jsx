@@ -2796,6 +2796,12 @@ const openSelectedCellFillModal = () => {
                                 >
                                   {displayValue}
                                 </span>
+                                <span
+                                  className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-slate-500 ${tableFontSizeClass}`}
+                                  style={{ right: showBlueDots && selectionMode === 'dot' ? '1.1rem' : '0.35rem' }}
+                                >
+                                  ▾
+                                </span>
 
                                 {showBlueDots && selectionMode === 'dot' && (
                                 <button
