@@ -2748,7 +2748,7 @@ const openSelectedCellFillModal = () => {
                                 if (selectionMode === 'cell') startRangeSelection(staff, d.date, e);
                               }}
                             >
-                              <div className="relative flex items-center">
+                              <div className="relative flex items-center w-full" style={{ minWidth: densityConfig.dayMinWidth, width: densityConfig.dayMinWidth, maxWidth: densityConfig.dayMinWidth }}>
                                 <input
                                   type="text"
                                   value={displayValue}
@@ -2775,7 +2775,7 @@ const openSelectedCellFillModal = () => {
                                       e.currentTarget.blur();
                                     }
                                   }}
-                                  className={`w-full ${densityConfig.cellHeightClass} pr-7 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
+                                  className={`block min-w-0 w-full ${densityConfig.cellHeightClass} pr-5 pl-4 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
                                   style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
                                   title="可直接輸入代碼，Enter 確認"
                                 />
@@ -2809,7 +2809,7 @@ const openSelectedCellFillModal = () => {
                                     e.stopPropagation();
                                     startRangeSelection(staff, d.date, e);
                                   }}
-                                  className="absolute left-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
+                                  className="absolute left-0.5 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
                                   aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
                                   title={`選取 ${staff.name} ${d.date} 儲存格`}
                                 >
