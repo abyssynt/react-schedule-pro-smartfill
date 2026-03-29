@@ -665,6 +665,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [showFillModal, setShowFillModal] = useState(false);
   const [selectedGridCell, setSelectedGridCell] = useState(null);
   const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
+  const [cellDrafts, setCellDrafts] = useState({});
   const [invalidCellKeys, setInvalidCellKeys] = useState({});
   const [rangeSelection, setRangeSelection] = useState(null);
   const [selectionAnchor, setSelectionAnchor] = useState(null);
