@@ -2748,7 +2748,7 @@ const openSelectedCellFillModal = () => {
                                       e.currentTarget.blur();
                                     }
                                   }}
-                                  className={`w-full ${densityConfig.cellHeightClass} pl-5 pr-6 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
+                                  className={`w-full ${densityConfig.cellHeightClass} pr-7 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
                                   style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
                                   title="可直接輸入代碼，Enter 確認"
                                 />
@@ -2767,7 +2767,7 @@ const openSelectedCellFillModal = () => {
                                     setSelectionAnchor({ staffId: staff.id, dateStr: d.date });
                                     setRangeSelection({ start: { staffId: staff.id, dateStr: d.date }, end: { staffId: staff.id, dateStr: d.date } });
                                   }}
-                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] text-slate-500 opacity-90 hover:opacity-100"
+                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] opacity-70 hover:opacity-100"
                                   title="下拉選單"
                                 >
                                   <option value="">▾</option>
