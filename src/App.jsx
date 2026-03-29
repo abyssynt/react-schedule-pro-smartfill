@@ -1135,7 +1135,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         delete next[cellKey];
         return next;
       });
-      if (!quiet) setRuleFillFeedback(`⚠️ ${rawValue} 不是合法班別/假別代碼，已還原原值`);
       return false;
     }
 
@@ -1178,7 +1177,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (targetCells.length === 0) return false;
     const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
     if (!isValid) {
-      if (!options.quiet) setRuleFillFeedback(`⚠️ ${rawValue} 不是合法班別/假別代碼，未套用到選取範圍`);
       return false;
     }
 
@@ -1213,7 +1211,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     } catch (error) {
       console.error('寫入剪貼簿失敗', error);
     }
-    setRuleFillFeedback(`📋 已複製 ${grid.length}×${grid[0]?.length || 0} 範圍`);
   };
 
   const pasteGridToSelection = async () => {
@@ -1231,29 +1228,31 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const rect = getRectFromSelection(rangeSelection, staffs, daysInMonth);
     if (!rect || !grid || grid.length === 0) return;
 
+    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
+    const selectionColCount = rect.colEnd - rect.colStart + 1;
+    const sourceRowCount = grid.length;
+    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
+    const singleCellSource = sourceRowCount === 1 && sourceColCount === 1;
+
+    const targetRowCount = singleCellSource ? selectionRowCount : Math.min(sourceRowCount, selectionRowCount);
+    const targetColCount = singleCellSource ? selectionColCount : Math.min(sourceColCount, selectionColCount);
+
     const updates = [];
-    let invalidCount = 0;
-    for (let rowOffset = 0; rowOffset < grid.length; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < (grid[rowOffset] || []).length; colOffset += 1) {
+    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
         const targetRow = rect.rowStart + rowOffset;
         const targetCol = rect.colStart + colOffset;
         const staff = staffs[targetRow];
         const day = daysInMonth[targetCol];
         if (!staff || !day) continue;
-        const rawValue = grid[rowOffset][colOffset];
+        const rawValue = singleCellSource ? (grid[0]?.[0] ?? '') : (grid[rowOffset]?.[colOffset] ?? '');
         const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
-        if (!isValid) {
-          invalidCount += 1;
-          continue;
-        }
+        if (!isValid) continue;
         updates.push({ staffId: staff.id, dateStr: day.date, value: normalized });
       }
     }
 
-    if (updates.length === 0) {
-      setRuleFillFeedback('⚠️ 剪貼簿內容沒有可貼上的合法代碼');
-      return;
-    }
+    if (updates.length === 0) return;
 
     setSchedule(prev => {
       const next = JSON.parse(JSON.stringify(prev));
@@ -1264,7 +1263,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return next;
     });
     resetRangeInputBuffer();
-    setRuleFillFeedback(`✅ 已貼上 ${updates.length} 格${invalidCount > 0 ? `，略過 ${invalidCount} 格非法值` : ''}`);
   };
 
   const fillSelectionFromTopLeft = () => {
@@ -1283,6 +1281,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setRangeSelection({ start: point, end: point });
     }
     setSelectedGridCell({ staff, dateStr });
+    window.requestAnimationFrame(() => gridContainerRef.current?.focus());
   };
 
   useEffect(() => {
@@ -1328,7 +1327,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           });
           return next;
         });
-        setRuleFillFeedback(`🧹 已清除 ${selectedRangeCells.length} 格內容`);
         return;
       }
 
@@ -1345,10 +1343,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         setRangeInputBuffer(nextBuffer);
         if (nextBuffer) {
           keepRangeInputBufferAlive();
-          setRuleFillFeedback(`⌨️ 範圍輸入中：${nextBuffer}　按 Enter 套用，Ctrl+C / Ctrl+V 可直接複製貼上`);
         } else {
           resetRangeInputBuffer();
-          setRuleFillFeedback(`已選取 ${selectedRangeCells.length} 格。可直接 Ctrl+C / Ctrl+V，或輸入代碼後按 Enter 套用。`);
         }
         return;
       }
@@ -1358,7 +1354,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const nextBuffer = `${rangeInputBuffer}${event.key}`;
         setRangeInputBuffer(nextBuffer);
         keepRangeInputBufferAlive();
-        setRuleFillFeedback(`⌨️ 範圍輸入中：${nextBuffer}　按 Enter 套用，Ctrl+C / Ctrl+V 可直接複製貼上`);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -2425,16 +2420,6 @@ const openSelectedCellFillModal = () => {
             </div>
           </div>
         </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => { setSelectedGridCell(null); setRangeSelection(null); setSelectionAnchor(null); resetRangeInputBuffer(); }}
-              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
-            >
-              取消選取
-            </button>
-          </div>
-        )}
       </div>
 
       {showRuleFillControl && (
@@ -2610,7 +2595,7 @@ const openSelectedCellFillModal = () => {
       </div>
 
       <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
-        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
+        <div ref={gridContainerRef} tabIndex={0} className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)] focus:outline-none">
           <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
