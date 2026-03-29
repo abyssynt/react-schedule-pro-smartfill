@@ -2425,21 +2425,6 @@ const openSelectedCellFillModal = () => {
             </div>
           </div>
         </div>
-        {ruleFillFeedback && (
-          <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
-            <Check size={16} className="text-green-600" />
-            {ruleFillFeedback}
-          </div>
-        )}
-        {selectedGridCell && (
-          <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
-            <div>
-              <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
-              {isMultiRangeSelection && (
-                <div className="mt-1 text-xs text-blue-800/80">
-                  已框選 <span className="font-bold">{selectedRangeCells.length}</span> 格，可直接 <span className="font-bold">Ctrl+C / Ctrl+V</span>，或直接輸入代碼後按 <span className="font-bold">Enter</span> 套用。
-                </div>
-              )}
             </div>
             <button
               type="button"
