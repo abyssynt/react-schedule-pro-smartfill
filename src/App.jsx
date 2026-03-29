@@ -351,9 +351,16 @@ const parseClipboardGrid = (text = '') => {
   return raw.split('\n').map(row => row.split('\t'));
 };
 
+const getSelectionGroupStaffs = (selection, staffs = []) => {
+  const selectionGroup = selection?.start?.group || selection?.end?.group || '';
+  if (!selectionGroup) return staffs;
+  return staffs.filter((staff) => (staff.group || '白班') === selectionGroup);
+};
+
 const getRectFromSelection = (selection, staffs = [], daysInMonth = []) => {
   if (!selection?.start || !selection?.end) return null;
-  const staffIndexMap = new Map(staffs.map((staff, index) => [staff.id, index]));
+  const scopedStaffs = getSelectionGroupStaffs(selection, staffs);
+  const staffIndexMap = new Map(scopedStaffs.map((staff, index) => [staff.id, index]));
   const dayIndexMap = new Map(daysInMonth.map((day, index) => [day.date, index]));
 
   const startRow = staffIndexMap.get(selection.start.staffId);
@@ -367,7 +374,8 @@ const getRectFromSelection = (selection, staffs = [], daysInMonth = []) => {
     rowStart: Math.min(startRow, endRow),
     rowEnd: Math.max(startRow, endRow),
     colStart: Math.min(startCol, endCol),
-    colEnd: Math.max(startCol, endCol)
+    colEnd: Math.max(startCol, endCol),
+    scopedStaffs
   };
 };
 
@@ -377,7 +385,7 @@ const expandSelectionCells = (selection, staffs = [], daysInMonth = []) => {
   const cells = [];
   for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
     for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
-      const staff = staffs[rowIndex];
+      const staff = rect.scopedStaffs[rowIndex];
       const day = daysInMonth[colIndex];
       if (staff && day) cells.push({ staffId: staff.id, dateStr: day.date, rowIndex, colIndex });
     }
@@ -388,7 +396,7 @@ const expandSelectionCells = (selection, staffs = [], daysInMonth = []) => {
 const isCellInSelectionRect = (selection, staffs = [], daysInMonth = [], staffId, dateStr) => {
   const rect = getRectFromSelection(selection, staffs, daysInMonth);
   if (!rect) return false;
-  const rowIndex = staffs.findIndex(staff => staff.id === staffId);
+  const rowIndex = rect.scopedStaffs.findIndex(staff => staff.id === staffId);
   const colIndex = daysInMonth.findIndex(day => day.date === dateStr);
   if (rowIndex === -1 || colIndex === -1) return false;
   return rowIndex >= rect.rowStart && rowIndex <= rect.rowEnd && colIndex >= rect.colStart && colIndex <= rect.colEnd;
