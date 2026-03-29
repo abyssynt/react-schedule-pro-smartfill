@@ -2698,13 +2698,13 @@ const openSelectedCellFillModal = () => {
                           const cellKey = makeCellKey(staff.id, d.date);
                           const draftValue = cellDrafts[cellKey];
                           const displayValue = draftValue !== undefined ? draftValue : val;
-                          const isSelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date;
+                          const isSelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date && !isCellInSelectionRect(rangeSelection, staffs, daysInMonth, staff.id, d.date);
                           const inRangeSelection = isCellInSelectionRect(rangeSelection, staffs, daysInMonth, staff.id, d.date);
                           const isInvalid = Boolean(invalidCellKeys[cellKey]);
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${isSelected && !inRangeSelection ? 'ring-2 ring-blue-500 ring-inset' : ''} ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
+                              className={`border-r p-0 relative overflow-hidden ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                               onMouseDown={(e) => {
                                 setIsRangeDragging(true);
@@ -2720,6 +2720,36 @@ const openSelectedCellFillModal = () => {
                               }}
                             >
                               <div className="relative flex items-center">
+                                <input
+                                  type="text"
+                                  value={displayValue}
+                                  onChange={(e) => setCellDrafts(prev => ({ ...prev, [cellKey]: e.target.value }))}
+                                  onFocus={() => {
+                                    setSelectedGridCell({ staff, dateStr: d.date });
+                                    setSelectionAnchor({ staffId: staff.id, dateStr: d.date });
+                                    setRangeSelection({ start: { staffId: staff.id, dateStr: d.date }, end: { staffId: staff.id, dateStr: d.date } });
+                                  }}
+                                  onBlur={(e) => commitCellValue(staff.id, d.date, e.target.value, { quiet: true })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (isMultiRangeSelection && inRangeSelection) applyValueToSelection(displayValue, { quiet: true });
+                                      else commitCellValue(staff.id, d.date, displayValue);
+                                      e.currentTarget.blur();
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setCellDrafts(prev => {
+                                        const next = { ...prev };
+                                        delete next[cellKey];
+                                        return next;
+                                      });
+                                      e.currentTarget.blur();
+                                    }
+                                  }}
+                                  className={`w-full ${densityConfig.cellHeightClass} pr-7 text-center bg-transparent border-none font-bold hover:bg-black/5 ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
+                                  style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
+                                  title="可直接輸入代碼，Enter 確認"
+                                />
                                 <select
                                   value={val}
                                   onChange={(e) => {
@@ -2730,72 +2760,17 @@ const openSelectedCellFillModal = () => {
                                       return next;
                                     });
                                   }}
-                                  onFocus={() => {
-                                    setSelectedGridCell({ staff, dateStr: d.date });
-                                    setSelectionAnchor({ staffId: staff.id, dateStr: d.date });
-                                    setRangeSelection({ start: { staffId: staff.id, dateStr: d.date }, end: { staffId: staff.id, dateStr: d.date } });
-                                  }}
-                                  onBlur={() => {
-                                    const draft = cellDrafts[cellKey];
-                                    if (draft !== undefined) commitCellValue(staff.id, d.date, draft, { quiet: true });
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if ((e.ctrlKey || e.metaKey) && ['c', 'v'].includes(e.key.toLowerCase())) return;
-                                    if (e.key === 'Enter') {
-                                      const draft = cellDrafts[cellKey];
-                                      if (draft === undefined) return;
-                                      e.preventDefault();
-                                      if (isMultiRangeSelection && inRangeSelection) applyValueToSelection(draft, { quiet: true });
-                                      else commitCellValue(staff.id, d.date, draft);
-                                      e.currentTarget.blur();
-                                      return;
-                                    }
-                                    if (e.key === 'Escape') {
-                                      setCellDrafts(prev => {
-                                        const next = { ...prev };
-                                        delete next[cellKey];
-                                        return next;
-                                      });
-                                      return;
-                                    }
-                                    if (e.key === 'Backspace') {
-                                      e.preventDefault();
-                                      setCellDrafts(prev => {
-                                        const base = prev[cellKey] !== undefined ? prev[cellKey] : val;
-                                        const next = { ...prev };
-                                        const trimmed = String(base || '').slice(0, -1);
-                                        if (trimmed) next[cellKey] = trimmed;
-                                        else delete next[cellKey];
-                                        return next;
-                                      });
-                                      return;
-                                    }
-                                    if (e.key.length === 1 && !e.altKey) {
-                                      e.preventDefault();
-                                      setCellDrafts(prev => {
-                                        const base = prev[cellKey] !== undefined ? prev[cellKey] : '';
-                                        return { ...prev, [cellKey]: `${base}${e.key}` };
-                                      });
-                                    }
-                                  }}
-                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass} text-transparent`}
-                                  style={{ color: 'transparent' }}
-                                  title="可直接輸入代碼，Enter 確認"
+                                  className="absolute right-0 top-0 h-full w-6 cursor-pointer border-none bg-transparent text-[10px] opacity-70 hover:opacity-100"
+                                  title="下拉選單"
                                 >
-                                  <option value="" style={{ color: '#111827' }}></option>
+                                  <option value="">▾</option>
                                   <optgroup label="上班">
-                                    {DICT.SHIFTS.map(s => <option key={s} value={s} style={{ color: '#111827' }}>{s}</option>)}
+                                    {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
                                   </optgroup>
                                   <optgroup label="休假">
-                                    {mergedLeaveCodes.map(l => <option key={l} value={l} style={{ color: '#111827' }}>{l}</option>)}
+                                    {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
                                   </optgroup>
                                 </select>
-                                <span
-                                  className={`pointer-events-none absolute inset-0 flex items-center justify-center font-bold ${tableFontSizeClass} ${isInvalid ? 'text-red-600' : ''}`}
-                                  style={{ color: isInvalid ? '#dc2626' : tableFontColor }}
-                                >
-                                  {displayValue}
-                                </span>
 
                                 {showBlueDots && selectionMode === 'dot' && (
                                 <button
@@ -2804,11 +2779,11 @@ const openSelectedCellFillModal = () => {
                                     e.stopPropagation();
                                     startRangeSelection(staff, d.date, e);
                                   }}
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
+                                  className="absolute left-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
                                   aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
                                   title={`選取 ${staff.name} ${d.date} 儲存格`}
                                 >
-                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${inRangeSelection ? 'bg-violet-600 scale-110' : isSelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
+                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${isSelected ? 'bg-blue-700 scale-110' : inRangeSelection ? 'bg-violet-600 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
                                 </button>
                                 )}
                               </div>
