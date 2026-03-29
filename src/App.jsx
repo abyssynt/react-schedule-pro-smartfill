@@ -314,6 +314,86 @@ const normalizeImportedShiftCode = (rawValue = '') => {
 
 const buildMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 
+
+const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
+  const value = String(rawValue ?? '').trim();
+  if (!value) return { normalized: '', isValid: true };
+
+  const collapsed = value.replace(/\s+/g, '');
+  const lower = collapsed.toLowerCase();
+  const allowedCodes = Array.from(new Set([...(DICT.SHIFTS || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
+  const directMap = {
+    d: 'D',
+    e: 'E',
+    n: 'N',
+    off: 'off',
+    of: 'off',
+    am: 'AM',
+    pm: 'PM',
+    '8-12': '8-12',
+    '12-16': '12-16',
+    '白8-8': '白8-8',
+    '夜8-8': '夜8-8'
+  };
+
+  if (directMap[lower]) return { normalized: directMap[lower], isValid: allowedCodes.includes(directMap[lower]) };
+  const directAllowed = allowedCodes.find(code => String(code).toLowerCase() === lower);
+  if (directAllowed) return { normalized: directAllowed, isValid: true };
+
+  return { normalized: value, isValid: false };
+};
+
+const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
+
+const parseClipboardGrid = (text = '') => {
+  const raw = String(text || '').replace(/\r/g, '');
+  if (!raw.trim()) return [];
+  return raw.split('\n').map(row => row.split('\t'));
+};
+
+const getRectFromSelection = (selection, staffs = [], daysInMonth = []) => {
+  if (!selection?.start || !selection?.end) return null;
+  const staffIndexMap = new Map(staffs.map((staff, index) => [staff.id, index]));
+  const dayIndexMap = new Map(daysInMonth.map((day, index) => [day.date, index]));
+
+  const startRow = staffIndexMap.get(selection.start.staffId);
+  const endRow = staffIndexMap.get(selection.end.staffId);
+  const startCol = dayIndexMap.get(selection.start.dateStr);
+  const endCol = dayIndexMap.get(selection.end.dateStr);
+
+  if ([startRow, endRow, startCol, endCol].some(v => v === undefined)) return null;
+
+  return {
+    rowStart: Math.min(startRow, endRow),
+    rowEnd: Math.max(startRow, endRow),
+    colStart: Math.min(startCol, endCol),
+    colEnd: Math.max(startCol, endCol)
+  };
+};
+
+const expandSelectionCells = (selection, staffs = [], daysInMonth = []) => {
+  const rect = getRectFromSelection(selection, staffs, daysInMonth);
+  if (!rect) return [];
+  const cells = [];
+  for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
+    for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
+      const staff = staffs[rowIndex];
+      const day = daysInMonth[colIndex];
+      if (staff && day) cells.push({ staffId: staff.id, dateStr: day.date, rowIndex, colIndex });
+    }
+  }
+  return cells;
+};
+
+const isCellInSelectionRect = (selection, staffs = [], daysInMonth = [], staffId, dateStr) => {
+  const rect = getRectFromSelection(selection, staffs, daysInMonth);
+  if (!rect) return false;
+  const rowIndex = staffs.findIndex(staff => staff.id === staffId);
+  const colIndex = daysInMonth.findIndex(day => day.date === dateStr);
+  if (rowIndex === -1 || colIndex === -1) return false;
+  return rowIndex >= rect.rowStart && rowIndex <= rect.rowEnd && colIndex >= rect.colStart && colIndex <= rect.colEnd;
+};
+
 const extractYearMonthCandidates = (...sources) => {
   const patterns = [
     /(\d{4})\s*年\s*(\d{1,2})\s*月/,
@@ -773,6 +853,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [showFillModal, setShowFillModal] = useState(false);
   const [selectedGridCell, setSelectedGridCell] = useState(null);
   const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
+  const [cellDrafts, setCellDrafts] = useState({});
+  const [invalidCellKeys, setInvalidCellKeys] = useState({});
+  const [rangeSelection, setRangeSelection] = useState(null);
+  const [selectionAnchor, setSelectionAnchor] = useState(null);
+  const [isRangeDragging, setIsRangeDragging] = useState(false);
+  const [clipboardGrid, setClipboardGrid] = useState([]);
+  const [keyInputBuffer, setKeyInputBuffer] = useState('');
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -790,6 +877,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const monthLoadSkipRef = useRef(false);
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
+  const keyInputTimerRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -1015,10 +1103,282 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
 
     setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setCellDrafts({});
+    setInvalidCellKeys({});
+    setKeyInputBuffer('');
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
   };
+
+  const clearInvalidCellLater = (cellKey) => {
+    window.setTimeout(() => {
+      setInvalidCellKeys(prev => {
+        const next = { ...prev };
+        delete next[cellKey];
+        return next;
+      });
+    }, 1200);
+  };
+
+  const resetKeyInputBuffer = () => {
+    setKeyInputBuffer('');
+    if (keyInputTimerRef.current) {
+      window.clearTimeout(keyInputTimerRef.current);
+      keyInputTimerRef.current = null;
+    }
+  };
+
+  const keepKeyInputBufferAlive = () => {
+    if (keyInputTimerRef.current) window.clearTimeout(keyInputTimerRef.current);
+    keyInputTimerRef.current = window.setTimeout(() => {
+      setKeyInputBuffer('');
+      keyInputTimerRef.current = null;
+    }, 1500);
+  };
+
+  const getEffectiveSelection = () => {
+    if (rangeSelection?.start && rangeSelection?.end) return rangeSelection;
+    if (selectedGridCell?.staff?.id && selectedGridCell?.dateStr) {
+      return {
+        start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
+        end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
+      };
+    }
+    return null;
+  };
+
+  const selectedRangeCells = useMemo(
+    () => expandSelectionCells(getEffectiveSelection(), staffs, daysInMonth),
+    [rangeSelection, selectedGridCell, staffs, daysInMonth]
+  );
+
+  const clearSelectionContents = () => {
+    if (selectedRangeCells.length === 0) return false;
+    setSchedule(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      selectedRangeCells.forEach(({ staffId, dateStr }) => {
+        if (!next[staffId]) next[staffId] = {};
+        next[staffId][dateStr] = null;
+      });
+      return next;
+    });
+    resetKeyInputBuffer();
+    return true;
+  };
+
+  const applyValueToCells = (cells, normalized) => {
+    if (!cells || cells.length === 0) return false;
+    setSchedule(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      cells.forEach(({ staffId, dateStr }) => {
+        if (!next[staffId]) next[staffId] = {};
+        next[staffId][dateStr] = normalized ? { value: normalized, source: 'manual' } : null;
+      });
+      return next;
+    });
+    return true;
+  };
+
+  const tryApplyBufferedCode = (buffer) => {
+    if (!buffer || selectedRangeCells.length === 0) return false;
+    const { normalized, isValid } = normalizeManualShiftCode(buffer, mergedLeaveCodes);
+    if (!isValid) return false;
+    applyValueToCells(selectedRangeCells, normalized);
+    resetKeyInputBuffer();
+    return true;
+  };
+
+  const commitCellValue = (staffId, dateStr, rawValue) => {
+    const cellKey = makeCellKey(staffId, dateStr);
+    const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+
+    if (!isValid) {
+      setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
+      clearInvalidCellLater(cellKey);
+      setCellDrafts(prev => {
+        const next = { ...prev };
+        delete next[cellKey];
+        return next;
+      });
+      return false;
+    }
+
+    handleCellChange(staffId, dateStr, normalized);
+    setCellDrafts(prev => {
+      const next = { ...prev };
+      delete next[cellKey];
+      return next;
+    });
+    setInvalidCellKeys(prev => {
+      const next = { ...prev };
+      delete next[cellKey];
+      return next;
+    });
+    return true;
+  };
+
+  const startRangeSelection = (staff, dateStr, event = {}) => {
+    const point = { staffId: staff.id, dateStr };
+    if (event.shiftKey && selectionAnchor) {
+      setRangeSelection({ start: selectionAnchor, end: point });
+    } else {
+      setSelectionAnchor(point);
+      setRangeSelection({ start: point, end: point });
+    }
+    setSelectedGridCell({ staff, dateStr });
+    resetKeyInputBuffer();
+  };
+
+  const updateRangeSelection = (staff, dateStr) => {
+    if (!isRangeDragging || !selectionAnchor) return;
+    setRangeSelection({ start: selectionAnchor, end: { staffId: staff.id, dateStr } });
+  };
+
+  const copySelectionToClipboard = async () => {
+    const selection = getEffectiveSelection();
+    const rect = getRectFromSelection(selection, staffs, daysInMonth);
+    if (!rect) return;
+    const grid = [];
+    for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
+      const row = [];
+      for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
+        row.push(getCellCode(staffs[rowIndex]?.id, daysInMonth[colIndex]?.date) || '');
+      }
+      grid.push(row);
+    }
+    setClipboardGrid(grid);
+    const text = grid.map(row => row.join('\t')).join('\n');
+    try {
+      if (navigator?.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('寫入剪貼簿失敗', error);
+    }
+  };
+
+  const pasteGridToSelection = async () => {
+    const selection = getEffectiveSelection();
+    const rect = getRectFromSelection(selection, staffs, daysInMonth);
+    if (!rect) return;
+
+    let grid = clipboardGrid;
+    if (!grid || grid.length === 0) {
+      try {
+        if (navigator?.clipboard?.readText) {
+          const text = await navigator.clipboard.readText();
+          grid = parseClipboardGrid(text);
+        }
+      } catch (error) {
+        console.error('讀取剪貼簿失敗', error);
+      }
+    }
+    if (!grid || grid.length === 0) return;
+
+    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
+    const selectionColCount = rect.colEnd - rect.colStart + 1;
+    const sourceRowCount = grid.length;
+    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
+
+    let targetRowCount = sourceRowCount;
+    let targetColCount = sourceColCount;
+
+    if (selectionRowCount > 1 || selectionColCount > 1) {
+      if (sourceRowCount === 1 && sourceColCount === 1) {
+        targetRowCount = selectionRowCount;
+        targetColCount = selectionColCount;
+      } else {
+        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
+        targetColCount = Math.min(sourceColCount, selectionColCount);
+      }
+    }
+
+    const updates = [];
+    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
+        const sourceRow = sourceRowCount === 1 && sourceColCount === 1 ? 0 : rowOffset;
+        const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
+        const targetRow = rect.rowStart + rowOffset;
+        const targetCol = rect.colStart + colOffset;
+        const staff = staffs[targetRow];
+        const day = daysInMonth[targetCol];
+        if (!staff || !day) continue;
+        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
+        const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+        if (!isValid) continue;
+        updates.push({ staffId: staff.id, dateStr: day.date, value: normalized });
+      }
+    }
+
+    if (updates.length === 0) return;
+
+    setSchedule(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      updates.forEach(({ staffId, dateStr, value }) => {
+        if (!next[staffId]) next[staffId] = {};
+        next[staffId][dateStr] = value ? { value, source: 'manual' } : null;
+      });
+      return next;
+    });
+    resetKeyInputBuffer();
+  };
+
+  useEffect(() => {
+    const stopDrag = () => setIsRangeDragging(false);
+    window.addEventListener('mouseup', stopDrag);
+    return () => window.removeEventListener('mouseup', stopDrag);
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (event) => {
+      const target = event.target;
+      const tagName = String(target?.tagName || '').toLowerCase();
+      const isTypingTarget = tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target?.isContentEditable;
+      const hasSelection = selectedRangeCells.length > 0;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && hasSelection) {
+        event.preventDefault();
+        copySelectionToClipboard();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && hasSelection) {
+        event.preventDefault();
+        pasteGridToSelection();
+        return;
+      }
+
+      if (isTypingTarget) return;
+      if (!hasSelection) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        resetKeyInputBuffer();
+        setRangeSelection(null);
+        setSelectionAnchor(null);
+        setSelectedGridCell(null);
+        return;
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        clearSelectionContents();
+        return;
+      }
+
+      if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        const nextBuffer = `${keyInputBuffer}${event.key}`;
+        setKeyInputBuffer(nextBuffer);
+        keepKeyInputBufferAlive();
+        tryApplyBufferedCode(nextBuffer);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedRangeCells, keyInputBuffer, clipboardGrid, rangeSelection, selectedGridCell, staffs, daysInMonth, mergedLeaveCodes]);
 
   // ==========================================
   // 4. Excel 匯出 (ExcelJS 實現)
@@ -2079,24 +2439,6 @@ const openSelectedCellFillModal = () => {
             </div>
           </div>
         </div>
-        {ruleFillFeedback && (
-          <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
-            <Check size={16} className="text-green-600" />
-            {ruleFillFeedback}
-          </div>
-        )}
-        {selectedGridCell && (
-          <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
-            <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
-            <button
-              type="button"
-              onClick={() => setSelectedGridCell(null)}
-              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
-            >
-              取消選取
-            </button>
-          </div>
-        )}
       </div>
 
       {showRuleFillControl && (
@@ -2372,18 +2714,46 @@ const openSelectedCellFillModal = () => {
                         {daysInMonth.map(d => {
                           const cellData = schedule[staff.id]?.[d.date];
                           const val = typeof cellData === 'object' && cellData !== null ? (cellData?.value || '') : (cellData || '');
+                          const cellKey = makeCellKey(staff.id, d.date);
+                          const draftValue = cellDrafts[cellKey];
+                          const displayValue = draftValue !== undefined ? draftValue : val;
+                          const effectiveSelection = rangeSelection?.start && rangeSelection?.end ? rangeSelection : (selectedGridCell?.staff?.id && selectedGridCell?.dateStr ? {
+                            start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
+                            end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
+                          } : null);
+                          const inRangeSelection = isCellInSelectionRect(effectiveSelection, staffs, daysInMonth, staff.id, d.date);
+                          const isPrimarySelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date;
+                          const isInvalid = Boolean(invalidCellKeys[cellKey]);
+
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
+                              className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
-                            onClick={() => { if (selectionMode === 'cell') setSelectedGridCell({ staff, dateStr: d.date }); }}
+                              onMouseDown={(e) => {
+                                if (selectionMode !== 'cell') return;
+                                setIsRangeDragging(true);
+                                startRangeSelection(staff, d.date, e);
+                              }}
+                              onMouseEnter={() => updateRangeSelection(staff, d.date)}
+                              onClick={() => {
+                                if (selectionMode === 'cell') startRangeSelection(staff, d.date);
+                              }}
                             >
                               <div className="relative">
                                 <select
                                   value={val}
-                                  onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
-                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`} style={{ color: tableFontColor }}
+                                  onChange={(e) => {
+                                    handleCellChange(staff.id, d.date, e.target.value);
+                                    startRangeSelection(staff, d.date);
+                                  }}
+                                  onMouseDown={(e) => {
+                                    if (selectionMode !== 'cell') return;
+                                    setIsRangeDragging(true);
+                                    startRangeSelection(staff, d.date, e);
+                                  }}
+                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`}
+                                  style={{ color: tableFontColor }}
                                 >
                                   <option value=""></option>
                                   <optgroup label="上班">
@@ -2394,19 +2764,27 @@ const openSelectedCellFillModal = () => {
                                   </optgroup>
                                 </select>
 
-                                {showBlueDots && selectionMode === 'dot' && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedGridCell({ staff, dateStr: d.date });
-                                  }}
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
-                                  aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
-                                  title={`選取 ${staff.name} ${d.date} 儲存格`}
-                                >
-                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
-                                </button>
+                                {showBlueDots && (
+                                  <button
+                                    type="button"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setIsRangeDragging(true);
+                                      startRangeSelection(staff, d.date, e);
+                                    }}
+                                    onMouseEnter={() => updateRangeSelection(staff, d.date)}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      startRangeSelection(staff, d.date);
+                                    }}
+                                    className={`absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center ${selectionMode === 'dot' ? 'z-20' : 'z-10 pointer-events-none opacity-0'}`}
+                                    aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
+                                    title={`選取 ${staff.name} ${d.date} 儲存格`}
+                                  >
+                                    <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${inRangeSelection ? 'bg-violet-600 scale-110' : isPrimarySelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
+                                  </button>
                                 )}
                               </div>
                             </td>
