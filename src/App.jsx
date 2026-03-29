@@ -859,7 +859,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [isRangeDragging, setIsRangeDragging] = useState(false);
   const [clipboardGrid, setClipboardGrid] = useState([]);
   const [rangeInputBuffer, setRangeInputBuffer] = useState('');
-  const [singleCellInputBuffer, setSingleCellInputBuffer] = useState('');
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -879,7 +878,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const monthSwitchSeedRef = useRef('');
   const gridContainerRef = useRef(null);
   const rangeInputTimerRef = useRef(null);
-  const singleCellInputTimerRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -1109,7 +1107,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setSelectionAnchor(null);
     setCellDrafts({});
     setInvalidCellKeys({});
-    resetSingleCellInputBuffer();
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
@@ -1139,7 +1136,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return next;
       });
       if (!quiet) setRuleFillFeedback(`⚠️ ${rawValue} 不是合法班別/假別代碼，已還原原值`);
-      resetSingleCellInputBuffer();
       return false;
     }
 
@@ -1154,7 +1150,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       delete next[cellKey];
       return next;
     });
-    resetSingleCellInputBuffer();
     return true;
   };
 
@@ -1178,22 +1173,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }, 2200);
   };
 
-  const resetSingleCellInputBuffer = () => {
-    setSingleCellInputBuffer('');
-    if (singleCellInputTimerRef.current) {
-      window.clearTimeout(singleCellInputTimerRef.current);
-      singleCellInputTimerRef.current = null;
-    }
-  };
-
-  const keepSingleCellInputBufferAlive = () => {
-    if (singleCellInputTimerRef.current) window.clearTimeout(singleCellInputTimerRef.current);
-    singleCellInputTimerRef.current = window.setTimeout(() => {
-      setSingleCellInputBuffer('');
-      singleCellInputTimerRef.current = null;
-    }, 1800);
-  };
-
   const applyValueToSelection = (rawValue, options = {}) => {
     const targetCells = selectedRangeCells;
     if (targetCells.length === 0) return false;
@@ -1212,7 +1191,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return next;
     });
     resetRangeInputBuffer();
-    resetSingleCellInputBuffer();
     if (!options.quiet) setRuleFillFeedback(`✅ 已套用 ${normalized || '空白'} 到 ${targetCells.length} 格`);
     return true;
   };
@@ -1315,7 +1293,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return next;
     });
     resetRangeInputBuffer();
-    resetSingleCellInputBuffer();
 
     const notes = [];
     if (invalidCount > 0) notes.push(`略過 ${invalidCount} 格非法值`);
@@ -1352,8 +1329,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const target = event.target;
       const tagName = String(target?.tagName || '').toLowerCase();
       const isTypingTarget = tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target?.isContentEditable;
-      const isSingleSelection = selectedRangeCells.length === 1;
-      const selectedCell = isSingleSelection ? selectedRangeCells[0] : null;
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
         event.preventDefault();
@@ -1370,48 +1345,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       if (event.key === 'Escape') {
         event.preventDefault();
         resetRangeInputBuffer();
-        resetSingleCellInputBuffer();
         setRangeSelection(null);
         setSelectionAnchor(null);
         return;
-      }
-
-      if (isSingleSelection) {
-        if ((event.key === 'Delete' || event.key === 'Backspace') && !singleCellInputBuffer) {
-          event.preventDefault();
-          setSchedule(prev => ({
-            ...prev,
-            [selectedCell.staffId]: { ...prev[selectedCell.staffId], [selectedCell.dateStr]: null }
-          }));
-          resetSingleCellInputBuffer();
-          return;
-        }
-
-        if (event.key === 'Backspace' && singleCellInputBuffer) {
-          event.preventDefault();
-          const nextBuffer = singleCellInputBuffer.slice(0, -1);
-          if (nextBuffer) {
-            setSingleCellInputBuffer(nextBuffer);
-            keepSingleCellInputBufferAlive();
-          } else {
-            resetSingleCellInputBuffer();
-          }
-          return;
-        }
-
-        if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
-          event.preventDefault();
-          const nextBuffer = `${singleCellInputBuffer}${event.key}`;
-          const normalizedResult = normalizeManualShiftCode(nextBuffer, mergedLeaveCodes);
-          if (normalizedResult.isValid) {
-            commitCellValue(selectedCell.staffId, selectedCell.dateStr, nextBuffer, { quiet: true });
-            resetSingleCellInputBuffer();
-          } else {
-            setSingleCellInputBuffer(nextBuffer);
-            keepSingleCellInputBufferAlive();
-          }
-          return;
-        }
       }
 
       if ((event.key === 'Delete' || event.key === 'Backspace') && !rangeInputBuffer) {
@@ -1424,39 +1360,42 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           });
           return next;
         });
-        resetRangeInputBuffer();
+        setRuleFillFeedback(`🧹 已清除 ${selectedRangeCells.length} 格內容`);
         return;
       }
 
       if (event.key === 'Enter') {
         if (!rangeInputBuffer) return;
         event.preventDefault();
-        applyValueToSelection(rangeInputBuffer, { quiet: true });
+        applyValueToSelection(rangeInputBuffer);
         return;
       }
 
       if (event.key === 'Backspace') {
         event.preventDefault();
         const nextBuffer = rangeInputBuffer.slice(0, -1);
+        setRangeInputBuffer(nextBuffer);
         if (nextBuffer) {
-          setRangeInputBuffer(nextBuffer);
           keepRangeInputBufferAlive();
+          setRuleFillFeedback(`⌨️ 範圍輸入中：${nextBuffer}　按 Enter 套用，Ctrl+C / Ctrl+V 可直接複製貼上`);
         } else {
           resetRangeInputBuffer();
+          setRuleFillFeedback(`已選取 ${selectedRangeCells.length} 格。可直接 Ctrl+C / Ctrl+V，或輸入代碼後按 Enter 套用。`);
         }
         return;
       }
 
-      if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      if (event.key.length === 1 && !event.altKey) {
         event.preventDefault();
         const nextBuffer = `${rangeInputBuffer}${event.key}`;
         setRangeInputBuffer(nextBuffer);
         keepRangeInputBufferAlive();
+        setRuleFillFeedback(`⌨️ 範圍輸入中：${nextBuffer}　按 Enter 套用，Ctrl+C / Ctrl+V 可直接複製貼上`);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasRangeSelection, clipboardGrid, staffs, daysInMonth, mergedLeaveCodes, rangeInputBuffer, selectedRangeCells, singleCellInputBuffer]);
+  }, [hasRangeSelection, rangeSelection, clipboardGrid, staffs, daysInMonth, mergedLeaveCodes, rangeInputBuffer, selectedRangeCells]);
 
 
   // ==========================================
