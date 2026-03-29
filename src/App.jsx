@@ -1231,16 +1231,41 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const rect = getRectFromSelection(rangeSelection, staffs, daysInMonth);
     if (!rect || !grid || grid.length === 0) return;
 
+    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
+    const selectionColCount = rect.colEnd - rect.colStart + 1;
+    const sourceRowCount = grid.length;
+    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
+    const selectionCellCount = selectionRowCount * selectionColCount;
+    const sourceCellCount = sourceRowCount * sourceColCount;
+    const shouldConfineToSelection = selectionCellCount > 1;
+
+    let targetRowCount = sourceRowCount;
+    let targetColCount = sourceColCount;
+
+    if (shouldConfineToSelection) {
+      if (sourceRowCount === 1 && sourceColCount === 1) {
+        targetRowCount = selectionRowCount;
+        targetColCount = selectionColCount;
+      } else {
+        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
+        targetColCount = Math.min(sourceColCount, selectionColCount);
+      }
+    }
+
     const updates = [];
     let invalidCount = 0;
-    for (let rowOffset = 0; rowOffset < grid.length; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < (grid[rowOffset] || []).length; colOffset += 1) {
+    let skippedOverflowCount = 0;
+
+    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
+        const sourceRow = sourceRowCount === 1 && sourceColCount === 1 ? 0 : rowOffset;
+        const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
         const targetRow = rect.rowStart + rowOffset;
         const targetCol = rect.colStart + colOffset;
         const staff = staffs[targetRow];
         const day = daysInMonth[targetCol];
         if (!staff || !day) continue;
-        const rawValue = grid[rowOffset][colOffset];
+        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
         const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
         if (!isValid) {
           invalidCount += 1;
@@ -1248,6 +1273,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
         updates.push({ staffId: staff.id, dateStr: day.date, value: normalized });
       }
+    }
+
+    if (shouldConfineToSelection && !(sourceRowCount === 1 && sourceColCount === 1)) {
+      skippedOverflowCount = Math.max(0, sourceCellCount - (targetRowCount * targetColCount));
     }
 
     if (updates.length === 0) {
@@ -1264,7 +1293,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return next;
     });
     resetRangeInputBuffer();
-    setRuleFillFeedback(`✅ 已貼上 ${updates.length} 格${invalidCount > 0 ? `，略過 ${invalidCount} 格非法值` : ''}`);
+
+    const notes = [];
+    if (invalidCount > 0) notes.push(`略過 ${invalidCount} 格非法值`);
+    if (skippedOverflowCount > 0) notes.push(`超出選取範圍 ${skippedOverflowCount} 格未貼上`);
+    setRuleFillFeedback(`✅ 已貼上 ${updates.length} 格${notes.length > 0 ? `，${notes.join('，')}` : ''}`);
   };
 
   const fillSelectionFromTopLeft = () => {
