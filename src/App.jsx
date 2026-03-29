@@ -1297,7 +1297,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const notes = [];
     if (invalidCount > 0) notes.push(`略過 ${invalidCount} 格非法值`);
     if (skippedOverflowCount > 0) notes.push(`超出選取範圍 ${skippedOverflowCount} 格未貼上`);
-    setRuleFillFeedback(`✅ 已貼上 ${updates.length} 格${notes.length > 0 ? `，${notes.join('，')}` : ''}`);
   };
 
   const fillSelectionFromTopLeft = () => {
