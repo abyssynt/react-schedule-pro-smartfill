@@ -840,48 +840,7 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
-const clampColorChannel = (value) => Math.max(0, Math.min(255, Math.round(value)));
-
-const normalizeHexColor = (hex, fallback = '#000000') => {
-  const raw = String(hex || '').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
-  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
-    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
-  }
-  return fallback;
-};
-
-const hexToRgbObject = (hex, fallback = '#000000') => {
-  const normalized = normalizeHexColor(hex, fallback).replace('#', '');
-  return {
-    r: parseInt(normalized.slice(0, 2), 16),
-    g: parseInt(normalized.slice(2, 4), 16),
-    b: parseInt(normalized.slice(4, 6), 16)
-  };
-};
-
-const rgbObjectToHex = ({ r, g, b }) => {
-  const toHex = (value) => clampColorChannel(value).toString(16).padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
-
-const blendHexColors = (baseHex, mixHex, mixRatio = 0.5) => {
-  const ratio = Math.max(0, Math.min(1, Number(mixRatio) || 0));
-  const base = hexToRgbObject(baseHex, '#ffffff');
-  const mix = hexToRgbObject(mixHex, '#ffffff');
-  return rgbObjectToHex({
-    r: base.r * (1 - ratio) + mix.r * ratio,
-    g: base.g * (1 - ratio) + mix.g * ratio,
-    b: base.b * (1 - ratio) + mix.b * ratio
-  });
-};
-
-const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
-  return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
-};
-
-
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -927,7 +886,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
   const keyInputTimerRef = useRef(null);
-  const tableScrollRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -1446,24 +1404,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
 
-    const exportTheme = {
-      pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
-      tableFont: uiSettings?.tableFontColor || '#1f2937',
-      shiftBg: uiSettings?.shiftColumnBgColor || '#ffffff',
-      shiftFont: uiSettings?.shiftColumnFontColor || '#1e293b',
-      nameBg: uiSettings?.nameDateColumnBgColor || '#ffffff',
-      nameFont: uiSettings?.nameDateColumnFontColor || '#1e293b',
-      weekdayHeadBg: blendHexColors(uiSettings?.nameDateColumnBgColor || '#ffffff', '#f1f5f9', 0.7),
-      weekendHeadBg: colors.weekend || '#dcfce7',
-      holidayHeadBg: colors.holiday || '#fca5a5',
-      weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
-      holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
-      monthTitleBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.55),
-      statWorkBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#93c5fd', 0.45),
-      statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
-      statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
-    };
-
     const statHeaders = ['上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
     const lastDateColumn = daysInMonth.length + 1;
@@ -1480,18 +1420,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       worksheet.mergeCells(1, titleStartCol, 1, titleEndCol);
       const titleCell = monthTitleRow.getCell(titleStartCol);
       titleCell.value = `${month}月班表`;
+      titleCell.font = { bold: true, size: 14 };
       titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
-      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
     }
 
     if (leaveEndCol >= leaveStartCol) {
       if (leaveEndCol > leaveStartCol) worksheet.mergeCells(1, leaveStartCol, 1, leaveEndCol);
       const leaveCell = monthTitleRow.getCell(leaveStartCol);
       leaveCell.value = `應休${requiredLeaves}天`;
+      leaveCell.font = { bold: true, size: 11 };
       leaveCell.alignment = { vertical: 'middle', horizontal: 'right' };
-      leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
-      leaveCell.font = { bold: true, size: 11, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
     }
 
     for (let col = 1; col <= totalColumns; col++) {
@@ -1501,7 +1441,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
       if (col === 1 || col > lastDateColumn) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#FFFFFF') } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
       }
     }
 
@@ -1511,7 +1451,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     header.height = 30;
 
     header.eachCell((cell, colNumber) => {
-      cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      cell.font = { bold: true, size: 10 };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       cell.border = {
         top: { style: 'thin' }, left: { style: 'thin' },
@@ -1520,23 +1460,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
         const d = daysInMonth[colNumber - 2];
-        if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayHeadBg, '#FFCACA') } };
-        else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendHeadBg, '#DCFCE7') } };
-        else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekdayHeadBg, '#F1F5F9') } };
+        if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCACA' } };
+        else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+        else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
       } else {
-        if (colNumber === 1) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
-        } else if (colNumber === 2) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.nameBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.nameFont, '#1E293B') } };
-        } else {
-          const statIndex = colNumber - (daysInMonth.length + 2);
-          const statKey = statHeaders[statIndex];
-          const statBg = statKey === '上班' ? exportTheme.statWorkBg : statKey === '假日休' ? exportTheme.statHolidayBg : statKey === '總休' ? exportTheme.statTotalBg : exportTheme.pageBg;
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(statBg, '#F8FAFC') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
-        }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
       }
     });
 
@@ -1555,7 +1483,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       row.eachCell((cell, colNumber) => {
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.font = { color: { argb: hexToExcelArgb(colNumber === 1 ? exportTheme.nameFont : exportTheme.tableFont, '#1F2937') } };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
@@ -1564,8 +1491,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
           cell.numFmt = '@';
           const d = daysInMonth[colNumber - 2];
-          if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayCellBg, '#FFE4E4') } };
-          else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendCellBg, '#F0FDF4') } };
+          if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E4' } };
+          else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
         }
       });
     });
@@ -1575,8 +1502,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const rowData = [label, ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || ''), ...Array(statHeaders.length).fill('')];
       const row = worksheet.addRow(rowData);
       row.eachCell((cell) => {
-        const summaryBg = rowKey === 'D' ? exportTheme.statWorkBg : rowKey === 'E' ? exportTheme.statHolidayBg : rowKey === 'N' ? exportTheme.statTotalBg : blendHexColors(exportTheme.pageBg, exportTheme.nameBg, 0.5);
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(summaryBg, '#F1F5F9') } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
@@ -1607,22 +1533,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const exportToWord = () => {
     const statHeaders = ['上班', '假日休', '總休'];
-    const exportTheme = {
-      pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
-      tableFont: uiSettings?.tableFontColor || '#1f2937',
-      shiftBg: uiSettings?.shiftColumnBgColor || '#ffffff',
-      shiftFont: uiSettings?.shiftColumnFontColor || '#1e293b',
-      nameBg: uiSettings?.nameDateColumnBgColor || '#ffffff',
-      nameFont: uiSettings?.nameDateColumnFontColor || '#1e293b',
-      weekdayHeadBg: blendHexColors(uiSettings?.nameDateColumnBgColor || '#ffffff', '#f1f5f9', 0.7),
-      weekendHeadBg: colors.weekend || '#dcfce7',
-      holidayHeadBg: colors.holiday || '#fca5a5',
-      weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
-      holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
-      statWorkBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#93c5fd', 0.45),
-      statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
-      statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
-    };
     const titleColSpan = daysInMonth.length;
     const leaveColSpan = statHeaders.length;
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
@@ -1661,8 +1571,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-family: "Microsoft JhengHei", Arial, sans-serif;
             margin: 0;
             padding: 0;
-            color: ${exportTheme.tableFont};
-            background: ${exportTheme.pageBg};
           }
           table {
             border-collapse: collapse;
@@ -1681,7 +1589,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .month-row td {
             height: 24pt;
             font-weight: 700;
-            background: ${exportTheme.pageBg};
+            background: #ffffff;
           }
           .month-title-cell {
             height: 24pt;
@@ -1721,24 +1629,24 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-weight: 700;
             line-height: 1.1;
           }
-          .weekday-head { background-color: ${exportTheme.weekdayHeadBg}; }
-          .holiday-head { background-color: ${exportTheme.holidayHeadBg}; }
-          .weekend-head { background-color: ${exportTheme.weekendHeadBg}; }
-          .holiday-cell { background-color: ${exportTheme.holidayCellBg}; }
-          .weekend-cell { background-color: ${exportTheme.weekendCellBg}; }
-          .stat-work-head { background-color: ${exportTheme.statWorkBg}; color: ${exportTheme.tableFont}; }
-          .stat-holiday-head { background-color: ${exportTheme.statHolidayBg}; color: ${exportTheme.tableFont}; }
-          .stat-total-head { background-color: ${exportTheme.statTotalBg}; color: ${exportTheme.tableFont}; }
-          .stat-work-cell { background-color: ${exportTheme.statWorkBg}; }
-          .stat-holiday-cell { background-color: ${exportTheme.statHolidayBg}; }
-          .stat-total-cell { background-color: ${exportTheme.statTotalBg}; }
+          .weekday-head { background-color: #f1f5f9; }
+          .holiday-head { background-color: ${colors.holiday}; }
+          .weekend-head { background-color: ${colors.weekend}; }
+          .holiday-cell { background-color: #ffe4e4; }
+          .weekend-cell { background-color: #f0fdf4; }
+          .stat-work-head { background-color: #dbeafe; color: #1d4ed8; }
+          .stat-holiday-head { background-color: #dcfce7; color: #15803d; }
+          .stat-total-head { background-color: #fee2e2; color: #b91c1c; }
+          .stat-work-cell { background-color: #eff6ff; }
+          .stat-holiday-cell { background-color: #f0fdf4; }
+          .stat-total-cell { background-color: #fef2f2; }
           .rules-row td {
             padding: 8pt 10pt;
             text-align: left;
             vertical-align: top;
             line-height: 1.7;
             font-size: 10pt;
-            background: ${exportTheme.pageBg};
+            background: #ffffff;
           }
         </style>
       </head>
@@ -1754,10 +1662,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 <td class="leave-title-cell" colspan="${leaveColSpan}">應休${requiredLeaves}天</td>
               </tr>
               <tr>
-                <th class="name-col header-cell" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">姓名</th>
+                <th class="name-col header-cell">姓名</th>
                 ${daysInMonth.map(d => {
                   const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
-                  const headBg = d.isHoliday ? exportTheme.holidayHeadBg : (d.isWeekend ? exportTheme.weekendHeadBg : exportTheme.weekdayHeadBg);
+                  const headBg = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9');
                   return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;">${d.day}<br/>(${d.weekStr})</th>`;
                 }).join('')}
                 <th class="stat-col header-cell stat-work-head">上班</th>
@@ -1770,17 +1678,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 const stats = getStaffStats(staff.id);
                 return `
                 <tr>
-                  <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
+                  <td class="name-col">${staff.name}</td>
                   ${daysInMonth.map(d => {
                     const cellData = schedule[staff.id]?.[d.date];
                     const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
-                    const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
+                    const cellBg = d.isHoliday ? '#ffe4e4' : (d.isWeekend ? '#f0fdf4' : '#ffffff');
                     return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;">${value}</td>`;
                   }).join('')}
-                  <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
-                  <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
-                  <td class="stat-col stat-total-cell" style="background:${exportTheme.statTotalBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
+                  <td class="stat-col stat-work-cell" style="background:#eff6ff; mso-pattern:auto none;">${stats.work || ''}</td>
+                  <td class="stat-col stat-holiday-cell" style="background:#f0fdf4; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
+                  <td class="stat-col stat-total-cell" style="background:#fef2f2; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -2485,50 +2393,6 @@ const openSelectedCellFillModal = () => {
     resetKeyInputBuffer();
   }, [staffs.length]);
 
-  const handleTableWheelCapture = (event) => {
-    const container = tableScrollRef.current;
-    if (!container) return;
-
-    const hasHorizontalIntent = Math.abs(event.deltaX) > 0 || event.shiftKey;
-    if (!hasHorizontalIntent) return;
-
-    const delta = Math.abs(event.deltaX) > 0 ? event.deltaX : event.deltaY;
-    if (!delta) return;
-
-    container.scrollLeft += delta;
-    event.preventDefault();
-  };
-
-  useEffect(() => {
-    const handleGlobalWheel = (event) => {
-      const container = tableScrollRef.current;
-      if (!container) return;
-
-      const hasHorizontalIntent = Math.abs(event.deltaX) > 0 || event.shiftKey;
-      if (!hasHorizontalIntent) return;
-
-      const activeEl = document.activeElement;
-      const activeTag = String(activeEl?.tagName || '').toLowerCase();
-      const isEditingInput = activeEl && (activeTag === 'input' || activeTag === 'textarea' || activeEl?.isContentEditable);
-      if (isEditingInput) return;
-
-      const maxScrollLeft = container.scrollWidth - container.clientWidth;
-      if (maxScrollLeft <= 0) return;
-
-      const delta = Math.abs(event.deltaX) > 0 ? event.deltaX : event.deltaY;
-      if (!delta) return;
-
-      const nextScrollLeft = Math.min(maxScrollLeft, Math.max(0, container.scrollLeft + delta));
-      if (nextScrollLeft === container.scrollLeft) return;
-
-      container.scrollLeft = nextScrollLeft;
-      event.preventDefault();
-    };
-
-    window.addEventListener('wheel', handleGlobalWheel, { passive: false, capture: true });
-    return () => window.removeEventListener('wheel', handleGlobalWheel, { capture: true });
-  }, []);
-
   return (
     <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
@@ -2562,24 +2426,11 @@ const openSelectedCellFillModal = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={draftImportInputRef}
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={onImportDraftFileChange}
-            />
             <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Save size={16} /> 暫存
             </button>
             <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Clock size={16} /> 歷史
-            </button>
-            <button onClick={onDownloadDraftFile} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Download size={16} /> 下載工作檔
-            </button>
-            <button onClick={onImportDraftFileClick} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Database size={16} /> 開啟工作檔
             </button>
 
             <div className="relative">
@@ -2801,7 +2652,7 @@ const openSelectedCellFillModal = () => {
       </div>
 
       <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
-        <div ref={tableScrollRef} className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]" onWheelCapture={handleTableWheelCapture}>
+        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
           <table className="w-max min-w-full border-collapse select-none">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
@@ -2918,6 +2769,7 @@ const openSelectedCellFillModal = () => {
                               className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                               onMouseDown={(e) => {
+                                if (e.button !== 0) return;
                                 e.preventDefault();
                                 setIsRangeDragging(true);
                                 startRangeSelection(staff, d.date, e);
@@ -2950,6 +2802,7 @@ const openSelectedCellFillModal = () => {
                                       startRangeSelection(staff, d.date);
                                     }}
                                     onMouseDown={(e) => {
+                                      if (e.button !== 0) return;
                                       e.stopPropagation();
                                       startRangeSelection(staff, d.date, e);
                                     }}
@@ -3464,37 +3317,24 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
       dataSheet.addRow([`${templateMonth}月班表匯入範本`]);
       dataSheet.mergeCells(1, 1, 1, headers.length);
       const titleCell = dataSheet.getCell(1, 1);
+      titleCell.font = { bold: true, size: 14 };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
-      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
       dataSheet.getRow(1).height = 24;
 
       const headerRow = dataSheet.addRow(headers);
       headerRow.height = 24;
       headerRow.eachCell((cell, colNumber) => {
-        cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+        cell.font = { bold: true, size: 10 };
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
         if (colNumber === 1 || colNumber === 2) {
-          if (colNumber === 1) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
-        } else if (colNumber === 2) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.nameBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.nameFont, '#1E293B') } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
         } else {
-          const statIndex = colNumber - (daysInMonth.length + 2);
-          const statKey = statHeaders[statIndex];
-          const statBg = statKey === '上班' ? exportTheme.statWorkBg : statKey === '假日休' ? exportTheme.statHolidayBg : statKey === '總休' ? exportTheme.statTotalBg : exportTheme.pageBg;
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(statBg, '#F8FAFC') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
-        }
-        } else {
-          const summaryBg = rowKey === 'D' ? exportTheme.statWorkBg : rowKey === 'E' ? exportTheme.statHolidayBg : rowKey === 'N' ? exportTheme.statTotalBg : blendHexColors(exportTheme.pageBg, exportTheme.nameBg, 0.5);
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(summaryBg, '#F1F5F9') } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
         }
       });
 
@@ -3722,7 +3562,6 @@ export default function App() {
   const [activeDraftMeta, setActiveDraftMeta] = useState(null);
   const activeDraftHydratedRef = useRef(false);
   const activeDraftSaveReadyRef = useRef(false);
-  const draftImportInputRef = useRef(null);
 
   const formatDraftSavedAt = (isoString) => {
     if (!isoString) return '';
@@ -3730,24 +3569,6 @@ export default function App() {
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleString();
   };
-
-  const buildWorkspaceState = () => ({
-    colors,
-    customHolidays,
-    specialWorkdays,
-    medicalCalendarAdjustments,
-    uiSettings,
-    staffingConfig,
-    customLeaveCodes,
-    customColumns,
-    customColumnValues,
-    schedulingRulesText,
-    monthlySchedules,
-    year,
-    month,
-    staffs,
-    schedule
-  });
 
   const applyWorkspaceState = (state = {}) => {
     setColors(state.colors || { weekend: '#dcfce7', holiday: '#fca5a5' });
@@ -3893,65 +3714,6 @@ export default function App() {
     setActiveDraftMeta(null);
   };
 
-  const handleDownloadDraftFile = () => {
-    try {
-      const exportedAt = new Date().toISOString();
-      const payload = {
-        type: 'schedule-draft',
-        version: '1.6.0',
-        exportedAt,
-        state: buildWorkspaceState()
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `排班工作檔_${year}年${String(month).padStart(2, '0')}月.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('下載工作檔失敗', error);
-      window.alert('下載工作檔失敗，請稍後再試。');
-    }
-  };
-
-  const handleImportDraftFileClick = () => {
-    if (draftImportInputRef.current) draftImportInputRef.current.click();
-  };
-
-  const handleImportDraftFileChange = async (event) => {
-    const file = event.target?.files?.[0];
-    if (!file) return;
-
-    try {
-      const rawText = await file.text();
-      const parsed = JSON.parse(rawText);
-      const importedState = parsed?.state || parsed;
-      if (!importedState || typeof importedState !== 'object') {
-        throw new Error('暫存檔格式不正確');
-      }
-
-      applyWorkspaceState(importedState);
-      const savedAt = new Date().toISOString();
-      const payload = { savedAt, state: importedState };
-      localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
-      setHasActiveDraft(true);
-      setActiveDraftMeta({
-        savedAt,
-        savedAtText: formatDraftSavedAt(savedAt),
-        year: importedState.year,
-        month: importedState.month
-      });
-      setScreen('schedule');
-      window.alert('開啟工作檔成功，已載入目前工作內容。');
-    } catch (error) {
-      console.error('開啟工作檔失敗', error);
-      window.alert('開啟工作檔失敗，請確認檔案格式是否正確。');
-    } finally {
-      if (event.target) event.target.value = '';
-    }
-  };
-
   const handleImportFiles = async (files) => {
     const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
     setImportedSchedulePayload(imported);
@@ -4012,10 +3774,6 @@ export default function App() {
         setStaffs={setStaffs}
         schedule={schedule}
         setSchedule={setSchedule}
-        onDownloadDraftFile={handleDownloadDraftFile}
-        onImportDraftFileClick={handleImportDraftFileClick}
-        draftImportInputRef={draftImportInputRef}
-        onImportDraftFileChange={handleImportDraftFileChange}
       />
     );
   }
