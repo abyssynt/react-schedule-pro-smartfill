@@ -965,16 +965,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
-  const fourWeekDividerColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
+  const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
+  const fourWeekDividerColor = blendHexColors(fourWeekDividerBaseColor, pageBackgroundColor, 0.18);
 
-  const getFourWeekDividerStyle = (dateStr) => isFourWeekCycleEndDate(dateStr)
-    ? {
-        borderRightWidth: '4px',
-        borderRightStyle: 'solid',
-        borderRightColor: fourWeekDividerColor,
-        boxShadow: `inset -2px 0 0 ${fourWeekDividerColor}`
-      }
-    : {};
+  const renderFourWeekDivider = (dateStr, zIndexClass = 'z-20') => {
+    if (!isFourWeekCycleEndDate(dateStr)) return null;
+    return (
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute top-[-1px] bottom-[-1px] right-[-1px] ${zIndexClass}`}
+        style={{ width: '3px', backgroundColor: fourWeekDividerColor }}
+      />
+    );
+  };
   const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
   const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
   const showBottomStats = uiSettings?.showBottomStats ?? true;
@@ -2824,15 +2827,15 @@ const openSelectedCellFillModal = () => {
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
-                    className={`sticky top-0 z-40 ${densityConfig.dayHeaderClass} border-r text-center shadow-sm`}
+                    className={`sticky top-0 z-40 relative ${densityConfig.dayHeaderClass} border-r text-center shadow-sm`}
                     style={{
                       minWidth: densityConfig.dayMinWidth,
-                      backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9'),
-                      ...getFourWeekDividerStyle(d.date)
+                      backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9')
                     }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
+                    {renderFourWeekDivider(d.date, 'z-30')}
                   </th>
                 ))}
                 {showRightStats && (
@@ -2975,8 +2978,7 @@ const openSelectedCellFillModal = () => {
                               className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
                               style={{
                                 backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
-                                opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                                ...getFourWeekDividerStyle(d.date)
+                                opacity: d.isHoliday || d.isWeekend ? 0.9 : 1
                               }}
                               onMouseDown={(e) => {
                                 if (e.button !== 0) return;
@@ -2990,6 +2992,7 @@ const openSelectedCellFillModal = () => {
                               }}
                             >
                               <div className="relative">
+                                {renderFourWeekDivider(d.date)}
                                 <div
                                   className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
                                   style={{ color: tableFontColor, pointerEvents: 'none' }}
@@ -3085,10 +3088,11 @@ const openSelectedCellFillModal = () => {
                         className="border-r"
                         style={{
                           backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
-                          opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                          ...getFourWeekDividerStyle(d.date)
+                          opacity: d.isHoliday || d.isWeekend ? 0.9 : 1
                         }}
-                      ></td>
+                      >
+                        {renderFourWeekDivider(d.date)}
+                      </td>
                     ))}
 
                     <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
