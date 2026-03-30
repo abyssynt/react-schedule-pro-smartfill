@@ -929,9 +929,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       0
     );
     const safeLength = Math.max(1, longestNameLength);
-    const compactControlSpace = 8;
-    const estimatedNameWidth = compactControlSpace + (safeLength * 12);
-    return Math.max(38, Math.min(180, estimatedNameWidth));
+    const compactControlSpace = 54;
+    const estimatedNameWidth = compactControlSpace + (safeLength * 16);
+    return Math.max(96, Math.min(196, estimatedNameWidth));
   }, [staffs]);
   const effectiveDensityConfig = useMemo(() => ({
     ...densityConfig,
@@ -2858,7 +2858,7 @@ const openSelectedCellFillModal = () => {
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className={`shrink min-w-0 text-center py-0 px-0 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", width: `${Math.max(3.2, Math.min((staff.name || '').length + 1.2, 8.5))}ch`, maxWidth: '100%' }}
+                              className={`flex-none min-w-0 text-center py-0 px-0.5 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent whitespace-nowrap ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", width: `${Math.max(4.2, Math.min((staff.name || '').length + 1.1, 8.5))}ch`, maxWidth: 'calc(100% - 1.75rem)' }}
                             />
 
                             <button
