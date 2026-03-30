@@ -880,12 +880,6 @@ const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
   return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
 };
 
-const hexToRgba = (hex, alpha = 1, fallback = '#000000') => {
-  const { r, g, b } = hexToRgbObject(hex, fallback);
-  const normalizedAlpha = Math.max(0, Math.min(1, Number(alpha) || 0));
-  return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
-};
-
 const FOUR_WEEK_CYCLE_START = '2026-04-13';
 const FOUR_WEEK_CYCLE_DAYS = 28;
 
@@ -972,11 +966,23 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
   const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
-  const fourWeekDividerColor = hexToRgba(fourWeekDividerBaseColor, 0.42, '#1e293b');
+  const fourWeekDividerColor = blendHexColors(fourWeekDividerBaseColor, pageBackgroundColor, 0.18);
 
-  const getFourWeekDividerBorderStyle = (dateStr) => {
-    if (!isFourWeekCycleEndDate(dateStr)) return {};
-    return { borderRight: `3px solid ${fourWeekDividerColor}` };
+  const getFourWeekDividerStyle = (dateStr) => (
+    isFourWeekCycleEndDate(dateStr)
+      ? { borderRight: `3px solid ${fourWeekDividerColor}` }
+      : null
+  );
+
+  const applyExcelFourWeekDivider = (border = {}, dateStr) => {
+    if (!isFourWeekCycleEndDate(dateStr)) return border;
+    return {
+      ...border,
+      right: {
+        style: 'thick',
+        color: { argb: hexToExcelArgb(fourWeekDividerColor, '#64748B') }
+      }
+    };
   };
   const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
   const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
@@ -1560,16 +1566,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     header.eachCell((cell, colNumber) => {
       cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      cell.border = {
+      const baseBorder = {
         top: { style: 'thin' }, left: { style: 'thin' },
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
+      cell.border = baseBorder;
 
       if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
         const d = daysInMonth[colNumber - 2];
-        if (isFourWeekCycleEndDate(d.date)) {
-          cell.border.right = { style: 'medium', color: { argb: hexToExcelArgb(fourWeekDividerBaseColor, '#1E293B') } };
-        }
+        cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
         if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayHeadBg, '#FFCACA') } };
         else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendHeadBg, '#DCFCE7') } };
         else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekdayHeadBg, '#F1F5F9') } };
@@ -1606,17 +1611,16 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       row.eachCell((cell, colNumber) => {
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
         cell.font = { color: { argb: hexToExcelArgb(colNumber === 1 ? exportTheme.nameFont : exportTheme.tableFont, '#1F2937') } };
-        cell.border = {
+        const baseBorder = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
+        cell.border = baseBorder;
 
         if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
           cell.numFmt = '@';
           const d = daysInMonth[colNumber - 2];
-          if (isFourWeekCycleEndDate(d.date)) {
-            cell.border.right = { style: 'medium', color: { argb: hexToExcelArgb(fourWeekDividerBaseColor, '#1E293B') } };
-          }
+          cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
           if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayCellBg, '#FFE4E4') } };
           else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendCellBg, '#F0FDF4') } };
         }
@@ -1634,12 +1638,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
-        if (cell.col >= 2 && cell.col <= daysInMonth.length + 1) {
-          const d = daysInMonth[cell.col - 2];
-          if (isFourWeekCycleEndDate(d.date)) {
-            cell.border.right = { style: 'medium', color: { argb: hexToExcelArgb(fourWeekDividerBaseColor, '#1E293B') } };
-          }
-        }
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
       });
     });
@@ -1785,7 +1783,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .weekend-head { background-color: ${exportTheme.weekendHeadBg}; }
           .holiday-cell { background-color: ${exportTheme.holidayCellBg}; }
           .weekend-cell { background-color: ${exportTheme.weekendCellBg}; }
-          .cycle-divider { border-right: 2.5pt solid ${fourWeekDividerBaseColor}; }
           .stat-work-head { background-color: ${exportTheme.statWorkBg}; color: ${exportTheme.tableFont}; }
           .stat-holiday-head { background-color: ${exportTheme.statHolidayBg}; color: ${exportTheme.tableFont}; }
           .stat-total-head { background-color: ${exportTheme.statTotalBg}; color: ${exportTheme.tableFont}; }
@@ -1799,6 +1796,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             line-height: 1.7;
             font-size: 10pt;
             background: ${exportTheme.pageBg};
+          }
+          .cycle-divider {
+            border-right: 3px solid ${fourWeekDividerColor} !important;
           }
         </style>
       </head>
@@ -1818,8 +1818,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 ${daysInMonth.map(d => {
                   const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
                   const headBg = d.isHoliday ? exportTheme.holidayHeadBg : (d.isWeekend ? exportTheme.weekendHeadBg : exportTheme.weekdayHeadBg);
-                  const dividerClass = isFourWeekCycleEndDate(d.date) ? ' cycle-divider' : '';
-                  return `<th class="day-col header-cell ${headClass}${dividerClass}" style="background:${headBg}; mso-pattern:auto none;">${d.day}<br/>(${d.weekStr})</th>`;
+                  return `<th class="day-col header-cell ${headClass} ${isFourWeekCycleEndDate(d.date) ? 'cycle-divider' : ''}" style="background:${headBg}; mso-pattern:auto none;">${d.day}<br/>(${d.weekStr})</th>`;
                 }).join('')}
                 <th class="stat-col header-cell stat-work-head">上班</th>
                 <th class="stat-col header-cell stat-holiday-head">假日休</th>
@@ -1837,8 +1836,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                     const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
                     const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
-                    const dividerClass = isFourWeekCycleEndDate(d.date) ? ' cycle-divider' : '';
-                    return `<td class="day-col ${cellClass}${dividerClass}" style="background:${cellBg}; mso-pattern:auto none;">${value}</td>`;
+                    return `<td class="day-col ${cellClass} ${isFourWeekCycleEndDate(d.date) ? 'cycle-divider' : ''}" style="background:${cellBg}; mso-pattern:auto none;">${value}</td>`;
                   }).join('')}
                   <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
                   <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
@@ -2846,7 +2844,7 @@ const openSelectedCellFillModal = () => {
                     style={{
                       minWidth: densityConfig.dayMinWidth,
                       backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9'),
-                      ...getFourWeekDividerBorderStyle(d.date)
+                      ...getFourWeekDividerStyle(d.date)
                     }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
@@ -2994,7 +2992,7 @@ const openSelectedCellFillModal = () => {
                               style={{
                                 backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
                                 opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                                ...getFourWeekDividerBorderStyle(d.date)
+                                ...getFourWeekDividerStyle(d.date)
                               }}
                               onMouseDown={(e) => {
                                 if (e.button !== 0) return;
@@ -3100,14 +3098,13 @@ const openSelectedCellFillModal = () => {
                     {daysInMonth.map(d => (
                       <td
                         key={d.date}
-                        className="border-r relative"
+                        className="border-r"
                         style={{
                           backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
                           opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                          ...getFourWeekDividerBorderStyle(d.date)
+                          ...getFourWeekDividerStyle(d.date)
                         }}
-                      >
-                      </td>
+                      />
                     ))}
 
                     <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
