@@ -730,7 +730,7 @@ const getShiftCellLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[s
 const UI_DENSITY_OPTIONS = {
   compact: {
     shiftWidth: 58,
-    nameWidth: 98,
+    nameWidth: 84,
     dayMinWidth: 32,
     dayHeaderClass: 'px-0.5 py-1 text-[11px]',
     statHeaderClass: 'p-1.5',
@@ -744,7 +744,7 @@ const UI_DENSITY_OPTIONS = {
   },
   standard: {
     shiftWidth: 68,
-    nameWidth: 108,
+    nameWidth: 84,
     dayMinWidth: 52,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
     statHeaderClass: 'px-2 py-2',
@@ -833,7 +833,7 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   return {
     ...baseConfig,
     shiftWidth: Math.max(48, baseConfig.shiftWidth + shiftAdjust),
-    nameWidth: Math.max(90, baseConfig.nameWidth + nameAdjust),
+    nameWidth: Math.max(76, baseConfig.nameWidth + nameAdjust),
     dayMinWidth: Math.max(28, baseConfig.dayMinWidth + dayAdjust),
     rowMinHeight: Math.max(72, (baseConfig.rowMinHeight || 80) + heightAdjust * 4),
     selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
