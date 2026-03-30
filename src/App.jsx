@@ -736,7 +736,7 @@ const UI_DENSITY_OPTIONS = {
     statHeaderClass: 'p-1.5',
     leaveHeaderClass: 'p-1',
     cellHeightClass: 'h-8',
-    nameCellPaddingClass: 'px-1 py-0.5',
+    nameCellPaddingClass: 'px-0.5 py-0.5',
     footCellPaddingClass: 'p-1.5',
     groupLabelClass: '',
     selectorDotClass: 'w-1.5 h-1.5',
@@ -764,7 +764,7 @@ const UI_DENSITY_OPTIONS = {
     statHeaderClass: 'p-4',
     leaveHeaderClass: 'p-2',
     cellHeightClass: 'h-12',
-    nameCellPaddingClass: 'px-1.5 py-1.5',
+    nameCellPaddingClass: 'px-2 py-2',
     footCellPaddingClass: 'p-3',
     groupLabelClass: '',
     selectorDotClass: 'w-3 h-3',
@@ -929,9 +929,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       0
     );
     const safeLength = Math.max(1, longestNameLength);
-    const compactControlSpace = 44;
-    const estimatedNameWidth = compactControlSpace + (safeLength * 14);
-    return Math.max(58, Math.min(220, estimatedNameWidth));
+    const compactControlSpace = 24;
+    const estimatedNameWidth = compactControlSpace + (safeLength * 16);
+    return Math.max(46, Math.min(220, estimatedNameWidth));
   }, [staffs]);
   const effectiveDensityConfig = useMemo(() => ({
     ...densityConfig,
@@ -2832,20 +2832,20 @@ const openSelectedCellFillModal = () => {
 
                         <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                           <div className="flex items-center gap-0.5">
-                            <div className="flex flex-col items-center justify-center shrink-0 w-3">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-4">
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'up')}
                                 disabled={groupIndex === 0}
                                 className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
                               >
-                                <ArrowUp size={12} />
+                                <ArrowUp size={14} />
                               </button>
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'down')}
                                 disabled={groupIndex === groupStaffList.length - 1}
                                 className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
                               >
-                                <ArrowDown size={12} />
+                                <ArrowDown size={14} />
                               </button>
                             </div>
 
@@ -2858,7 +2858,7 @@ const openSelectedCellFillModal = () => {
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className={`flex-1 min-w-0 text-center py-0.5 px-0 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
+                              className={`flex-1 min-w-0 text-center py-0.5 px-0 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
                             />
 
                             <button
