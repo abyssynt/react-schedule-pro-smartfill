@@ -730,41 +730,41 @@ const getShiftCellLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[s
 const UI_DENSITY_OPTIONS = {
   compact: {
     shiftWidth: 58,
-    nameWidth: 98,
+    nameWidth: 84,
     dayMinWidth: 32,
     dayHeaderClass: 'px-0.5 py-1 text-[11px]',
     statHeaderClass: 'p-1.5',
     leaveHeaderClass: 'p-1',
     cellHeightClass: 'h-8',
-    nameCellPaddingClass: 'px-1.5 py-1',
+    nameCellPaddingClass: 'px-0.5 py-0.5',
     footCellPaddingClass: 'p-1.5',
     groupLabelClass: '',
     selectorDotClass: 'w-1.5 h-1.5',
     rowMinHeight: 72
   },
   standard: {
-    shiftWidth: 76,
-    nameWidth: 122,
-    dayMinWidth: 64,
+    shiftWidth: 68,
+    nameWidth: 84,
+    dayMinWidth: 52,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
-    statHeaderClass: 'p-3',
-    leaveHeaderClass: 'p-1.5',
-    cellHeightClass: 'h-10',
-    nameCellPaddingClass: 'px-2 py-2',
-    footCellPaddingClass: 'p-2.5',
+    statHeaderClass: 'px-1 py-1',
+    leaveHeaderClass: 'px-1 py-1.5',
+    cellHeightClass: 'h-9',
+    nameCellPaddingClass: 'px-1 py-1',
+    footCellPaddingClass: 'px-1 py-1',
     groupLabelClass: '',
     selectorDotClass: 'w-2 h-2',
-    rowMinHeight: 80
+    rowMinHeight: 72
   },
   relaxed: {
     shiftWidth: 100,
     nameWidth: 156,
     dayMinWidth: 68,
-    dayHeaderClass: 'px-2 py-2.5 text-sm',
+    dayHeaderClass: 'px-1 py-1.5 text-sm',
     statHeaderClass: 'p-4',
     leaveHeaderClass: 'p-2',
     cellHeightClass: 'h-12',
-    nameCellPaddingClass: 'px-3 py-2.5',
+    nameCellPaddingClass: 'px-2 py-2',
     footCellPaddingClass: 'p-3',
     groupLabelClass: '',
     selectorDotClass: 'w-3 h-3',
@@ -833,14 +833,55 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   return {
     ...baseConfig,
     shiftWidth: Math.max(48, baseConfig.shiftWidth + shiftAdjust),
-    nameWidth: Math.max(90, baseConfig.nameWidth + nameAdjust),
+    nameWidth: Math.max(76, baseConfig.nameWidth + nameAdjust),
     dayMinWidth: Math.max(28, baseConfig.dayMinWidth + dayAdjust),
     rowMinHeight: Math.max(72, (baseConfig.rowMinHeight || 80) + heightAdjust * 4),
     selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
   };
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule }) {
+const clampColorChannel = (value) => Math.max(0, Math.min(255, Math.round(value)));
+
+const normalizeHexColor = (hex, fallback = '#000000') => {
+  const raw = String(hex || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
+  }
+  return fallback;
+};
+
+const hexToRgbObject = (hex, fallback = '#000000') => {
+  const normalized = normalizeHexColor(hex, fallback).replace('#', '');
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16)
+  };
+};
+
+const rgbObjectToHex = ({ r, g, b }) => {
+  const toHex = (value) => clampColorChannel(value).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
+const blendHexColors = (baseHex, mixHex, mixRatio = 0.5) => {
+  const ratio = Math.max(0, Math.min(1, Number(mixRatio) || 0));
+  const base = hexToRgbObject(baseHex, '#ffffff');
+  const mix = hexToRgbObject(mixHex, '#ffffff');
+  return rgbObjectToHex({
+    r: base.r * (1 - ratio) + mix.r * ratio,
+    g: base.g * (1 - ratio) + mix.g * ratio,
+    b: base.b * (1 - ratio) + mix.b * ratio
+  });
+};
+
+const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
+  return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
+};
+
+
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -868,6 +909,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [isRangeDragging, setIsRangeDragging] = useState(false);
   const [clipboardGrid, setClipboardGrid] = useState([]);
   const [keyInputBuffer, setKeyInputBuffer] = useState('');
+  const [editingStaffId, setEditingStaffId] = useState(null);
+  const [editingNameDraft, setEditingNameDraft] = useState('');
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -882,6 +925,20 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftLabelFontSize = getShiftLabelFontSize(uiSettings?.shiftColumnFontSize);
   const shiftCellLabelFontSize = getShiftCellLabelFontSize(uiSettings?.shiftColumnFontSize);
   const densityConfig = getAdjustedDensityConfig(getUiDensityConfig(uiSettings?.tableDensity), uiSettings);
+  const dynamicNameWidth = useMemo(() => {
+    const longestNameLength = Math.max(
+      ...((staffs || []).map((staff) => String(staff?.name || '').trim().length || 0)),
+      0
+    );
+    const safeLength = Math.max(1, longestNameLength);
+    const compactControlSpace = 54;
+    const estimatedNameWidth = compactControlSpace + (safeLength * 16);
+    return Math.max(96, Math.min(196, estimatedNameWidth));
+  }, [staffs]);
+  const effectiveDensityConfig = useMemo(() => ({
+    ...densityConfig,
+    nameWidth: dynamicNameWidth
+  }), [densityConfig, dynamicNameWidth]);
   const monthLoadSkipRef = useRef(false);
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
@@ -1071,22 +1128,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     [daysInMonth]
   );
 
-  const FOUR_WEEK_CYCLE_START = '2026-04-13';
-  const cycleDividerColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#334155';
-
-  const isCycleEndDate = (dateStr) => {
-    const baseDate = parseDateKey(FOUR_WEEK_CYCLE_START);
-    const currentDate = parseDateKey(dateStr);
-    const diffDays = Math.round((currentDate - baseDate) / 86400000);
-    return diffDays >= 0 && (diffDays + 1) % 28 === 0;
-  };
-
-  const getCycleDividerStyle = (dateStr, width = 4) => ({
-    borderRight: isCycleEndDate(dateStr)
-      ? `${width}px solid ${cycleDividerColor}`
-      : undefined
-  });
-
   const createBlankScheduleForStaffs = (staffList = []) => {
     return staffList.reduce((acc, staff) => {
       acc[staff.id] = {};
@@ -1132,6 +1173,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setCellDrafts({});
     setInvalidCellKeys({});
     setKeyInputBuffer('');
+    setEditingStaffId(null);
+    setEditingNameDraft('');
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
@@ -1245,6 +1288,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const startRangeSelection = (staff, dateStr, event = {}) => {
+    const mouseButton = typeof event.button === 'number' ? event.button : 0;
+    if (mouseButton !== 0) return;
+
     const point = { staffId: staff.id, dateStr, group: staff.group || '白班' };
     if (event.shiftKey && selectionAnchor) {
       setRangeSelection({ start: selectionAnchor, end: point });
@@ -1420,6 +1466,24 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
 
+    const exportTheme = {
+      pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
+      tableFont: uiSettings?.tableFontColor || '#1f2937',
+      shiftBg: uiSettings?.shiftColumnBgColor || '#ffffff',
+      shiftFont: uiSettings?.shiftColumnFontColor || '#1e293b',
+      nameBg: uiSettings?.nameDateColumnBgColor || '#ffffff',
+      nameFont: uiSettings?.nameDateColumnFontColor || '#1e293b',
+      weekdayHeadBg: blendHexColors(uiSettings?.nameDateColumnBgColor || '#ffffff', '#f1f5f9', 0.7),
+      weekendHeadBg: colors.weekend || '#dcfce7',
+      holidayHeadBg: colors.holiday || '#fca5a5',
+      weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
+      holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
+      monthTitleBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.55),
+      statWorkBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#93c5fd', 0.45),
+      statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
+      statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
+    };
+
     const statHeaders = ['上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
     const lastDateColumn = daysInMonth.length + 1;
@@ -1436,18 +1500,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       worksheet.mergeCells(1, titleStartCol, 1, titleEndCol);
       const titleCell = monthTitleRow.getCell(titleStartCol);
       titleCell.value = `${month}月班表`;
-      titleCell.font = { bold: true, size: 14 };
       titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
+      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
     }
 
     if (leaveEndCol >= leaveStartCol) {
       if (leaveEndCol > leaveStartCol) worksheet.mergeCells(1, leaveStartCol, 1, leaveEndCol);
       const leaveCell = monthTitleRow.getCell(leaveStartCol);
       leaveCell.value = `應休${requiredLeaves}天`;
-      leaveCell.font = { bold: true, size: 11 };
       leaveCell.alignment = { vertical: 'middle', horizontal: 'right' };
-      leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+      leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
+      leaveCell.font = { bold: true, size: 11, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
     }
 
     for (let col = 1; col <= totalColumns; col++) {
@@ -1457,7 +1521,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
       if (col === 1 || col > lastDateColumn) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#FFFFFF') } };
       }
     }
 
@@ -1467,7 +1531,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     header.height = 30;
 
     header.eachCell((cell, colNumber) => {
-      cell.font = { bold: true, size: 10 };
+      cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       cell.border = {
         top: { style: 'thin' }, left: { style: 'thin' },
@@ -1476,11 +1540,23 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
         const d = daysInMonth[colNumber - 2];
-        if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCACA' } };
-        else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
-        else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayHeadBg, '#FFCACA') } };
+        else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendHeadBg, '#DCFCE7') } };
+        else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekdayHeadBg, '#F1F5F9') } };
       } else {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        if (colNumber === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
+        } else if (colNumber === 2) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.nameBg, '#FFFFFF') } };
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.nameFont, '#1E293B') } };
+        } else {
+          const statIndex = colNumber - (daysInMonth.length + 2);
+          const statKey = statHeaders[statIndex];
+          const statBg = statKey === '上班' ? exportTheme.statWorkBg : statKey === '假日休' ? exportTheme.statHolidayBg : statKey === '總休' ? exportTheme.statTotalBg : exportTheme.pageBg;
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(statBg, '#F8FAFC') } };
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+        }
       }
     });
 
@@ -1499,6 +1575,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       row.eachCell((cell, colNumber) => {
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        cell.font = { color: { argb: hexToExcelArgb(colNumber === 1 ? exportTheme.nameFont : exportTheme.tableFont, '#1F2937') } };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
@@ -1507,8 +1584,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
           cell.numFmt = '@';
           const d = daysInMonth[colNumber - 2];
-          if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E4' } };
-          else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+          if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayCellBg, '#FFE4E4') } };
+          else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendCellBg, '#F0FDF4') } };
         }
       });
     });
@@ -1518,7 +1595,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const rowData = [label, ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || ''), ...Array(statHeaders.length).fill('')];
       const row = worksheet.addRow(rowData);
       row.eachCell((cell) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        const summaryBg = rowKey === 'D' ? exportTheme.statWorkBg : rowKey === 'E' ? exportTheme.statHolidayBg : rowKey === 'N' ? exportTheme.statTotalBg : blendHexColors(exportTheme.pageBg, exportTheme.nameBg, 0.5);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(summaryBg, '#F1F5F9') } };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
@@ -1549,6 +1627,22 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const exportToWord = () => {
     const statHeaders = ['上班', '假日休', '總休'];
+    const exportTheme = {
+      pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
+      tableFont: uiSettings?.tableFontColor || '#1f2937',
+      shiftBg: uiSettings?.shiftColumnBgColor || '#ffffff',
+      shiftFont: uiSettings?.shiftColumnFontColor || '#1e293b',
+      nameBg: uiSettings?.nameDateColumnBgColor || '#ffffff',
+      nameFont: uiSettings?.nameDateColumnFontColor || '#1e293b',
+      weekdayHeadBg: blendHexColors(uiSettings?.nameDateColumnBgColor || '#ffffff', '#f1f5f9', 0.7),
+      weekendHeadBg: colors.weekend || '#dcfce7',
+      holidayHeadBg: colors.holiday || '#fca5a5',
+      weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
+      holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
+      statWorkBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#93c5fd', 0.45),
+      statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
+      statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
+    };
     const titleColSpan = daysInMonth.length;
     const leaveColSpan = statHeaders.length;
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
@@ -1587,6 +1681,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-family: "Microsoft JhengHei", Arial, sans-serif;
             margin: 0;
             padding: 0;
+            color: ${exportTheme.tableFont};
+            background: ${exportTheme.pageBg};
           }
           table {
             border-collapse: collapse;
@@ -1605,7 +1701,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .month-row td {
             height: 24pt;
             font-weight: 700;
-            background: #ffffff;
+            background: ${exportTheme.pageBg};
           }
           .month-title-cell {
             height: 24pt;
@@ -1645,24 +1741,24 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-weight: 700;
             line-height: 1.1;
           }
-          .weekday-head { background-color: #f1f5f9; }
-          .holiday-head { background-color: ${colors.holiday}; }
-          .weekend-head { background-color: ${colors.weekend}; }
-          .holiday-cell { background-color: #ffe4e4; }
-          .weekend-cell { background-color: #f0fdf4; }
-          .stat-work-head { background-color: #dbeafe; color: #1d4ed8; }
-          .stat-holiday-head { background-color: #dcfce7; color: #15803d; }
-          .stat-total-head { background-color: #fee2e2; color: #b91c1c; }
-          .stat-work-cell { background-color: #eff6ff; }
-          .stat-holiday-cell { background-color: #f0fdf4; }
-          .stat-total-cell { background-color: #fef2f2; }
+          .weekday-head { background-color: ${exportTheme.weekdayHeadBg}; }
+          .holiday-head { background-color: ${exportTheme.holidayHeadBg}; }
+          .weekend-head { background-color: ${exportTheme.weekendHeadBg}; }
+          .holiday-cell { background-color: ${exportTheme.holidayCellBg}; }
+          .weekend-cell { background-color: ${exportTheme.weekendCellBg}; }
+          .stat-work-head { background-color: ${exportTheme.statWorkBg}; color: ${exportTheme.tableFont}; }
+          .stat-holiday-head { background-color: ${exportTheme.statHolidayBg}; color: ${exportTheme.tableFont}; }
+          .stat-total-head { background-color: ${exportTheme.statTotalBg}; color: ${exportTheme.tableFont}; }
+          .stat-work-cell { background-color: ${exportTheme.statWorkBg}; }
+          .stat-holiday-cell { background-color: ${exportTheme.statHolidayBg}; }
+          .stat-total-cell { background-color: ${exportTheme.statTotalBg}; }
           .rules-row td {
             padding: 8pt 10pt;
             text-align: left;
             vertical-align: top;
             line-height: 1.7;
             font-size: 10pt;
-            background: #ffffff;
+            background: ${exportTheme.pageBg};
           }
         </style>
       </head>
@@ -1678,10 +1774,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 <td class="leave-title-cell" colspan="${leaveColSpan}">應休${requiredLeaves}天</td>
               </tr>
               <tr>
-                <th class="name-col header-cell">姓名</th>
+                <th class="name-col header-cell" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">姓名</th>
                 ${daysInMonth.map(d => {
                   const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
-                  const headBg = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9');
+                  const headBg = d.isHoliday ? exportTheme.holidayHeadBg : (d.isWeekend ? exportTheme.weekendHeadBg : exportTheme.weekdayHeadBg);
                   return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;">${d.day}<br/>(${d.weekStr})</th>`;
                 }).join('')}
                 <th class="stat-col header-cell stat-work-head">上班</th>
@@ -1694,17 +1790,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 const stats = getStaffStats(staff.id);
                 return `
                 <tr>
-                  <td class="name-col">${staff.name}</td>
+                  <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
                   ${daysInMonth.map(d => {
                     const cellData = schedule[staff.id]?.[d.date];
                     const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
-                    const cellBg = d.isHoliday ? '#ffe4e4' : (d.isWeekend ? '#f0fdf4' : '#ffffff');
+                    const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
                     return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;">${value}</td>`;
                   }).join('')}
-                  <td class="stat-col stat-work-cell" style="background:#eff6ff; mso-pattern:auto none;">${stats.work || ''}</td>
-                  <td class="stat-col stat-holiday-cell" style="background:#f0fdf4; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
-                  <td class="stat-col stat-total-cell" style="background:#fef2f2; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
+                  <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
+                  <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
+                  <td class="stat-col stat-total-cell" style="background:${exportTheme.statTotalBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -2394,6 +2490,18 @@ const openSelectedCellFillModal = () => {
     resetKeyInputBuffer();
   };
 
+  const commitEditingStaffName = (staffId, nextName) => {
+    const trimmedName = String(nextName ?? '').trim();
+    setStaffs(prev => {
+      const next = [...prev];
+      const currentIndex = next.findIndex(s => s.id === staffId);
+      if (currentIndex !== -1) next[currentIndex].name = trimmedName || '新成員';
+      return next;
+    });
+    setEditingStaffId(null);
+    setEditingNameDraft('');
+  };
+
   const groupedStaffs = useMemo(() => {
     return SHIFT_GROUPS.map(group => ({
       group,
@@ -2406,11 +2514,13 @@ const openSelectedCellFillModal = () => {
     setRangeSelection(null);
     setSelectionAnchor(null);
     setIsRangeDragging(false);
+    setEditingStaffId(null);
+    setEditingNameDraft('');
     resetKeyInputBuffer();
   }, [staffs.length]);
 
   return (
-    <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
+    <div className="min-h-screen text-slate-900 p-3 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
         @keyframes pulse-once { 0% { transform: translateY(-10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
         @keyframes fade-in-down { 0% { opacity: 0; transform: translateY(-5px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -2419,7 +2529,7 @@ const openSelectedCellFillModal = () => {
       `}</style>
 
       {showDraftPrompt && (
-        <div className="max-w-[95vw] mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
+        <div className="max-w-[98vw] mx-auto mb-3 bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
           <div className="flex items-center gap-1.5">
             <Clock size={18} className="text-amber-600" />
             <span className="text-sm font-bold">偵測到先前暫存紀錄。</span>
@@ -2431,26 +2541,39 @@ const openSelectedCellFillModal = () => {
         </div>
       )}
 
-      <div className="max-w-[95vw] mx-auto mb-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="max-w-[98vw] mx-auto mb-4">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+            <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
               智慧補班系統｜開發版
-              <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
+              <span className="text-blue-500 text-xs font-normal px-2 py-0.5 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
             </h1>
             <p className="text-slate-500 text-xs mt-1 italic">開發測試使用</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+            <input
+              ref={draftImportInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={onImportDraftFileChange}
+            />
+            <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Save size={16} /> 暫存
             </button>
-            <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+            <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Clock size={16} /> 歷史
+            </button>
+            <button onClick={onDownloadDraftFile} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+              <Download size={16} /> 下載工作檔
+            </button>
+            <button onClick={onImportDraftFileClick} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+              <Database size={16} /> 開啟工作檔
             </button>
 
             <div className="relative">
-              <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-2 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm">
+              <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-1.5 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm">
                 <Download size={16} /> 匯出
               </button>
               {showExportMenu && (
@@ -2468,17 +2591,17 @@ const openSelectedCellFillModal = () => {
             <div className="w-px h-8 bg-slate-200 mx-2 hidden sm:block"></div>
 
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
-              <button onClick={() => handleRuleBasedAutoSchedule(false)} disabled={isRuleFillLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
+              <button onClick={() => handleRuleBasedAutoSchedule(false)} disabled={isRuleFillLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
                 {isRuleFillLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 規則全月補空
               </button>
-              <button onClick={() => setShowRuleFillControl(!showRuleFillControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showRuleFillControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
+              <button onClick={() => setShowRuleFillControl(!showRuleFillControl)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${showRuleFillControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
                 <Calendar size={14} /> 規則指定補空
               </button>
               <button
                 type="button"
                 onClick={openSelectedCellFillModal}
                 disabled={!selectedGridCell}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
               >
                 <Check size={14} /> 補此格
               </button>
@@ -2486,7 +2609,7 @@ const openSelectedCellFillModal = () => {
                 type="button"
                 onClick={clearSelectedCell}
                 disabled={!selectedGridCell}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
               >
                 <Trash2 size={14} /> 清除此格
               </button>
@@ -2496,8 +2619,8 @@ const openSelectedCellFillModal = () => {
       </div>
 
       {showRuleFillControl && (
-        <div className="max-w-[95vw] mx-auto mb-6 rounded-3xl border border-slate-200 bg-slate-100/90 px-5 py-5 shadow-sm animate-fade-in-down lg:px-6">
-          <div className="mb-4 flex items-center gap-2 text-slate-800">
+        <div className="max-w-[98vw] mx-auto mb-4 rounded-3xl border border-slate-200 bg-slate-100/90 px-4 py-4 shadow-sm animate-fade-in-down lg:px-5">
+          <div className="mb-3 flex items-center gap-2 text-slate-800">
             <Sparkles size={18} className="text-blue-600" />
             <h3 className="font-black">規則指定補空設定</h3>
           </div>
@@ -2560,7 +2683,7 @@ const openSelectedCellFillModal = () => {
                   max="31"
                   value={ruleFillConfig.dateRange.start}
                   onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, dateRange: { ...ruleFillConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-center text-sm font-bold text-slate-800"
                 />
                 <span className="shrink-0 text-sm font-bold text-slate-500">至</span>
                 <input
@@ -2569,7 +2692,7 @@ const openSelectedCellFillModal = () => {
                   max="31"
                   value={ruleFillConfig.dateRange.end}
                   onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, dateRange: { ...ruleFillConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-center text-sm font-bold text-slate-800"
                 />
               </div>
             </div>
@@ -2579,7 +2702,7 @@ const openSelectedCellFillModal = () => {
               <select
                 value={ruleFillConfig.targetShift}
                 onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, targetShift: e.target.value })}
-                className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
+                className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-sm font-bold text-slate-800"
               >
                 <option value="">依群組需求自動補空</option>
                 {RULE_FILL_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
@@ -2592,7 +2715,7 @@ const openSelectedCellFillModal = () => {
                 <select
                   value={rangeClearMode}
                   onChange={(e) => setRangeClearMode(e.target.value)}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-sm font-bold text-slate-800"
                 >
                   <option value="autoOnly">只清除自動補入內容</option>
                   <option value="all">清除範圍內全部內容</option>
@@ -2621,15 +2744,15 @@ const openSelectedCellFillModal = () => {
         </div>
       )}
 
-      <div className="max-w-[95vw] mx-auto mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-7 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <div className="max-w-[98vw] mx-auto mb-4 grid grid-cols-1 lg:grid-cols-12 gap-3">
+        <div className="lg:col-span-7 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-5">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-3 text-sm font-bold text-slate-700">
               <input
                 type="number"
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())}
-                className="w-24 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
+                className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-center font-bold bg-white text-slate-800"
               />
               <span className="shrink-0">年</span>
 
@@ -2644,7 +2767,7 @@ const openSelectedCellFillModal = () => {
                   if (!Number.isFinite(nextMonth)) return;
                   setMonth(Math.min(12, Math.max(1, nextMonth)));
                 }}
-                className="w-20 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
+                className="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-center font-bold bg-white text-slate-800"
               />
               <span className="shrink-0">月</span>
 
@@ -2658,27 +2781,27 @@ const openSelectedCellFillModal = () => {
         </div>
 
         <div className="lg:col-span-5 flex items-center justify-end gap-2">
-          <button onClick={() => changeScreen('entry')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+          <button onClick={() => changeScreen('entry')} className="bg-white border px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <ArrowLeft size={18} className="text-slate-600" /> 回入口頁
           </button>
-          <button onClick={() => changeScreen('settings')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+          <button onClick={() => changeScreen('settings')} className="bg-white border px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <Settings size={18} className="text-slate-600" /> 系統設定
           </button>
         </div>
       </div>
 
-      <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
-        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
+      <div className="max-w-[98vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
+        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-150px)]">
           <table className="w-max min-w-full border-collapse select-none">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
                 <th className={`sticky left-0 top-0 z-50 border-r font-black shadow-sm ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
-                <th className={`sticky top-0 z-50 border-r font-black shadow-sm ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
+                <th className={`sticky top-0 z-50 border-r font-black shadow-sm ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
                     className={`sticky top-0 z-40 ${densityConfig.dayHeaderClass} border-r text-center shadow-sm`}
-                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9'), ...getCycleDividerStyle(d.date) }}
+                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9') }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
@@ -2686,16 +2809,16 @@ const openSelectedCellFillModal = () => {
                 ))}
                 {showRightStats && (
                 <>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold shadow-sm`}>上班</th>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-green-50 text-green-700 font-bold shadow-sm`}>假日休</th>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold shadow-sm`}>總休</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-blue-50 text-blue-700 font-bold shadow-sm`}>上班</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-green-50 text-green-700 font-bold shadow-sm`}>假日休</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-red-50 text-red-700 font-bold shadow-sm`}>總休</th>
                 </>
                 )}
                 {showLeaveStats && mergedLeaveCodes.map(l => (
-                  <th key={l} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold shadow-sm`}>{l}</th>
+                  <th key={l} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[34px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold shadow-sm`}>{l}</th>
                 ))}
                 {(customColumns || []).map(col => (
-                  <th key={col} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[70px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold shadow-sm`}>{col}</th>
+                  <th key={col} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[60px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold shadow-sm`}>{col}</th>
                 ))}
               </tr>
             </thead>
@@ -2725,9 +2848,9 @@ const openSelectedCellFillModal = () => {
                           </td>
                         )}
 
-                        <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
-                          <div className="flex items-center gap-2">
-                            <div className="flex flex-col items-center justify-center shrink-0 w-5">
+                        <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                          <div className="flex items-center gap-0.5">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-3">
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'up')}
                                 disabled={groupIndex === 0}
@@ -2744,21 +2867,60 @@ const openSelectedCellFillModal = () => {
                               </button>
                             </div>
 
-                            <input
-                              type="text"
-                              value={staff.name}
-                              onChange={(e) => {
-                                const next = [...staffs];
-                                const currentIndex = next.findIndex(s => s.id === staff.id);
-                                if (currentIndex !== -1) next[currentIndex].name = e.target.value;
-                                setStaffs(next);
+                            {editingStaffId === staff.id ? (
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              ref={(node) => {
+                                if (node && editingStaffId === staff.id) {
+                                  requestAnimationFrame(() => {
+                                    node.focus();
+                                    const selection = window.getSelection();
+                                    const range = document.createRange();
+                                    range.selectNodeContents(node);
+                                    range.collapse(false);
+                                    selection.removeAllRanges();
+                                    selection.addRange(range);
+                                  });
+                                }
                               }}
-                              className={`flex-1 min-w-0 text-center py-1.5 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
-                            />
+                              onInput={(e) => setEditingNameDraft(e.currentTarget.textContent || '')}
+                              onBlur={(e) => commitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft)}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  commitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft);
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setEditingStaffId(null);
+                                  setEditingNameDraft('');
+                                }
+                              }}
+                              className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold bg-transparent whitespace-nowrap outline-none ${nameDateColumnFontSizeClass}`}
+                              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", maxWidth: '100%' }}
+                            >
+                              {editingNameDraft}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingStaffId(staff.id);
+                                setEditingNameDraft(staff.name || '');
+                              }}
+                              className={`flex-1 min-w-0 bg-transparent border-none text-center font-bold whitespace-nowrap px-0.5 py-0 ${nameDateColumnFontSizeClass}`}
+                              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em" }}
+                              title="點擊編輯姓名"
+                            >
+                              <span className="block truncate">{staff.name}</span>
+                            </button>
+                          )}
 
                             <button
                               onClick={() => removeStaff(staff.id)}
-                              className="text-slate-400 hover:text-red-500 shrink-0 w-6 flex items-center justify-center"
+                              className="text-slate-400 hover:text-red-500 shrink-0 w-3 flex items-center justify-center"
                             >
                               <Minus size={14} />
                             </button>
@@ -2783,8 +2945,9 @@ const openSelectedCellFillModal = () => {
                             <td
                               key={d.date}
                               className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
-                              style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1, ...getCycleDividerStyle(d.date) }}
+                              style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                               onMouseDown={(e) => {
+                                if (e.button !== 0) return;
                                 e.preventDefault();
                                 setIsRangeDragging(true);
                                 startRangeSelection(staff, d.date, e);
@@ -2817,6 +2980,7 @@ const openSelectedCellFillModal = () => {
                                       startRangeSelection(staff, d.date);
                                     }}
                                     onMouseDown={(e) => {
+                                      if (e.button !== 0) return;
                                       e.stopPropagation();
                                       startRangeSelection(staff, d.date, e);
                                     }}
@@ -2872,13 +3036,13 @@ const openSelectedCellFillModal = () => {
                   })}
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
-                    <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                    <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
                           className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 font-bold text-sm"
                         >
-                          <Plus size={16} /> 新增人員
+                          <Plus size={16} /> 新增
                         </button>
                       </div>
                     </td>
@@ -2902,7 +3066,7 @@ const openSelectedCellFillModal = () => {
               {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
                   <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
-                  <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                  <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
                     {rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`}
                   </td>
                   {daysInMonth.map(d => {
@@ -3010,7 +3174,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
         <div className="px-6 py-6 bg-gray-50/80 border-b lg:border-b-0 lg:border-r border-gray-200">
           <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-xl ${iconBg}`}><Icon className={`w-5 h-5 ${iconColor}`} /></div>
+            <div className={`p-2 rounded-xl ${iconBg}`}><Icon className={`w-4 h-5 ${iconColor}`} /></div>
             <div><h3 className="font-bold text-gray-800">{title}</h3><p className="text-sm text-gray-500 mt-1 leading-relaxed">{desc}</p></div>
           </div>
         </div>
@@ -3128,7 +3292,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                             nameDateColumnFontColor: preset.nameDateColumnFontColor
                           }));
                         }}
-                        className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
+                        className={`px-3 py-1.5 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
                       >
                         {label}
                       </button>
@@ -3228,19 +3392,19 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                         <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.white}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.evening}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.night}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                     </div>
                   </div>
@@ -3252,19 +3416,19 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                         <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.white}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.evening}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.night}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                     </div>
                   </div>
@@ -3278,7 +3442,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
               </div>
             </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
-              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
+              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
             </SettingRow>
           </div>
         </section>
@@ -3331,24 +3495,37 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
       dataSheet.addRow([`${templateMonth}月班表匯入範本`]);
       dataSheet.mergeCells(1, 1, 1, headers.length);
       const titleCell = dataSheet.getCell(1, 1);
-      titleCell.font = { bold: true, size: 14 };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
+      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
       dataSheet.getRow(1).height = 24;
 
       const headerRow = dataSheet.addRow(headers);
       headerRow.height = 24;
       headerRow.eachCell((cell, colNumber) => {
-        cell.font = { bold: true, size: 10 };
+        cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
         if (colNumber === 1 || colNumber === 2) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+          if (colNumber === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
+        } else if (colNumber === 2) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.nameBg, '#FFFFFF') } };
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.nameFont, '#1E293B') } };
         } else {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+          const statIndex = colNumber - (daysInMonth.length + 2);
+          const statKey = statHeaders[statIndex];
+          const statBg = statKey === '上班' ? exportTheme.statWorkBg : statKey === '假日休' ? exportTheme.statHolidayBg : statKey === '總休' ? exportTheme.statTotalBg : exportTheme.pageBg;
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(statBg, '#F8FAFC') } };
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+        }
+        } else {
+          const summaryBg = rowKey === 'D' ? exportTheme.statWorkBg : rowKey === 'E' ? exportTheme.statHolidayBg : rowKey === 'N' ? exportTheme.statTotalBg : blendHexColors(exportTheme.pageBg, exportTheme.nameBg, 0.5);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(summaryBg, '#F1F5F9') } };
         }
       });
 
@@ -3576,6 +3753,7 @@ export default function App() {
   const [activeDraftMeta, setActiveDraftMeta] = useState(null);
   const activeDraftHydratedRef = useRef(false);
   const activeDraftSaveReadyRef = useRef(false);
+  const draftImportInputRef = useRef(null);
 
   const formatDraftSavedAt = (isoString) => {
     if (!isoString) return '';
@@ -3583,6 +3761,24 @@ export default function App() {
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleString();
   };
+
+  const buildWorkspaceState = () => ({
+    colors,
+    customHolidays,
+    specialWorkdays,
+    medicalCalendarAdjustments,
+    uiSettings,
+    staffingConfig,
+    customLeaveCodes,
+    customColumns,
+    customColumnValues,
+    schedulingRulesText,
+    monthlySchedules,
+    year,
+    month,
+    staffs,
+    schedule
+  });
 
   const applyWorkspaceState = (state = {}) => {
     setColors(state.colors || { weekend: '#dcfce7', holiday: '#fca5a5' });
@@ -3728,6 +3924,65 @@ export default function App() {
     setActiveDraftMeta(null);
   };
 
+  const handleDownloadDraftFile = () => {
+    try {
+      const exportedAt = new Date().toISOString();
+      const payload = {
+        type: 'schedule-draft',
+        version: '1.6.0',
+        exportedAt,
+        state: buildWorkspaceState()
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `排班工作檔_${year}年${String(month).padStart(2, '0')}月.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('下載工作檔失敗', error);
+      window.alert('下載工作檔失敗，請稍後再試。');
+    }
+  };
+
+  const handleImportDraftFileClick = () => {
+    if (draftImportInputRef.current) draftImportInputRef.current.click();
+  };
+
+  const handleImportDraftFileChange = async (event) => {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+
+    try {
+      const rawText = await file.text();
+      const parsed = JSON.parse(rawText);
+      const importedState = parsed?.state || parsed;
+      if (!importedState || typeof importedState !== 'object') {
+        throw new Error('暫存檔格式不正確');
+      }
+
+      applyWorkspaceState(importedState);
+      const savedAt = new Date().toISOString();
+      const payload = { savedAt, state: importedState };
+      localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
+      setHasActiveDraft(true);
+      setActiveDraftMeta({
+        savedAt,
+        savedAtText: formatDraftSavedAt(savedAt),
+        year: importedState.year,
+        month: importedState.month
+      });
+      setScreen('schedule');
+      window.alert('開啟工作檔成功，已載入目前工作內容。');
+    } catch (error) {
+      console.error('開啟工作檔失敗', error);
+      window.alert('開啟工作檔失敗，請確認檔案格式是否正確。');
+    } finally {
+      if (event.target) event.target.value = '';
+    }
+  };
+
   const handleImportFiles = async (files) => {
     const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
     setImportedSchedulePayload(imported);
@@ -3788,6 +4043,10 @@ export default function App() {
         setStaffs={setStaffs}
         schedule={schedule}
         setSchedule={setSchedule}
+        onDownloadDraftFile={handleDownloadDraftFile}
+        onImportDraftFileClick={handleImportDraftFileClick}
+        draftImportInputRef={draftImportInputRef}
+        onImportDraftFileChange={handleImportDraftFileChange}
       />
     );
   }
