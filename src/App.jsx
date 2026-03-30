@@ -929,9 +929,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       0
     );
     const safeLength = Math.max(1, longestNameLength);
-    const compactControlSpace = 24;
-    const estimatedNameWidth = compactControlSpace + (safeLength * 16);
-    return Math.max(46, Math.min(220, estimatedNameWidth));
+    const compactControlSpace = 8;
+    const estimatedNameWidth = compactControlSpace + (safeLength * 12);
+    return Math.max(38, Math.min(180, estimatedNameWidth));
   }, [staffs]);
   const effectiveDensityConfig = useMemo(() => ({
     ...densityConfig,
@@ -2830,9 +2830,9 @@ const openSelectedCellFillModal = () => {
                           </td>
                         )}
 
-                        <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                        <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                           <div className="flex items-center gap-0.5">
-                            <div className="flex flex-col items-center justify-center shrink-0 w-4">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-3">
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'up')}
                                 disabled={groupIndex === 0}
@@ -2858,12 +2858,12 @@ const openSelectedCellFillModal = () => {
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className={`flex-1 min-w-0 text-center py-0.5 px-0 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
+                              className={`flex-1 min-w-0 text-center py-0 px-0 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em" }}
                             />
 
                             <button
                               onClick={() => removeStaff(staff.id)}
-                              className="text-slate-400 hover:text-red-500 shrink-0 w-4 flex items-center justify-center"
+                              className="text-slate-400 hover:text-red-500 shrink-0 w-3 flex items-center justify-center"
                             >
                               <Minus size={14} />
                             </button>
@@ -2979,7 +2979,7 @@ const openSelectedCellFillModal = () => {
                   })}
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
-                    <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                    <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
