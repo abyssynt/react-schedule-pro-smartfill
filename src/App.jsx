@@ -2868,25 +2868,41 @@ const openSelectedCellFillModal = () => {
                             </div>
 
                             {editingStaffId === staff.id ? (
-                            <input
-                              type="text"
-                              value={editingNameDraft}
-                              autoFocus
-                              onChange={(e) => setEditingNameDraft(e.target.value)}
-                              onBlur={() => commitEditingStaffName(staff.id, editingNameDraft)}
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              ref={(node) => {
+                                if (node && editingStaffId === staff.id) {
+                                  requestAnimationFrame(() => {
+                                    node.focus();
+                                    const selection = window.getSelection();
+                                    const range = document.createRange();
+                                    range.selectNodeContents(node);
+                                    range.collapse(false);
+                                    selection.removeAllRanges();
+                                    selection.addRange(range);
+                                  });
+                                }
+                              }}
+                              onInput={(e) => setEditingNameDraft(e.currentTarget.textContent || '')}
+                              onBlur={(e) => commitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft)}
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                  commitEditingStaffName(staff.id, editingNameDraft);
+                                  e.preventDefault();
+                                  commitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft);
                                 } else if (e.key === 'Escape') {
+                                  e.preventDefault();
                                   setEditingStaffId(null);
                                   setEditingNameDraft('');
                                 }
                               }}
-                              className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent whitespace-nowrap ${nameDateColumnFontSizeClass}`}
+                              className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold bg-transparent whitespace-nowrap outline-none ${nameDateColumnFontSizeClass}`}
                               style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", maxWidth: '100%' }}
-                            />
+                            >
+                              {editingNameDraft}
+                            </div>
                           ) : (
                             <button
                               type="button"
