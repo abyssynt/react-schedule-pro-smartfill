@@ -890,8 +890,8 @@ const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => 
   target.setHours(0, 0, 0, 0);
   start.setHours(0, 0, 0, 0);
   const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
-  if (diffDays < 0) return false;
-  return (diffDays + 1) % FOUR_WEEK_CYCLE_DAYS === 0;
+  const cycleOffset = ((diffDays + 1) % FOUR_WEEK_CYCLE_DAYS + FOUR_WEEK_CYCLE_DAYS) % FOUR_WEEK_CYCLE_DAYS;
+  return cycleOffset === 0;
 };
 
 
@@ -968,7 +968,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const fourWeekDividerColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
 
   const getFourWeekDividerStyle = (dateStr) => isFourWeekCycleEndDate(dateStr)
-    ? { borderRight: `4px solid ${fourWeekDividerColor}` }
+    ? {
+        borderRightWidth: '4px',
+        borderRightStyle: 'solid',
+        borderRightColor: fourWeekDividerColor,
+        boxShadow: `inset -2px 0 0 ${fourWeekDividerColor}`
+      }
     : {};
   const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
   const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
