@@ -840,7 +840,7 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -2426,24 +2426,11 @@ const openSelectedCellFillModal = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={draftImportInputRef}
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={onImportDraftFileChange}
-            />
             <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Save size={16} /> 暫存
             </button>
             <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Clock size={16} /> 歷史
-            </button>
-            <button onClick={onDownloadDraftFile} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Download size={16} /> 下載暫存檔
-            </button>
-            <button onClick={onImportDraftFileClick} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Database size={16} /> 匯入暫存檔
             </button>
 
             <div className="relative">
@@ -3573,7 +3560,6 @@ export default function App() {
   const [activeDraftMeta, setActiveDraftMeta] = useState(null);
   const activeDraftHydratedRef = useRef(false);
   const activeDraftSaveReadyRef = useRef(false);
-  const draftImportInputRef = useRef(null);
 
   const formatDraftSavedAt = (isoString) => {
     if (!isoString) return '';
@@ -3581,24 +3567,6 @@ export default function App() {
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleString();
   };
-
-  const buildWorkspaceState = () => ({
-    colors,
-    customHolidays,
-    specialWorkdays,
-    medicalCalendarAdjustments,
-    uiSettings,
-    staffingConfig,
-    customLeaveCodes,
-    customColumns,
-    customColumnValues,
-    schedulingRulesText,
-    monthlySchedules,
-    year,
-    month,
-    staffs,
-    schedule
-  });
 
   const applyWorkspaceState = (state = {}) => {
     setColors(state.colors || { weekend: '#dcfce7', holiday: '#fca5a5' });
@@ -3744,65 +3712,6 @@ export default function App() {
     setActiveDraftMeta(null);
   };
 
-  const handleDownloadDraftFile = () => {
-    try {
-      const exportedAt = new Date().toISOString();
-      const payload = {
-        type: 'schedule-draft',
-        version: '1.6.0',
-        exportedAt,
-        state: buildWorkspaceState()
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `排班暫存_${year}年${String(month).padStart(2, '0')}月.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('下載暫存檔失敗', error);
-      window.alert('下載暫存檔失敗，請稍後再試。');
-    }
-  };
-
-  const handleImportDraftFileClick = () => {
-    if (draftImportInputRef.current) draftImportInputRef.current.click();
-  };
-
-  const handleImportDraftFileChange = async (event) => {
-    const file = event.target?.files?.[0];
-    if (!file) return;
-
-    try {
-      const rawText = await file.text();
-      const parsed = JSON.parse(rawText);
-      const importedState = parsed?.state || parsed;
-      if (!importedState || typeof importedState !== 'object') {
-        throw new Error('暫存檔格式不正確');
-      }
-
-      applyWorkspaceState(importedState);
-      const savedAt = new Date().toISOString();
-      const payload = { savedAt, state: importedState };
-      localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
-      setHasActiveDraft(true);
-      setActiveDraftMeta({
-        savedAt,
-        savedAtText: formatDraftSavedAt(savedAt),
-        year: importedState.year,
-        month: importedState.month
-      });
-      setScreen('schedule');
-      window.alert('匯入暫存檔成功，已載入目前工作內容。');
-    } catch (error) {
-      console.error('匯入暫存檔失敗', error);
-      window.alert('匯入暫存檔失敗，請確認檔案格式是否正確。');
-    } finally {
-      if (event.target) event.target.value = '';
-    }
-  };
-
   const handleImportFiles = async (files) => {
     const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
     setImportedSchedulePayload(imported);
@@ -3863,10 +3772,6 @@ export default function App() {
         setStaffs={setStaffs}
         schedule={schedule}
         setSchedule={setSchedule}
-        onDownloadDraftFile={handleDownloadDraftFile}
-        onImportDraftFileClick={handleImportDraftFileClick}
-        draftImportInputRef={draftImportInputRef}
-        onImportDraftFileChange={handleImportDraftFileChange}
       />
     );
   }
