@@ -314,19 +314,92 @@ const normalizeImportedShiftCode = (rawValue = '') => {
 
 const buildMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 
-const FOUR_WEEK_CYCLE_START = '2026-04-13';
-const FOUR_WEEK_CYCLE_LENGTH = 28;
-const FOUR_WEEK_CYCLE_END_OFFSET = FOUR_WEEK_CYCLE_LENGTH - 1;
 
-const isFourWeekCycleEndDate = (dateKey, cycleStartKey = FOUR_WEEK_CYCLE_START) => {
-  if (!dateKey || !cycleStartKey) return false;
-  const baseDate = parseDateKey(cycleStartKey);
-  const targetDate = parseDateKey(dateKey);
-  baseDate.setHours(0, 0, 0, 0);
-  targetDate.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((targetDate.getTime() - baseDate.getTime()) / 86400000);
-  const normalized = ((diffDays % FOUR_WEEK_CYCLE_LENGTH) + FOUR_WEEK_CYCLE_LENGTH) % FOUR_WEEK_CYCLE_LENGTH;
-  return normalized === FOUR_WEEK_CYCLE_END_OFFSET;
+const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
+  const value = String(rawValue ?? '').trim();
+  if (!value) return { normalized: '', isValid: true };
+
+  const collapsed = value.replace(/\s+/g, '');
+  const lower = collapsed.toLowerCase();
+  const allowedCodes = Array.from(new Set([...(DICT.SHIFTS || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
+  const directMap = {
+    d: 'D',
+    e: 'E',
+    n: 'N',
+    off: 'off',
+    of: 'off',
+    am: 'AM',
+    pm: 'PM',
+    '8-12': '8-12',
+    '12-16': '12-16',
+    '白8-8': '白8-8',
+    '夜8-8': '夜8-8'
+  };
+
+  if (directMap[lower]) return { normalized: directMap[lower], isValid: allowedCodes.includes(directMap[lower]) };
+  const directAllowed = allowedCodes.find(code => String(code).toLowerCase() === lower);
+  if (directAllowed) return { normalized: directAllowed, isValid: true };
+
+  return { normalized: value, isValid: false };
+};
+
+const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
+
+const parseClipboardGrid = (text = '') => {
+  const raw = String(text || '').replace(/\r/g, '');
+  if (!raw.trim()) return [];
+  return raw.split('\n').map(row => row.split('\t'));
+};
+
+const getSelectionGroupStaffs = (selection, staffs = []) => {
+  const selectionGroup = selection?.start?.group || selection?.end?.group || '';
+  if (!selectionGroup) return staffs;
+  return staffs.filter((staff) => (staff.group || '白班') === selectionGroup);
+};
+
+const getRectFromSelection = (selection, staffs = [], daysInMonth = []) => {
+  if (!selection?.start || !selection?.end) return null;
+  const scopedStaffs = getSelectionGroupStaffs(selection, staffs);
+  const staffIndexMap = new Map(scopedStaffs.map((staff, index) => [staff.id, index]));
+  const dayIndexMap = new Map(daysInMonth.map((day, index) => [day.date, index]));
+
+  const startRow = staffIndexMap.get(selection.start.staffId);
+  const endRow = staffIndexMap.get(selection.end.staffId);
+  const startCol = dayIndexMap.get(selection.start.dateStr);
+  const endCol = dayIndexMap.get(selection.end.dateStr);
+
+  if ([startRow, endRow, startCol, endCol].some(v => v === undefined)) return null;
+
+  return {
+    rowStart: Math.min(startRow, endRow),
+    rowEnd: Math.max(startRow, endRow),
+    colStart: Math.min(startCol, endCol),
+    colEnd: Math.max(startCol, endCol),
+    scopedStaffs
+  };
+};
+
+const expandSelectionCells = (selection, staffs = [], daysInMonth = []) => {
+  const rect = getRectFromSelection(selection, staffs, daysInMonth);
+  if (!rect) return [];
+  const cells = [];
+  for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
+    for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
+      const staff = rect.scopedStaffs[rowIndex];
+      const day = daysInMonth[colIndex];
+      if (staff && day) cells.push({ staffId: staff.id, dateStr: day.date, rowIndex, colIndex });
+    }
+  }
+  return cells;
+};
+
+const isCellInSelectionRect = (selection, staffs = [], daysInMonth = [], staffId, dateStr) => {
+  const rect = getRectFromSelection(selection, staffs, daysInMonth);
+  if (!rect) return false;
+  const rowIndex = rect.scopedStaffs.findIndex(staff => staff.id === staffId);
+  const colIndex = daysInMonth.findIndex(day => day.date === dateStr);
+  if (rowIndex === -1 || colIndex === -1) return false;
+  return rowIndex >= rect.rowStart && rowIndex <= rect.rowEnd && colIndex >= rect.colStart && colIndex <= rect.colEnd;
 };
 
 const extractYearMonthCandidates = (...sources) => {
@@ -672,7 +745,7 @@ const UI_DENSITY_OPTIONS = {
   standard: {
     shiftWidth: 76,
     nameWidth: 122,
-    dayMinWidth: 42,
+    dayMinWidth: 64,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
     statHeaderClass: 'p-3',
     leaveHeaderClass: 'p-1.5',
@@ -686,7 +759,7 @@ const UI_DENSITY_OPTIONS = {
   relaxed: {
     shiftWidth: 100,
     nameWidth: 156,
-    dayMinWidth: 56,
+    dayMinWidth: 68,
     dayHeaderClass: 'px-2 py-2.5 text-sm',
     statHeaderClass: 'p-4',
     leaveHeaderClass: 'p-2',
@@ -788,6 +861,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [showFillModal, setShowFillModal] = useState(false);
   const [selectedGridCell, setSelectedGridCell] = useState(null);
   const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
+  const [cellDrafts, setCellDrafts] = useState({});
+  const [invalidCellKeys, setInvalidCellKeys] = useState({});
+  const [rangeSelection, setRangeSelection] = useState(null);
+  const [selectionAnchor, setSelectionAnchor] = useState(null);
+  const [isRangeDragging, setIsRangeDragging] = useState(false);
+  const [clipboardGrid, setClipboardGrid] = useState([]);
+  const [keyInputBuffer, setKeyInputBuffer] = useState('');
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -805,6 +885,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const monthLoadSkipRef = useRef(false);
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
+  const keyInputTimerRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -979,8 +1060,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         weekStr: weekNames[weekNum],
         isWeekend: rawWeekend && !isAdjustedWorkday,
         isHoliday: holidaySet.has(dateStr),
-        isAdjustedWorkday,
-        isCycleEnd: isFourWeekCycleEndDate(dateStr)
+        isAdjustedWorkday
       });
     }
     return days;
@@ -991,8 +1071,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     [daysInMonth]
   );
 
-  const cycleDividerColor = '#0f172a';
-  const getCycleDividerStyle = (day) => day?.isCycleEnd ? { borderRightWidth: '3px', borderRightColor: cycleDividerColor } : {};
+  const FOUR_WEEK_CYCLE_START = '2026-04-13';
+  const cycleDividerColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#334155';
+
+  const isCycleEndDate = (dateStr) => {
+    const baseDate = parseDateKey(FOUR_WEEK_CYCLE_START);
+    const currentDate = parseDateKey(dateStr);
+    const diffDays = Math.round((currentDate - baseDate) / 86400000);
+    return diffDays >= 0 && (diffDays + 1) % 28 === 0;
+  };
+
+  const getCycleDividerStyle = (dateStr, width = 4) => ({
+    borderRight: isCycleEndDate(dateStr)
+      ? `${width}px solid ${cycleDividerColor}`
+      : undefined
+  });
 
   const createBlankScheduleForStaffs = (staffList = []) => {
     return staffList.reduce((acc, staff) => {
@@ -1034,10 +1127,289 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
 
     setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setCellDrafts({});
+    setInvalidCellKeys({});
+    setKeyInputBuffer('');
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
   };
+
+  const clearInvalidCellLater = (cellKey) => {
+    window.setTimeout(() => {
+      setInvalidCellKeys(prev => {
+        const next = { ...prev };
+        delete next[cellKey];
+        return next;
+      });
+    }, 1200);
+  };
+
+  const resetKeyInputBuffer = () => {
+    setKeyInputBuffer('');
+    if (keyInputTimerRef.current) {
+      window.clearTimeout(keyInputTimerRef.current);
+      keyInputTimerRef.current = null;
+    }
+  };
+
+  const keepKeyInputBufferAlive = () => {
+    if (keyInputTimerRef.current) window.clearTimeout(keyInputTimerRef.current);
+    keyInputTimerRef.current = window.setTimeout(() => {
+      setKeyInputBuffer('');
+      keyInputTimerRef.current = null;
+    }, 1500);
+  };
+
+  const getEffectiveSelection = () => {
+    if (rangeSelection?.start && rangeSelection?.end) return rangeSelection;
+    if (selectedGridCell?.staff?.id && selectedGridCell?.dateStr) {
+      return {
+        start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
+        end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
+      };
+    }
+    return null;
+  };
+
+  const selectedRangeCells = useMemo(
+    () => expandSelectionCells(getEffectiveSelection(), staffs, daysInMonth),
+    [rangeSelection, selectedGridCell, staffs, daysInMonth]
+  );
+
+  const clearSelectionContents = () => {
+    if (selectedRangeCells.length === 0) return false;
+    setSchedule(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      selectedRangeCells.forEach(({ staffId, dateStr }) => {
+        if (!next[staffId]) next[staffId] = {};
+        next[staffId][dateStr] = null;
+      });
+      return next;
+    });
+    resetKeyInputBuffer();
+    return true;
+  };
+
+  const applyValueToCells = (cells, normalized) => {
+    if (!cells || cells.length === 0) return false;
+    setSchedule(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      cells.forEach(({ staffId, dateStr }) => {
+        if (!next[staffId]) next[staffId] = {};
+        next[staffId][dateStr] = normalized ? { value: normalized, source: 'manual' } : null;
+      });
+      return next;
+    });
+    return true;
+  };
+
+  const tryApplyBufferedCode = (buffer) => {
+    if (!buffer || selectedRangeCells.length === 0) return false;
+    const { normalized, isValid } = normalizeManualShiftCode(buffer, mergedLeaveCodes);
+    if (!isValid) return false;
+    applyValueToCells(selectedRangeCells, normalized);
+    resetKeyInputBuffer();
+    return true;
+  };
+
+  const commitCellValue = (staffId, dateStr, rawValue) => {
+    const cellKey = makeCellKey(staffId, dateStr);
+    const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+
+    if (!isValid) {
+      setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
+      clearInvalidCellLater(cellKey);
+      setCellDrafts(prev => {
+        const next = { ...prev };
+        delete next[cellKey];
+        return next;
+      });
+      return false;
+    }
+
+    handleCellChange(staffId, dateStr, normalized);
+    setCellDrafts(prev => {
+      const next = { ...prev };
+      delete next[cellKey];
+      return next;
+    });
+    setInvalidCellKeys(prev => {
+      const next = { ...prev };
+      delete next[cellKey];
+      return next;
+    });
+    return true;
+  };
+
+  const startRangeSelection = (staff, dateStr, event = {}) => {
+    const point = { staffId: staff.id, dateStr, group: staff.group || '白班' };
+    if (event.shiftKey && selectionAnchor) {
+      setRangeSelection({ start: selectionAnchor, end: point });
+    } else {
+      setSelectionAnchor(point);
+      setRangeSelection({ start: point, end: point });
+    }
+    setSelectedGridCell({ staff, dateStr });
+    resetKeyInputBuffer();
+  };
+
+  const updateRangeSelection = (staff, dateStr) => {
+    if (!isRangeDragging || !selectionAnchor) return;
+    const anchorGroup = selectionAnchor.group || '白班';
+    const targetGroup = staff.group || '白班';
+    if (anchorGroup !== targetGroup) return;
+    setRangeSelection({ start: selectionAnchor, end: { staffId: staff.id, dateStr, group: targetGroup } });
+  };
+
+  const copySelectionToClipboard = async () => {
+    const selection = getEffectiveSelection();
+    const rect = getRectFromSelection(selection, staffs, daysInMonth);
+    if (!rect) return;
+
+    const grid = [];
+    for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
+      const row = [];
+      const staff = rect.scopedStaffs[rowIndex];
+      for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
+        const day = daysInMonth[colIndex];
+        row.push(getCellCode(staff?.id, day?.date) || '');
+      }
+      grid.push(row);
+    }
+
+    setClipboardGrid(grid);
+    const text = grid.map(row => row.join('\t')).join('\n');
+    try {
+      if (navigator?.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('寫入剪貼簿失敗', error);
+    }
+  };
+
+  const pasteGridToSelection = async () => {
+    const selection = getEffectiveSelection();
+    const rect = getRectFromSelection(selection, staffs, daysInMonth);
+    if (!rect) return;
+
+    let grid = clipboardGrid;
+    if (!grid || grid.length === 0) {
+      try {
+        if (navigator?.clipboard?.readText) {
+          const text = await navigator.clipboard.readText();
+          grid = parseClipboardGrid(text);
+        }
+      } catch (error) {
+        console.error('讀取剪貼簿失敗', error);
+      }
+    }
+    if (!grid || grid.length === 0) return;
+
+    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
+    const selectionColCount = rect.colEnd - rect.colStart + 1;
+    const sourceRowCount = grid.length;
+    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
+
+    let targetRowCount = sourceRowCount;
+    let targetColCount = sourceColCount;
+
+    if (selectionRowCount > 1 || selectionColCount > 1) {
+      if (sourceRowCount === 1 && sourceColCount === 1) {
+        targetRowCount = selectionRowCount;
+        targetColCount = selectionColCount;
+      } else {
+        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
+        targetColCount = Math.min(sourceColCount, selectionColCount);
+      }
+    }
+
+    const updates = [];
+    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
+        const sourceRow = sourceRowCount === 1 && sourceColCount === 1 ? 0 : rowOffset;
+        const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
+        const targetRow = rect.rowStart + rowOffset;
+        const targetCol = rect.colStart + colOffset;
+        const staff = rect.scopedStaffs[targetRow];
+        const day = daysInMonth[targetCol];
+        if (!staff || !day) continue;
+        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
+        const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+        if (!isValid) continue;
+        updates.push({ staffId: staff.id, dateStr: day.date, value: normalized });
+      }
+    }
+
+    if (updates.length === 0) return;
+
+    setSchedule(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      updates.forEach(({ staffId, dateStr, value }) => {
+        if (!next[staffId]) next[staffId] = {};
+        next[staffId][dateStr] = value ? { value, source: 'manual' } : null;
+      });
+      return next;
+    });
+    resetKeyInputBuffer();
+  };
+
+  useEffect(() => {
+    const stopDrag = () => setIsRangeDragging(false);
+    window.addEventListener('mouseup', stopDrag);
+    return () => window.removeEventListener('mouseup', stopDrag);
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (event) => {
+      const target = event.target;
+      const tagName = String(target?.tagName || '').toLowerCase();
+      const isTypingTarget = tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target?.isContentEditable;
+      const hasSelection = selectedRangeCells.length > 0;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && hasSelection) {
+        event.preventDefault();
+        copySelectionToClipboard();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && hasSelection) {
+        event.preventDefault();
+        pasteGridToSelection();
+        return;
+      }
+
+      if (!hasSelection) return;
+      if (isTypingTarget) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        resetKeyInputBuffer();
+        setRangeSelection(null);
+        setSelectionAnchor(null);
+        setSelectedGridCell(null);
+        return;
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        clearSelectionContents();
+        return;
+      }
+
+      if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        const nextBuffer = `${keyInputBuffer}${event.key}`;
+        setKeyInputBuffer(nextBuffer);
+        keepKeyInputBufferAlive();
+        tryApplyBufferedCode(nextBuffer);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedRangeCells, keyInputBuffer, clipboardGrid, rangeSelection, selectedGridCell, staffs, daysInMonth, mergedLeaveCodes]);
 
   // ==========================================
   // 4. Excel 匯出 (ExcelJS 實現)
@@ -1160,18 +1532,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     worksheet.getColumn(1).width = 15;
     for (let i = 2; i <= daysInMonth.length + 1; i++) worksheet.getColumn(i).width = 5;
     for (let i = daysInMonth.length + 2; i <= totalColumns; i++) worksheet.getColumn(i).width = 8;
-
-    daysInMonth.forEach((day, index) => {
-      if (!day?.isCycleEnd) return;
-      const colNumber = index + 2;
-      for (let rowNumber = 1; rowNumber <= worksheet.rowCount; rowNumber += 1) {
-        const cell = worksheet.getRow(rowNumber).getCell(colNumber);
-        cell.border = {
-          ...(cell.border || {}),
-          right: { style: 'medium', color: { argb: 'FF0F172A' } }
-        };
-      }
-    });
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
@@ -1322,7 +1682,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 ${daysInMonth.map(d => {
                   const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
                   const headBg = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9');
-                  return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;${d.isCycleEnd ? ' border-right:3px solid #0f172a;' : ''}">${d.day}<br/>(${d.weekStr})</th>`;
+                  return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;">${d.day}<br/>(${d.weekStr})</th>`;
                 }).join('')}
                 <th class="stat-col header-cell stat-work-head">上班</th>
                 <th class="stat-col header-cell stat-holiday-head">假日休</th>
@@ -1340,7 +1700,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                     const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
                     const cellBg = d.isHoliday ? '#ffe4e4' : (d.isWeekend ? '#f0fdf4' : '#ffffff');
-                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${d.isCycleEnd ? ' border-right:3px solid #0f172a;' : ''}">${value}</td>`;
+                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;">${value}</td>`;
                   }).join('')}
                   <td class="stat-col stat-work-cell" style="background:#eff6ff; mso-pattern:auto none;">${stats.work || ''}</td>
                   <td class="stat-col stat-holiday-cell" style="background:#f0fdf4; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
@@ -1987,6 +2347,11 @@ const openSelectedCellFillModal = () => {
     const newId = 's' + Date.now();
     setStaffs(prev => [...prev, { id: newId, name: '新成員', group }]);
     setSchedule(prev => ({ ...prev, [newId]: {} }));
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
   };
 
   const removeStaff = (staffId) => {
@@ -1997,6 +2362,11 @@ const openSelectedCellFillModal = () => {
       delete next[staffId];
       return next;
     });
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
   };
 
   const moveStaffInGroup = (staffId, direction) => {
@@ -2017,6 +2387,11 @@ const openSelectedCellFillModal = () => {
     const targetIndex = groupIndexes[targetGroupPos];
     [newStaffs[currentIndex], newStaffs[targetIndex]] = [newStaffs[targetIndex], newStaffs[currentIndex]];
     setStaffs(newStaffs);
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
   };
 
   const groupedStaffs = useMemo(() => {
@@ -2025,6 +2400,14 @@ const openSelectedCellFillModal = () => {
       staffs: staffs.filter(staff => (staff.group || '白班') === group)
     }));
   }, [staffs]);
+
+  useEffect(() => {
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
+  }, [staffs.length]);
 
   return (
     <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
@@ -2110,24 +2493,6 @@ const openSelectedCellFillModal = () => {
             </div>
           </div>
         </div>
-        {ruleFillFeedback && (
-          <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
-            <Check size={16} className="text-green-600" />
-            {ruleFillFeedback}
-          </div>
-        )}
-        {selectedGridCell && (
-          <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
-            <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
-            <button
-              type="button"
-              onClick={() => setSelectedGridCell(null)}
-              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
-            >
-              取消選取
-            </button>
-          </div>
-        )}
       </div>
 
       {showRuleFillControl && (
@@ -2304,7 +2669,7 @@ const openSelectedCellFillModal = () => {
 
       <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
         <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
-          <table className="w-max min-w-full border-collapse">
+          <table className="w-max min-w-full border-collapse select-none">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
                 <th className={`sticky left-0 top-0 z-50 border-r font-black shadow-sm ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
@@ -2313,7 +2678,7 @@ const openSelectedCellFillModal = () => {
                   <th
                     key={d.day}
                     className={`sticky top-0 z-40 ${densityConfig.dayHeaderClass} border-r text-center shadow-sm`}
-                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9'), ...getCycleDividerStyle(d) }}
+                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9'), ...getCycleDividerStyle(d.date) }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
@@ -2403,42 +2768,77 @@ const openSelectedCellFillModal = () => {
                         {daysInMonth.map(d => {
                           const cellData = schedule[staff.id]?.[d.date];
                           const val = typeof cellData === 'object' && cellData !== null ? (cellData?.value || '') : (cellData || '');
+                          const cellKey = makeCellKey(staff.id, d.date);
+                          const draftValue = cellDrafts[cellKey];
+                          const displayValue = draftValue !== undefined ? draftValue : val;
+                          const effectiveSelection = rangeSelection?.start && rangeSelection?.end ? rangeSelection : (selectedGridCell?.staff?.id && selectedGridCell?.dateStr ? {
+                            start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
+                            end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
+                          } : null);
+                          const inRangeSelection = isCellInSelectionRect(effectiveSelection, staffs, daysInMonth, staff.id, d.date);
+                          const isPrimarySelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date;
+                          const isInvalid = Boolean(invalidCellKeys[cellKey]);
+
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
-                              style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1, ...getCycleDividerStyle(d) }}
-                            onClick={() => { if (selectionMode === 'cell') setSelectedGridCell({ staff, dateStr: d.date }); }}
+                              className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
+                              style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1, ...getCycleDividerStyle(d.date) }}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setIsRangeDragging(true);
+                                startRangeSelection(staff, d.date, e);
+                              }}
+                              onMouseEnter={() => updateRangeSelection(staff, d.date)}
+                              onClick={() => {
+                                startRangeSelection(staff, d.date);
+                              }}
                             >
                               <div className="relative">
-                                <select
-                                  value={val}
-                                  onChange={(e) => handleCellChange(staff.id, d.date, e.target.value)}
-                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`} style={{ color: tableFontColor }}
+                                <div
+                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
+                                  style={{ color: tableFontColor, pointerEvents: 'none' }}
                                 >
-                                  <option value=""></option>
-                                  <optgroup label="上班">
-                                    {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
-                                  </optgroup>
-                                  <optgroup label="休假">
-                                    {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
-                                  </optgroup>
-                                </select>
-
-                                {showBlueDots && selectionMode === 'dot' && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedGridCell({ staff, dateStr: d.date });
-                                  }}
+                                  {val}
+                                </div>
+                                <div
                                   className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
-                                  aria-label={`選取 ${staff.name} ${d.date} 儲存格`}
-                                  title={`選取 ${staff.name} ${d.date} 儲存格`}
+                                  title="選擇班別/假別"
                                 >
-                                  <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
-                                </button>
-                                )}
+                                  <select
+                                    value={val}
+                                    onChange={(e) => {
+                                      handleCellChange(staff.id, d.date, e.target.value);
+                                      startRangeSelection(staff, d.date);
+                                      e.currentTarget.blur();
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startRangeSelection(staff, d.date);
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      startRangeSelection(staff, d.date, e);
+                                    }}
+                                    className="absolute inset-0 w-full h-full border-none bg-transparent cursor-pointer opacity-0"
+                                    style={{ color: tableFontColor }}
+                                    aria-label={`選擇 ${staff.name} ${d.date} 班別/假別`}
+                                  >
+                                    <option value=""></option>
+                                    <optgroup label="上班">
+                                      {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </optgroup>
+                                    <optgroup label="休假">
+                                      {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
+                                    </optgroup>
+                                  </select>
+
+                                  {showBlueDots && (
+                                    <span
+                                      className={`${densityConfig.selectorDotClass} rounded-full transition-all pointer-events-none ${inRangeSelection ? 'bg-violet-600 scale-110' : isPrimarySelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90'}`}
+                                    ></span>
+                                  )}
+                                </div>
                               </div>
                             </td>
                           );
@@ -2487,7 +2887,7 @@ const openSelectedCellFillModal = () => {
                       <td
                         key={d.date}
                         className="border-r"
-                        style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1, ...getCycleDividerStyle(d) }}
+                        style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
                       ></td>
                     ))}
 
@@ -2511,7 +2911,7 @@ const openSelectedCellFillModal = () => {
                       <td
                         key={d.date}
                         className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                        style={{ color: tableFontColor, ...getDemandHighlightStyle(d.date, rowKey, count), ...getCycleDividerStyle(d) }}
+                        style={{ color: tableFontColor, ...getDemandHighlightStyle(d.date, rowKey, count) }}
                       >
                         {count || ''}
                       </td>
