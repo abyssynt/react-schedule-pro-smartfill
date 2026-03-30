@@ -928,8 +928,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       ...((staffs || []).map((staff) => String(staff?.name || '').trim().length || 0)),
       0
     );
-    const estimatedNameWidth = 72 + (longestNameLength * 16);
-    return Math.max(112, Math.min(170, estimatedNameWidth));
+    const estimatedNameWidth = 54 + (longestNameLength * 18);
+    return Math.max(96, Math.min(260, estimatedNameWidth));
   }, [staffs]);
   const effectiveDensityConfig = useMemo(() => ({
     ...densityConfig,
