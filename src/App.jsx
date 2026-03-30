@@ -927,6 +927,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
   const keyInputTimerRef = useRef(null);
+  const tableScrollRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -2484,6 +2485,20 @@ const openSelectedCellFillModal = () => {
     resetKeyInputBuffer();
   }, [staffs.length]);
 
+  const handleTableWheelCapture = (event) => {
+    const container = tableScrollRef.current;
+    if (!container) return;
+
+    const hasHorizontalIntent = Math.abs(event.deltaX) > 0 || event.shiftKey;
+    if (!hasHorizontalIntent) return;
+
+    const delta = Math.abs(event.deltaX) > 0 ? event.deltaX : event.deltaY;
+    if (!delta) return;
+
+    container.scrollLeft += delta;
+    event.preventDefault();
+  };
+
   return (
     <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
@@ -2756,7 +2771,7 @@ const openSelectedCellFillModal = () => {
       </div>
 
       <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
-        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
+        <div ref={tableScrollRef} className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]" onWheelCapture={handleTableWheelCapture}>
           <table className="w-max min-w-full border-collapse select-none">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
