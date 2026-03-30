@@ -2858,7 +2858,7 @@ const openSelectedCellFillModal = () => {
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className={`flex-1 min-w-0 text-center py-0 px-0 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em" }}
+                              className={`shrink min-w-0 text-center py-0 px-0 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", width: `${Math.max(3.2, Math.min((staff.name || '').length + 1.2, 8.5))}ch`, maxWidth: '100%' }}
                             />
 
                             <button
