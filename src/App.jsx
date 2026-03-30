@@ -880,12 +880,6 @@ const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
   return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
 };
 
-const hexToRgba = (hex, alpha = 1, fallback = '#000000') => {
-  const { r, g, b } = hexToRgbObject(hex, fallback);
-  const safeAlpha = Math.max(0, Math.min(1, Number(alpha) || 0));
-  return `rgba(${r}, ${g}, ${b}, ${safeAlpha})`;
-};
-
 const FOUR_WEEK_CYCLE_START = '2026-04-13';
 const FOUR_WEEK_CYCLE_DAYS = 28;
 
@@ -972,10 +966,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
   const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
-  const fourWeekDividerColor = hexToRgba(fourWeekDividerBaseColor, 0.38, '#1e293b');
-  const getFourWeekDividerStyle = (dateStr) => (
-    isFourWeekCycleEndDate(dateStr) ? { borderRight: `4px solid ${fourWeekDividerColor}` } : {}
-  );
+  const fourWeekDividerColor = blendHexColors(fourWeekDividerBaseColor, pageBackgroundColor, 0.18);
+
+  const renderFourWeekDivider = (dateStr, zIndexClass = 'z-20') => {
+    if (!isFourWeekCycleEndDate(dateStr)) return null;
+    return (
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute top-[-1px] bottom-[-1px] right-[-1px] ${zIndexClass}`}
+        style={{ width: '3px', backgroundColor: fourWeekDividerColor }}
+      />
+    );
+  };
   const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
   const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
   const showBottomStats = uiSettings?.showBottomStats ?? true;
@@ -2990,6 +2992,7 @@ const openSelectedCellFillModal = () => {
                               }}
                             >
                               <div className="relative">
+                                {renderFourWeekDivider(d.date)}
                                 <div
                                   className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
                                   style={{ color: tableFontColor, pointerEvents: 'none' }}
@@ -3088,6 +3091,7 @@ const openSelectedCellFillModal = () => {
                           opacity: d.isHoliday || d.isWeekend ? 0.9 : 1
                         }}
                       >
+                        {renderFourWeekDivider(d.date)}
                       </td>
                     ))}
 
