@@ -886,6 +886,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
   const keyInputTimerRef = useRef(null);
+  const workFileInputRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -2426,11 +2427,24 @@ const openSelectedCellFillModal = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={workFileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleWorkFileChange}
+            />
             <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Save size={16} /> 暫存
             </button>
             <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Clock size={16} /> 歷史
+            </button>
+            <button onClick={handleDownloadWorkFile} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+              <Download size={16} /> 下載工作檔
+            </button>
+            <button onClick={handleOpenWorkFileClick} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+              <FileText size={16} /> 開啟工作檔
             </button>
 
             <div className="relative">
