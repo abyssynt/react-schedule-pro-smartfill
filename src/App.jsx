@@ -752,6 +752,24 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
+
+const FOUR_WEEK_CYCLE_START_DATE_KEY = '2026-04-13';
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const hexToRgba = (hex, alpha = 1, fallback = '#000000') => {
+  const { r, g, b } = hexToRgbObject(hex, fallback);
+  const safeAlpha = Math.max(0, Math.min(1, Number(alpha) || 0));
+  return `rgba(${r}, ${g}, ${b}, ${safeAlpha})`;
+};
+
+const isFourWeekCycleBoundary = (dateStr, cycleStartDateKey = FOUR_WEEK_CYCLE_START_DATE_KEY) => {
+  const targetDate = parseDateKey(dateStr);
+  const cycleStartDate = parseDateKey(cycleStartDateKey);
+  if (Number.isNaN(targetDate.getTime()) || Number.isNaN(cycleStartDate.getTime())) return false;
+  const diffDays = Math.round((targetDate.getTime() - cycleStartDate.getTime()) / MS_PER_DAY);
+  return ((diffDays % 28) + 28) % 28 === 27;
+};
+
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule }) {
   // ==========================================
   // 2. 核心 State 定義
@@ -808,15 +826,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...DICT.LEAVES, ...(customLeaveCodes || [])])).filter(Boolean), [customLeaveCodes]);
   const cycleDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#475569';
   const cycleDividerColor = useMemo(
-    () => blendHexColors(cycleDividerBaseColor, pageBackgroundColor || '#ffffff', 0.58),
+    () => blendHexColors(cycleDividerBaseColor, pageBackgroundColor || '#ffffff', 0.42),
     [cycleDividerBaseColor, pageBackgroundColor]
   );
   const cycleDividerPreviewColor = useMemo(
-    () => hexToRgba(cycleDividerBaseColor, 0.42, '#475569'),
+    () => hexToRgba(cycleDividerBaseColor, 0.18, '#475569'),
     [cycleDividerBaseColor]
   );
   const cycleDividerExcelColor = useMemo(
     () => blendHexColors(cycleDividerBaseColor, '#ffffff', 0.3),
+    [cycleDividerBaseColor]
+  );
+  const cycleDividerWordColor = useMemo(
+    () => blendHexColors(cycleDividerBaseColor, '#ffffff', 0.22),
     [cycleDividerBaseColor]
   );
   const isCycleDividerDate = (dateStr) => isFourWeekCycleBoundary(dateStr);
@@ -1300,6 +1322,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             line-height: 1.7;
             font-size: 10pt;
             background: #ffffff;
+          }
+          .cycle-divider {
+            border-right: 3px solid ${cycleDividerWordColor} !important;
           }
         </style>
       </head>
