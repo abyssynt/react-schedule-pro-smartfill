@@ -923,6 +923,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftLabelFontSize = getShiftLabelFontSize(uiSettings?.shiftColumnFontSize);
   const shiftCellLabelFontSize = getShiftCellLabelFontSize(uiSettings?.shiftColumnFontSize);
   const densityConfig = getAdjustedDensityConfig(getUiDensityConfig(uiSettings?.tableDensity), uiSettings);
+  const dynamicNameWidth = useMemo(() => {
+    const longestNameLength = Math.max(
+      ...((staffs || []).map((staff) => String(staff?.name || '').trim().length || 0)),
+      0
+    );
+    const estimatedNameWidth = 72 + (longestNameLength * 16);
+    return Math.max(112, Math.min(170, estimatedNameWidth));
+  }, [staffs]);
+  const effectiveDensityConfig = useMemo(() => ({
+    ...densityConfig,
+    nameWidth: dynamicNameWidth
+  }), [densityConfig, dynamicNameWidth]);
   const monthLoadSkipRef = useRef(false);
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
@@ -2764,7 +2776,7 @@ const openSelectedCellFillModal = () => {
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
                 <th className={`sticky left-0 top-0 z-50 border-r font-black shadow-sm ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
-                <th className={`sticky top-0 z-50 border-r font-black shadow-sm ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
+                <th className={`sticky top-0 z-50 border-r font-black shadow-sm ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
@@ -2816,7 +2828,7 @@ const openSelectedCellFillModal = () => {
                           </td>
                         )}
 
-                        <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                        <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                           <div className="flex items-center gap-2">
                             <div className="flex flex-col items-center justify-center shrink-0 w-5">
                               <button
@@ -2965,7 +2977,7 @@ const openSelectedCellFillModal = () => {
                   })}
 
                   <tr className="border-b border-slate-200 bg-slate-50/70">
-                    <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                    <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
@@ -2995,7 +3007,7 @@ const openSelectedCellFillModal = () => {
               {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
                 <tr key={rowKey}>
                   <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
-                  <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                  <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
                     {rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`}
                   </td>
                   {daysInMonth.map(d => {
