@@ -909,6 +909,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [isRangeDragging, setIsRangeDragging] = useState(false);
   const [clipboardGrid, setClipboardGrid] = useState([]);
   const [keyInputBuffer, setKeyInputBuffer] = useState('');
+  const [editingStaffId, setEditingStaffId] = useState(null);
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -1171,6 +1172,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setCellDrafts({});
     setInvalidCellKeys({});
     setKeyInputBuffer('');
+    setEditingStaffId(null);
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
@@ -2498,6 +2500,7 @@ const openSelectedCellFillModal = () => {
     setRangeSelection(null);
     setSelectionAnchor(null);
     setIsRangeDragging(false);
+    setEditingStaffId(null);
     resetKeyInputBuffer();
   }, [staffs.length]);
 
@@ -2849,17 +2852,37 @@ const openSelectedCellFillModal = () => {
                               </button>
                             </div>
 
+                            {editingStaffId === staff.id ? (
                             <input
                               type="text"
                               value={staff.name}
+                              autoFocus
                               onChange={(e) => {
                                 const next = [...staffs];
                                 const currentIndex = next.findIndex(s => s.id === staff.id);
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent whitespace-nowrap ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", maxWidth: '100%' }}
+                              onBlur={() => setEditingStaffId(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === 'Escape') {
+                                  setEditingStaffId(null);
+                                }
+                              }}
+                              className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent whitespace-nowrap ${nameDateColumnFontSizeClass}`}
+                              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", maxWidth: '100%' }}
                             />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingStaffId(staff.id)}
+                              className={`flex-1 min-w-0 bg-transparent border-none text-center font-bold whitespace-nowrap px-0.5 py-0 ${nameDateColumnFontSizeClass}`}
+                              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em" }}
+                              title="點擊編輯姓名"
+                            >
+                              <span className="block truncate">{staff.name}</span>
+                            </button>
+                          )}
 
                             <button
                               onClick={() => removeStaff(staff.id)}
