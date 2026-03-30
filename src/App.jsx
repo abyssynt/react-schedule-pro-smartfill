@@ -970,8 +970,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const getFourWeekDividerStyle = (dateStr) => (
     isFourWeekCycleEndDate(dateStr)
-      ? { borderRight: `3px solid ${fourWeekDividerColor}` }
+      ? { boxShadow: `inset -3px 0 0 ${fourWeekDividerColor}` }
       : null
+  );
+
+  const getWordCycleDividerStyle = (dateStr) => (
+    isFourWeekCycleEndDate(dateStr)
+      ? `border-right:3pt solid ${fourWeekDividerColor};mso-border-right-alt:3pt solid ${fourWeekDividerColor};`
+      : ''
   );
 
   const applyExcelFourWeekDivider = (border = {}, dateStr) => {
@@ -1797,9 +1803,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-size: 10pt;
             background: ${exportTheme.pageBg};
           }
-          .cycle-divider {
-            border-right: 3px solid ${fourWeekDividerColor} !important;
-          }
         </style>
       </head>
       <body>
@@ -1818,7 +1821,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 ${daysInMonth.map(d => {
                   const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
                   const headBg = d.isHoliday ? exportTheme.holidayHeadBg : (d.isWeekend ? exportTheme.weekendHeadBg : exportTheme.weekdayHeadBg);
-                  return `<th class="day-col header-cell ${headClass} ${isFourWeekCycleEndDate(d.date) ? 'cycle-divider' : ''}" style="background:${headBg}; mso-pattern:auto none;">${d.day}<br/>(${d.weekStr})</th>`;
+                  return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${d.day}<br/>(${d.weekStr})</th>`;
                 }).join('')}
                 <th class="stat-col header-cell stat-work-head">上班</th>
                 <th class="stat-col header-cell stat-holiday-head">假日休</th>
@@ -1836,7 +1839,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                     const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
                     const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
-                    return `<td class="day-col ${cellClass} ${isFourWeekCycleEndDate(d.date) ? 'cycle-divider' : ''}" style="background:${cellBg}; mso-pattern:auto none;">${value}</td>`;
+                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${value}</td>`;
                   }).join('')}
                   <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
                   <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
