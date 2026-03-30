@@ -910,6 +910,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [clipboardGrid, setClipboardGrid] = useState([]);
   const [keyInputBuffer, setKeyInputBuffer] = useState('');
   const [editingStaffId, setEditingStaffId] = useState(null);
+  const [editingNameDraft, setEditingNameDraft] = useState('');
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -1173,6 +1174,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setInvalidCellKeys({});
     setKeyInputBuffer('');
     setEditingStaffId(null);
+    setEditingNameDraft('');
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
@@ -2488,6 +2490,18 @@ const openSelectedCellFillModal = () => {
     resetKeyInputBuffer();
   };
 
+  const commitEditingStaffName = (staffId, nextName) => {
+    const trimmedName = String(nextName ?? '').trim();
+    setStaffs(prev => {
+      const next = [...prev];
+      const currentIndex = next.findIndex(s => s.id === staffId);
+      if (currentIndex !== -1) next[currentIndex].name = trimmedName || '新成員';
+      return next;
+    });
+    setEditingStaffId(null);
+    setEditingNameDraft('');
+  };
+
   const groupedStaffs = useMemo(() => {
     return SHIFT_GROUPS.map(group => ({
       group,
@@ -2501,6 +2515,7 @@ const openSelectedCellFillModal = () => {
     setSelectionAnchor(null);
     setIsRangeDragging(false);
     setEditingStaffId(null);
+    setEditingNameDraft('');
     resetKeyInputBuffer();
   }, [staffs.length]);
 
@@ -2855,18 +2870,18 @@ const openSelectedCellFillModal = () => {
                             {editingStaffId === staff.id ? (
                             <input
                               type="text"
-                              value={staff.name}
+                              value={editingNameDraft}
                               autoFocus
-                              onChange={(e) => {
-                                const next = [...staffs];
-                                const currentIndex = next.findIndex(s => s.id === staff.id);
-                                if (currentIndex !== -1) next[currentIndex].name = e.target.value;
-                                setStaffs(next);
-                              }}
-                              onBlur={() => setEditingStaffId(null)}
+                              onChange={(e) => setEditingNameDraft(e.target.value)}
+                              onBlur={() => commitEditingStaffName(staff.id, editingNameDraft)}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === 'Escape') {
+                                if (e.key === 'Enter') {
+                                  commitEditingStaffName(staff.id, editingNameDraft);
+                                } else if (e.key === 'Escape') {
                                   setEditingStaffId(null);
+                                  setEditingNameDraft('');
                                 }
                               }}
                               className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold border-none rounded-md focus:ring-2 focus:ring-blue-400 bg-transparent whitespace-nowrap ${nameDateColumnFontSizeClass}`}
@@ -2875,7 +2890,10 @@ const openSelectedCellFillModal = () => {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setEditingStaffId(staff.id)}
+                              onClick={() => {
+                                setEditingStaffId(staff.id);
+                                setEditingNameDraft(staff.name || '');
+                              }}
                               className={`flex-1 min-w-0 bg-transparent border-none text-center font-bold whitespace-nowrap px-0.5 py-0 ${nameDateColumnFontSizeClass}`}
                               style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em" }}
                               title="點擊編輯姓名"
