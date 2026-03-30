@@ -747,11 +747,11 @@ const UI_DENSITY_OPTIONS = {
     nameWidth: 84,
     dayMinWidth: 52,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
-    statHeaderClass: 'px-2 py-2',
+    statHeaderClass: 'px-1 py-1',
     leaveHeaderClass: 'px-1 py-1.5',
     cellHeightClass: 'h-9',
     nameCellPaddingClass: 'px-1.5 py-1.5',
-    footCellPaddingClass: 'px-2 py-2',
+    footCellPaddingClass: 'px-1 py-1',
     groupLabelClass: '',
     selectorDotClass: 'w-2 h-2',
     rowMinHeight: 72
@@ -760,11 +760,11 @@ const UI_DENSITY_OPTIONS = {
     shiftWidth: 100,
     nameWidth: 156,
     dayMinWidth: 68,
-    dayHeaderClass: 'px-2 py-2.5 text-sm',
+    dayHeaderClass: 'px-1 py-1.5 text-sm',
     statHeaderClass: 'p-4',
     leaveHeaderClass: 'p-2',
     cellHeightClass: 'h-12',
-    nameCellPaddingClass: 'px-3 py-2.5',
+    nameCellPaddingClass: 'px-2 py-2',
     footCellPaddingClass: 'p-3',
     groupLabelClass: '',
     selectorDotClass: 'w-3 h-3',
@@ -929,8 +929,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       0
     );
     const safeLength = Math.max(1, longestNameLength);
-    const estimatedNameWidth = 24 + (safeLength * 20);
-    return Math.max(76, Math.min(280, estimatedNameWidth));
+    const compactControlSpace = 44;
+    const estimatedNameWidth = compactControlSpace + (safeLength * 14);
+    return Math.max(58, Math.min(220, estimatedNameWidth));
   }, [staffs]);
   const effectiveDensityConfig = useMemo(() => ({
     ...densityConfig,
@@ -2664,7 +2665,7 @@ const openSelectedCellFillModal = () => {
                   max="31"
                   value={ruleFillConfig.dateRange.start}
                   onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, dateRange: { ...ruleFillConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-center text-sm font-bold text-slate-800"
                 />
                 <span className="shrink-0 text-sm font-bold text-slate-500">至</span>
                 <input
@@ -2673,7 +2674,7 @@ const openSelectedCellFillModal = () => {
                   max="31"
                   value={ruleFillConfig.dateRange.end}
                   onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, dateRange: { ...ruleFillConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-center text-sm font-bold text-slate-800"
                 />
               </div>
             </div>
@@ -2683,7 +2684,7 @@ const openSelectedCellFillModal = () => {
               <select
                 value={ruleFillConfig.targetShift}
                 onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, targetShift: e.target.value })}
-                className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
+                className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-sm font-bold text-slate-800"
               >
                 <option value="">依群組需求自動補空</option>
                 {RULE_FILL_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
@@ -2696,7 +2697,7 @@ const openSelectedCellFillModal = () => {
                 <select
                   value={rangeClearMode}
                   onChange={(e) => setRangeClearMode(e.target.value)}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-sm font-bold text-slate-800"
                 >
                   <option value="autoOnly">只清除自動補入內容</option>
                   <option value="all">清除範圍內全部內容</option>
@@ -2733,7 +2734,7 @@ const openSelectedCellFillModal = () => {
                 type="number"
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())}
-                className="w-24 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
+                className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-center font-bold bg-white text-slate-800"
               />
               <span className="shrink-0">年</span>
 
@@ -2748,7 +2749,7 @@ const openSelectedCellFillModal = () => {
                   if (!Number.isFinite(nextMonth)) return;
                   setMonth(Math.min(12, Math.max(1, nextMonth)));
                 }}
-                className="w-20 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
+                className="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-center font-bold bg-white text-slate-800"
               />
               <span className="shrink-0">月</span>
 
@@ -2762,10 +2763,10 @@ const openSelectedCellFillModal = () => {
         </div>
 
         <div className="lg:col-span-5 flex items-center justify-end gap-2">
-          <button onClick={() => changeScreen('entry')} className="bg-white border px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+          <button onClick={() => changeScreen('entry')} className="bg-white border px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <ArrowLeft size={18} className="text-slate-600" /> 回入口頁
           </button>
-          <button onClick={() => changeScreen('settings')} className="bg-white border px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+          <button onClick={() => changeScreen('settings')} className="bg-white border px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <Settings size={18} className="text-slate-600" /> 系統設定
           </button>
         </div>
@@ -2831,7 +2832,7 @@ const openSelectedCellFillModal = () => {
 
                         <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                           <div className="flex items-center gap-2">
-                            <div className="flex flex-col items-center justify-center shrink-0 w-5">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-4">
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'up')}
                                 disabled={groupIndex === 0}
@@ -2857,7 +2858,7 @@ const openSelectedCellFillModal = () => {
                                 if (currentIndex !== -1) next[currentIndex].name = e.target.value;
                                 setStaffs(next);
                               }}
-                              className={`flex-1 min-w-0 text-center py-1.5 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
+                              className={`flex-1 min-w-0 text-center py-1 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
                             />
 
                             <button
@@ -3116,7 +3117,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
         <div className="px-6 py-6 bg-gray-50/80 border-b lg:border-b-0 lg:border-r border-gray-200">
           <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-xl ${iconBg}`}><Icon className={`w-5 h-5 ${iconColor}`} /></div>
+            <div className={`p-2 rounded-xl ${iconBg}`}><Icon className={`w-4 h-5 ${iconColor}`} /></div>
             <div><h3 className="font-bold text-gray-800">{title}</h3><p className="text-sm text-gray-500 mt-1 leading-relaxed">{desc}</p></div>
           </div>
         </div>
@@ -3334,19 +3335,19 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                         <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.white}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.evening}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.night}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                     </div>
                   </div>
@@ -3358,19 +3359,19 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                         <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.white}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.evening}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.night}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                     </div>
                   </div>
@@ -3384,7 +3385,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
               </div>
             </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
-              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
+              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
             </SettingRow>
           </div>
         </section>
