@@ -2499,6 +2499,36 @@ const openSelectedCellFillModal = () => {
     event.preventDefault();
   };
 
+  useEffect(() => {
+    const handleGlobalWheel = (event) => {
+      const container = tableScrollRef.current;
+      if (!container) return;
+
+      const hasHorizontalIntent = Math.abs(event.deltaX) > 0 || event.shiftKey;
+      if (!hasHorizontalIntent) return;
+
+      const activeEl = document.activeElement;
+      const activeTag = String(activeEl?.tagName || '').toLowerCase();
+      const isEditingInput = activeEl && (activeTag === 'input' || activeTag === 'textarea' || activeEl?.isContentEditable);
+      if (isEditingInput) return;
+
+      const maxScrollLeft = container.scrollWidth - container.clientWidth;
+      if (maxScrollLeft <= 0) return;
+
+      const delta = Math.abs(event.deltaX) > 0 ? event.deltaX : event.deltaY;
+      if (!delta) return;
+
+      const nextScrollLeft = Math.min(maxScrollLeft, Math.max(0, container.scrollLeft + delta));
+      if (nextScrollLeft === container.scrollLeft) return;
+
+      container.scrollLeft = nextScrollLeft;
+      event.preventDefault();
+    };
+
+    window.addEventListener('wheel', handleGlobalWheel, { passive: false, capture: true });
+    return () => window.removeEventListener('wheel', handleGlobalWheel, { capture: true });
+  }, []);
+
   return (
     <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
