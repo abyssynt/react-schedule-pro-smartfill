@@ -880,6 +880,20 @@ const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
   return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
 };
 
+const FOUR_WEEK_CYCLE_START = '2026-04-13';
+const FOUR_WEEK_CYCLE_DAYS = 28;
+
+const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => {
+  if (!dateStr) return false;
+  const target = parseDateKey(dateStr);
+  const start = parseDateKey(cycleStart);
+  target.setHours(0, 0, 0, 0);
+  start.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
+  if (diffDays < 0) return false;
+  return (diffDays + 1) % FOUR_WEEK_CYCLE_DAYS === 0;
+};
+
 
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
@@ -951,6 +965,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
+  const fourWeekDividerColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
+
+  const getFourWeekDividerStyle = (dateStr) => isFourWeekCycleEndDate(dateStr)
+    ? { borderRight: `4px solid ${fourWeekDividerColor}` }
+    : {};
   const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
   const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
   const showBottomStats = uiSettings?.showBottomStats ?? true;
@@ -2801,7 +2820,11 @@ const openSelectedCellFillModal = () => {
                   <th
                     key={d.day}
                     className={`sticky top-0 z-40 ${densityConfig.dayHeaderClass} border-r text-center shadow-sm`}
-                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9') }}
+                    style={{
+                      minWidth: densityConfig.dayMinWidth,
+                      backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9'),
+                      ...getFourWeekDividerStyle(d.date)
+                    }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
@@ -2945,7 +2968,11 @@ const openSelectedCellFillModal = () => {
                             <td
                               key={d.date}
                               className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
-                              style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
+                              style={{
+                                backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
+                                opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
+                                ...getFourWeekDividerStyle(d.date)
+                              }}
                               onMouseDown={(e) => {
                                 if (e.button !== 0) return;
                                 e.preventDefault();
@@ -3051,7 +3078,11 @@ const openSelectedCellFillModal = () => {
                       <td
                         key={d.date}
                         className="border-r"
-                        style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
+                        style={{
+                          backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
+                          opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
+                          ...getFourWeekDividerStyle(d.date)
+                        }}
                       ></td>
                     ))}
 
