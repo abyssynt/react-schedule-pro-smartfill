@@ -743,18 +743,18 @@ const UI_DENSITY_OPTIONS = {
     rowMinHeight: 72
   },
   standard: {
-    shiftWidth: 76,
-    nameWidth: 122,
-    dayMinWidth: 64,
+    shiftWidth: 68,
+    nameWidth: 108,
+    dayMinWidth: 52,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
-    statHeaderClass: 'p-3',
-    leaveHeaderClass: 'p-1.5',
-    cellHeightClass: 'h-10',
-    nameCellPaddingClass: 'px-2 py-2',
-    footCellPaddingClass: 'p-2.5',
+    statHeaderClass: 'px-2 py-2',
+    leaveHeaderClass: 'px-1 py-1.5',
+    cellHeightClass: 'h-9',
+    nameCellPaddingClass: 'px-1.5 py-1.5',
+    footCellPaddingClass: 'px-2 py-2',
     groupLabelClass: '',
     selectorDotClass: 'w-2 h-2',
-    rowMinHeight: 80
+    rowMinHeight: 72
   },
   relaxed: {
     shiftWidth: 100,
@@ -2488,7 +2488,7 @@ const openSelectedCellFillModal = () => {
   }, [staffs.length]);
 
   return (
-    <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
+    <div className="min-h-screen text-slate-900 p-3 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
         @keyframes pulse-once { 0% { transform: translateY(-10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
         @keyframes fade-in-down { 0% { opacity: 0; transform: translateY(-5px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -2497,7 +2497,7 @@ const openSelectedCellFillModal = () => {
       `}</style>
 
       {showDraftPrompt && (
-        <div className="max-w-[95vw] mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
+        <div className="max-w-[98vw] mx-auto mb-3 bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
           <div className="flex items-center gap-1.5">
             <Clock size={18} className="text-amber-600" />
             <span className="text-sm font-bold">偵測到先前暫存紀錄。</span>
@@ -2509,12 +2509,12 @@ const openSelectedCellFillModal = () => {
         </div>
       )}
 
-      <div className="max-w-[95vw] mx-auto mb-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="max-w-[98vw] mx-auto mb-4">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+            <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
               智慧補班系統｜開發版
-              <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
+              <span className="text-blue-500 text-xs font-normal px-2 py-0.5 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
             </h1>
             <p className="text-slate-500 text-xs mt-1 italic">開發測試使用</p>
           </div>
@@ -2527,21 +2527,21 @@ const openSelectedCellFillModal = () => {
               className="hidden"
               onChange={onImportDraftFileChange}
             />
-            <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+            <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Save size={16} /> 暫存
             </button>
-            <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+            <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Clock size={16} /> 歷史
             </button>
-            <button onClick={onDownloadDraftFile} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+            <button onClick={onDownloadDraftFile} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Download size={16} /> 下載工作檔
             </button>
-            <button onClick={onImportDraftFileClick} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+            <button onClick={onImportDraftFileClick} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Database size={16} /> 開啟工作檔
             </button>
 
             <div className="relative">
-              <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-2 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm">
+              <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-1.5 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm">
                 <Download size={16} /> 匯出
               </button>
               {showExportMenu && (
@@ -2559,17 +2559,17 @@ const openSelectedCellFillModal = () => {
             <div className="w-px h-8 bg-slate-200 mx-2 hidden sm:block"></div>
 
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
-              <button onClick={() => handleRuleBasedAutoSchedule(false)} disabled={isRuleFillLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
+              <button onClick={() => handleRuleBasedAutoSchedule(false)} disabled={isRuleFillLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
                 {isRuleFillLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 規則全月補空
               </button>
-              <button onClick={() => setShowRuleFillControl(!showRuleFillControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showRuleFillControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
+              <button onClick={() => setShowRuleFillControl(!showRuleFillControl)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${showRuleFillControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
                 <Calendar size={14} /> 規則指定補空
               </button>
               <button
                 type="button"
                 onClick={openSelectedCellFillModal}
                 disabled={!selectedGridCell}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
               >
                 <Check size={14} /> 補此格
               </button>
@@ -2577,7 +2577,7 @@ const openSelectedCellFillModal = () => {
                 type="button"
                 onClick={clearSelectedCell}
                 disabled={!selectedGridCell}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
               >
                 <Trash2 size={14} /> 清除此格
               </button>
@@ -2587,8 +2587,8 @@ const openSelectedCellFillModal = () => {
       </div>
 
       {showRuleFillControl && (
-        <div className="max-w-[95vw] mx-auto mb-6 rounded-3xl border border-slate-200 bg-slate-100/90 px-5 py-5 shadow-sm animate-fade-in-down lg:px-6">
-          <div className="mb-4 flex items-center gap-2 text-slate-800">
+        <div className="max-w-[98vw] mx-auto mb-4 rounded-3xl border border-slate-200 bg-slate-100/90 px-4 py-4 shadow-sm animate-fade-in-down lg:px-5">
+          <div className="mb-3 flex items-center gap-2 text-slate-800">
             <Sparkles size={18} className="text-blue-600" />
             <h3 className="font-black">規則指定補空設定</h3>
           </div>
@@ -2712,8 +2712,8 @@ const openSelectedCellFillModal = () => {
         </div>
       )}
 
-      <div className="max-w-[95vw] mx-auto mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-7 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <div className="max-w-[98vw] mx-auto mb-4 grid grid-cols-1 lg:grid-cols-12 gap-3">
+        <div className="lg:col-span-7 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-5">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-3 text-sm font-bold text-slate-700">
               <input
@@ -2749,17 +2749,17 @@ const openSelectedCellFillModal = () => {
         </div>
 
         <div className="lg:col-span-5 flex items-center justify-end gap-2">
-          <button onClick={() => changeScreen('entry')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+          <button onClick={() => changeScreen('entry')} className="bg-white border px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <ArrowLeft size={18} className="text-slate-600" /> 回入口頁
           </button>
-          <button onClick={() => changeScreen('settings')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+          <button onClick={() => changeScreen('settings')} className="bg-white border px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <Settings size={18} className="text-slate-600" /> 系統設定
           </button>
         </div>
       </div>
 
-      <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
-        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
+      <div className="max-w-[98vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
+        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-150px)]">
           <table className="w-max min-w-full border-collapse select-none">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
@@ -2777,16 +2777,16 @@ const openSelectedCellFillModal = () => {
                 ))}
                 {showRightStats && (
                 <>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold shadow-sm`}>上班</th>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-green-50 text-green-700 font-bold shadow-sm`}>假日休</th>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold shadow-sm`}>總休</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-blue-50 text-blue-700 font-bold shadow-sm`}>上班</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-green-50 text-green-700 font-bold shadow-sm`}>假日休</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-red-50 text-red-700 font-bold shadow-sm`}>總休</th>
                 </>
                 )}
                 {showLeaveStats && mergedLeaveCodes.map(l => (
-                  <th key={l} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold shadow-sm`}>{l}</th>
+                  <th key={l} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[34px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold shadow-sm`}>{l}</th>
                 ))}
                 {(customColumns || []).map(col => (
-                  <th key={col} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[70px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold shadow-sm`}>{col}</th>
+                  <th key={col} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[60px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold shadow-sm`}>{col}</th>
                 ))}
               </tr>
             </thead>
@@ -3221,7 +3221,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                             nameDateColumnFontColor: preset.nameDateColumnFontColor
                           }));
                         }}
-                        className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
+                        className={`px-3 py-1.5 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
                       >
                         {label}
                       </button>
