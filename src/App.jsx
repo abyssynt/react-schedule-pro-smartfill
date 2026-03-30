@@ -972,7 +972,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
   const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
-  const fourWeekDividerColor = hexToRgba(fourWeekDividerBaseColor, 0.38, '#1e293b');
+  const fourWeekDividerColor = hexToRgba(fourWeekDividerBaseColor, 0.22, '#1e293b');
   const getFourWeekDividerStyle = (dateStr) => (
     isFourWeekCycleEndDate(dateStr) ? { borderRight: `4px solid ${fourWeekDividerColor}` } : {}
   );
@@ -2828,12 +2828,12 @@ const openSelectedCellFillModal = () => {
                     className={`sticky top-0 z-40 relative ${densityConfig.dayHeaderClass} border-r text-center shadow-sm`}
                     style={{
                       minWidth: densityConfig.dayMinWidth,
-                      backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9')
+                      backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9'),
+                      ...getFourWeekDividerStyle(d.date)
                     }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
-                    {renderFourWeekDivider(d.date, 'z-30')}
                   </th>
                 ))}
                 {showRightStats && (
