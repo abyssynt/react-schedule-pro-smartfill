@@ -2985,7 +2985,7 @@ const openSelectedCellFillModal = () => {
                           onClick={() => addStaff(group)}
                           className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 font-bold text-sm"
                         >
-                          <Plus size={16} /> 新增人員
+                          <Plus size={16} /> 新增
                         </button>
                       </div>
                     </td>
