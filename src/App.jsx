@@ -1732,7 +1732,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const summaryConfig = summaryRows.find((item) => item.group === group);
       const summaryRowHtml = summaryConfig ? `
                 <tr>
-                  <td class="name-col summary-label-cell" style="background:${summaryConfig.bg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${summaryConfig.label}</td>
+                  <td class="name-col summary-label-cell" style="background:${summaryConfig.bg}; color:${exportTheme.nameFont}; mso-pattern:auto none;"></td>
                   ${daysInMonth.map(d => {
                     const count = getDailyStats(d.date)[summaryConfig.key];
                     return `<td class="day-col summary-value-cell" style="background:${summaryConfig.bg}; color:${exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${count || ''}</td>`;
