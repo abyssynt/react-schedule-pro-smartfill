@@ -3149,7 +3149,7 @@ const openSelectedCellFillModal = () => {
                     return (
                       <tr
                         key={staff.id}
-                        className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isDraggingRow ? 'opacity-45' : ''}`}
+                        className={`relative border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isDraggingRow ? 'opacity-45 bg-blue-50/40' : ''}`}
                       >
                         {index === 0 && (
                           <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
@@ -3167,11 +3167,25 @@ const openSelectedCellFillModal = () => {
                         )}
 
                         <td
-                          className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5 ${isDragOverBefore ? 'ring-2 ring-inset ring-blue-400' : ''} ${isDragOverAfter ? 'ring-2 ring-inset ring-emerald-400' : ''}`}
+                          className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5 relative`}
                           style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}
                           onDragOver={(e) => handleStaffDragOver(e, staff)}
                           onDrop={(e) => handleStaffDrop(e, staff)}
                         >
+                          {isDragOverBefore && (
+                            <div className="pointer-events-none absolute left-1 right-1 top-0 z-40">
+                              <div className="relative h-0.5 bg-blue-500 rounded-full">
+                                <span className="absolute -left-1 -top-1 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white shadow-sm"></span>
+                              </div>
+                            </div>
+                          )}
+                          {isDragOverAfter && (
+                            <div className="pointer-events-none absolute left-1 right-1 bottom-0 z-40">
+                              <div className="relative h-0.5 bg-emerald-500 rounded-full">
+                                <span className="absolute -left-1 -top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white shadow-sm"></span>
+                              </div>
+                            </div>
+                          )}
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
@@ -3358,7 +3372,7 @@ const openSelectedCellFillModal = () => {
                   })}
 
                   {!isCollapsed && (
-                  <tr className={`border-b border-slate-200 bg-slate-50/70 ${isGroupDropActive ? 'bg-blue-50/80' : ''}`} onDragOver={(e) => handleGroupDragOver(e, group)} onDrop={(e) => handleGroupDrop(e, group)}>
+                  <tr className={`border-b border-slate-200 transition-colors ${isGroupDropActive ? 'bg-blue-50/90 shadow-[inset_0_0_0_2px_rgba(59,130,246,0.28)]' : 'bg-slate-50/70'}`} onDragOver={(e) => handleGroupDragOver(e, group)} onDrop={(e) => handleGroupDrop(e, group)}>
                     {visibleGroupStaffList.length === 0 && (
                       <td rowSpan={2} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
                         <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
@@ -3400,7 +3414,7 @@ const openSelectedCellFillModal = () => {
                   </tr>
                   )}
 
-                  <tr className={`bg-amber-50/95 border-b border-slate-200 ${isGroupDropActive ? 'ring-2 ring-inset ring-blue-400' : ''}`} onDragOver={(e) => handleGroupDragOver(e, group)} onDrop={(e) => handleGroupDrop(e, group)}>
+                  <tr className={`border-b border-slate-200 transition-colors ${isGroupDropActive ? 'bg-blue-100/80 shadow-[inset_0_0_0_2px_rgba(59,130,246,0.28)]' : 'bg-amber-50/95'}`} onDragOver={(e) => handleGroupDragOver(e, group)} onDrop={(e) => handleGroupDrop(e, group)}>
                     {visibleGroupStaffList.length > 0 || isCollapsed ? (
                     <td className={`sticky left-0 z-30 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
                       <div className="flex items-center justify-center">
