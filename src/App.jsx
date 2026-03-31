@@ -470,7 +470,7 @@ const inferImportedGroupFromCodes = (dayMap = {}) => {
     if (b[1] !== a[1]) return b[1] - a[1];
     return SHIFT_GROUPS.indexOf(a[0]) - SHIFT_GROUPS.indexOf(b[0]);
   });
-  return ranked[0]?.[1] > 0 ? ranked[0][0] : '白班';
+  return ranked[0]?.[1] > 0 ? ranked[0][0] : '';
 };
 
 const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, customLeaveCodes = [] }) => {
@@ -527,6 +527,9 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
     if (!hasAnyContent || !rawName) continue;
 
     const rowNumber = rowIndex + 1;
+    const hasAnyDayContent = dayColumnPairs.some(({ colNumber }) => String(row[colNumber] ?? '').trim() !== '');
+    if (!hasAnyDayContent) continue;
+
     const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
     importedSchedule[staffId] = {};
 
@@ -551,6 +554,11 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       }
     } else {
       normalizedGroup = inferImportedGroupFromCodes(importedSchedule[staffId]);
+      if (!normalizedGroup) {
+        delete importedSchedule[staffId];
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已略過`);
+        continue;
+      }
     }
 
     importedStaffs.push({
