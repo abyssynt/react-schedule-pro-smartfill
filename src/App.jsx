@@ -2486,40 +2486,101 @@ const openSelectedCellFillModal = () => {
                     <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
                   </tr>
 
-                  {showBottomStats && (
-                    <>
-                      {[
-                        { key: 'D', label: '白班上班' },
-                        { key: 'E', label: '小夜上班' },
-                        { key: 'N', label: '大夜上班' },
-                        { key: 'totalLeave', label: '休假人數' }
-                      ].map((statRow) => (
-                        <tr key={`${group}_${statRow.key}`} className="border-b border-slate-200 bg-amber-50/70">
-                          <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
-                          <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
-                            {statRow.label}
+                  {showBottomStats && group === '白班' && (
+                    <tr key={`${group}_D`} className="border-b border-slate-200 bg-amber-50/70">
+                      <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
+                      <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                        白班上班
+                      </td>
+                      {daysInMonth.map(d => {
+                        const dailyStats = getDailyStats(d.date);
+                        const count = dailyStats.D;
+                        return (
+                          <td
+                            key={d.date}
+                            className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
+                            style={{ color: tableFontColor }}
+                          >
+                            {count || ''}
                           </td>
-                          {daysInMonth.map(d => {
-                            const groupStats = getGroupDailyStats(group, d.date);
-                            const count = groupStats[statRow.key];
-                            return (
-                              <td
-                                key={d.date}
-                                className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                                style={{ color: tableFontColor }}
-                              >
-                                {count || ''}
-                              </td>
-                            );
-                          })}
-                          <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
-                        </tr>
-                      ))}
-                    </>
+                        );
+                      })}
+                      <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                    </tr>
+                  )}
+
+                  {showBottomStats && group === '小夜' && (
+                    <tr key={`${group}_E`} className="border-b border-slate-200 bg-amber-50/70">
+                      <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
+                      <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                        小夜上班
+                      </td>
+                      {daysInMonth.map(d => {
+                        const dailyStats = getDailyStats(d.date);
+                        const count = dailyStats.E;
+                        return (
+                          <td
+                            key={d.date}
+                            className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
+                            style={{ color: tableFontColor }}
+                          >
+                            {count || ''}
+                          </td>
+                        );
+                      })}
+                      <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                    </tr>
+                  )}
+
+                  {showBottomStats && group === '大夜' && (
+                    <tr key={`${group}_N`} className="border-b border-slate-200 bg-amber-50/70">
+                      <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
+                      <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                        大夜上班
+                      </td>
+                      {daysInMonth.map(d => {
+                        const dailyStats = getDailyStats(d.date);
+                        const count = dailyStats.N;
+                        return (
+                          <td
+                            key={d.date}
+                            className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
+                            style={{ color: tableFontColor }}
+                          >
+                            {count || ''}
+                          </td>
+                        );
+                      })}
+                      <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                    </tr>
                   )}
                 </React.Fragment>
               ))}
             </tbody>
+            {showBottomStats && (
+              <tfoot>
+                <tr className="border-b border-slate-200 bg-amber-50/80">
+                  <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
+                  <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                    休假人數
+                  </td>
+                  {daysInMonth.map(d => {
+                    const dailyStats = getDailyStats(d.date);
+                    const count = dailyStats.totalLeave;
+                    return (
+                      <td
+                        key={d.date}
+                        className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
+                        style={{ color: tableFontColor }}
+                      >
+                        {count || ''}
+                      </td>
+                    );
+                  })}
+                  <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
