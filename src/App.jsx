@@ -5,7 +5,7 @@ import {
   Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
-  Database, Cpu, Monitor, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Trash2, GripVertical
+  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2, GripVertical
 } from 'lucide-react';
 
 // ==========================================
@@ -3451,12 +3451,12 @@ const openSelectedCellFillModal = () => {
                           title={isCollapsed ? `展開${group}` : `收合${group}`}
                           aria-label={isCollapsed ? `展開${group}` : `收合${group}`}
                         >
-                          {isCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                          <span className="text-base font-black leading-none">{isCollapsed ? '+' : '−'}</span>
                         </button>
                       </div>
                     </td>
                     ) : null}
-                    <td className={`sticky z-30 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
+                    <td className={`sticky z-30 border-r text-center font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
                       {group === '白班' ? '白班上班' : group === '小夜' ? '小夜上班' : '大夜上班'}
                     </td>
                     {daysInMonth.map(d => {
