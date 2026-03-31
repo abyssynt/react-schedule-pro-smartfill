@@ -925,7 +925,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [keyInputBuffer, setKeyInputBuffer] = useState('');
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [editingNameDraft, setEditingNameDraft] = useState('');
-  const [collapsedGroups, setCollapsedGroups] = useState({ 白班: false, 小夜: false, 大夜: false });
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -2563,10 +2562,6 @@ const openSelectedCellFillModal = () => {
     resetKeyInputBuffer();
   }, [staffs.length]);
 
-  const toggleGroupCollapse = (group) => {
-    setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
-  };
-
   return (
     <div className="min-h-screen text-slate-900 p-3 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
@@ -2876,72 +2871,18 @@ const openSelectedCellFillModal = () => {
             </thead>
 
             <tbody>
-              {groupedStaffs.map(({ group, staffs: groupStaffList }) => {
-                const isCollapsed = Boolean(collapsedGroups[group]);
-                const visibleGroupStaffList = isCollapsed && group === '白班' ? [] : groupStaffList;
-                const groupCount = visibleGroupStaffList.length + 1;
-
-                return (
+              {groupedStaffs.map(({ group, staffs: groupStaffList }) => (
                 <React.Fragment key={group}>
-                  {isCollapsed && group === '白班' && (
-                    <tr className="border-b border-slate-200 bg-slate-50/70">
-                      <td className="sticky left-0 z-20 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
-                        <div className="relative flex items-start h-full px-2 py-2" style={{ minHeight: densityConfig.rowMinHeight }}>
-                          <button
-                            type="button"
-                            onClick={() => toggleGroupCollapse(group)}
-                            className="absolute left-2 top-2 w-6 h-6 rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 flex items-center justify-center font-black leading-none shadow-sm"
-                            title="展開白班"
-                          >
-                            +
-                          </button>
-                          <div className="w-full pl-8 pt-0.5">
-                            <span
-                              className={`${shiftColumnFontSizeClass} font-black leading-none whitespace-nowrap`}
-                              style={{ color: shiftColumnFontColor, fontSize: shiftLabelFontSize }}
-                            >
-                              {group}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className={`sticky z-30 border-r text-center font-black ${shiftColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
-                        已收合
-                      </td>
-                      {daysInMonth.map(d => (
-                        <td
-                          key={d.date}
-                          className="border-r"
-                          style={{
-                            backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
-                            opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                            ...getFourWeekDividerStyle(d.date)
-                          }}
-                        />
-                      ))}
-                      <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
-                    </tr>
-                  )}
-
-                  {visibleGroupStaffList.map((staff, index) => {
+                  {groupStaffList.map((staff, index) => {
                     const stats = getStaffStats(staff.id);
+                    const groupCount = groupStaffList.length + 1;
                     const groupIndex = groupStaffList.findIndex(s => s.id === staff.id);
 
                     return (
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
                           <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
-                            <div className="relative flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
-                              {group === '白班' && (
-                                <button
-                                  type="button"
-                                  onClick={() => toggleGroupCollapse(group)}
-                                  className="absolute left-1 top-1 w-7 h-7 rounded-xl border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 flex items-center justify-center font-black leading-none shadow-sm"
-                                  title={isCollapsed ? '展開白班' : '收合白班'}
-                                >
-                                  {isCollapsed ? '+' : '-'}
-                                </button>
-                              )}
+                            <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
                               {showShiftLabels && (
                                 <span
                                   className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`}
@@ -3145,7 +3086,6 @@ const openSelectedCellFillModal = () => {
                     );
                   })}
 
-                  {(!isCollapsed || group !== '白班') && (
                   <tr className="border-b border-slate-200 bg-slate-50/70">
                     <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
@@ -3172,10 +3112,8 @@ const openSelectedCellFillModal = () => {
 
                     <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
                   </tr>
-                  )}
                 </React.Fragment>
-                );
-              })}
+              ))}
             </tbody>
 
             {showBottomStats && (
