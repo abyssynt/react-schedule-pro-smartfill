@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Plus, Minus, Settings, Sparkles, Loader2,
-  ArrowUp, ArrowDown, Save, History as Clock, Download,
+  Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
   Database, Cpu, Monitor, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Trash2, GripVertical
@@ -2649,30 +2649,6 @@ const openSelectedCellFillModal = () => {
     resetKeyInputBuffer();
   };
 
-  const moveStaffInGroup = (staffId, direction) => {
-    const newStaffs = [...staffs];
-    const currentIndex = newStaffs.findIndex(s => s.id === staffId);
-    if (currentIndex === -1) return;
-
-    const currentGroup = newStaffs[currentIndex].group;
-    const groupIndexes = newStaffs
-      .map((staff, index) => ({ staff, index }))
-      .filter(item => item.staff.group === currentGroup)
-      .map(item => item.index);
-
-    const currentGroupPos = groupIndexes.indexOf(currentIndex);
-    const targetGroupPos = direction === 'up' ? currentGroupPos - 1 : currentGroupPos + 1;
-    if (targetGroupPos < 0 || targetGroupPos >= groupIndexes.length) return;
-
-    const targetIndex = groupIndexes[targetGroupPos];
-    [newStaffs[currentIndex], newStaffs[targetIndex]] = [newStaffs[targetIndex], newStaffs[currentIndex]];
-    setStaffs(newStaffs);
-    setSelectedGridCell(null);
-    setRangeSelection(null);
-    setSelectionAnchor(null);
-    setIsRangeDragging(false);
-    resetKeyInputBuffer();
-  };
 
   const moveStaffWithinGroupByDrag = (draggedStaffId, targetStaffId, position = 'before') => {
     if (!draggedStaffId || !targetStaffId || draggedStaffId === targetStaffId) return;
@@ -3165,7 +3141,6 @@ const openSelectedCellFillModal = () => {
                   {visibleGroupStaffList.map((staff, index) => {
                     const stats = getStaffStats(staff.id);
                     const groupCount = visibleGroupStaffList.length + 1;
-                    const groupIndex = visibleGroupStaffList.findIndex(s => s.id === staff.id);
 
                     const isDraggingRow = draggingStaffId === staff.id;
                     const isDragOverBefore = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'before';
@@ -3211,23 +3186,6 @@ const openSelectedCellFillModal = () => {
                             >
                               <GripVertical size={14} />
                             </button>
-                            <div className="flex flex-col items-center justify-center shrink-0 w-3">
-                              <button
-                                onClick={() => moveStaffInGroup(staff.id, 'up')}
-                                disabled={groupIndex === 0}
-                                className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
-                              >
-                                <ArrowUp size={14} />
-                              </button>
-                              <button
-                                onClick={() => moveStaffInGroup(staff.id, 'down')}
-                                disabled={groupIndex === visibleGroupStaffList.length - 1}
-                                className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
-                              >
-                                <ArrowDown size={14} />
-                              </button>
-                            </div>
-
                             {editingStaffId === staff.id ? (
                             <div
                               contentEditable
