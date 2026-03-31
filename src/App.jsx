@@ -2881,13 +2881,13 @@ const openSelectedCellFillModal = () => {
                 <React.Fragment key={group}>
                   {visibleGroupStaffList.map((staff, index) => {
                     const stats = getStaffStats(staff.id);
-                    const groupCount = visibleGroupStaffList.length + 1;
+                    const groupRowSpan = visibleGroupStaffList.length + (isCollapsed ? 1 : 2);
                     const groupIndex = visibleGroupStaffList.findIndex(s => s.id === staff.id);
 
                     return (
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
-                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
+                          <td rowSpan={groupRowSpan} className="sticky left-0 z-20 border-r border-b text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
                             <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
                               {showShiftLabels && (
                                 <span
@@ -3117,7 +3117,7 @@ const openSelectedCellFillModal = () => {
                       />
                     ))}
 
-                    <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                    <td className="border-r" colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
                   </tr>
                   )}
 
@@ -3153,7 +3153,7 @@ const openSelectedCellFillModal = () => {
                     })}
                     <td
                       colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}
-                      className="sticky z-20"
+                      className="sticky z-20 border-r"
                       style={{ backgroundColor: '#fef3c7', top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}
                     ></td>
                   </tr>
