@@ -857,8 +857,7 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#ffffff',
     shiftColumnFontColor: '#1e293b',
     nameDateColumnFontColor: '#1e293b',
-    demandOverColor: '#fde68a',
-    groupSummaryRowBgColor: '#fef3c7'
+    demandOverColor: '#fde68a'
   },
   soft: {
     pageBackgroundColor: '#f7faf7',
@@ -869,8 +868,7 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#fcfdfc',
     shiftColumnFontColor: '#365314',
     nameDateColumnFontColor: '#334155',
-    demandOverColor: '#fde68a',
-    groupSummaryRowBgColor: '#dcfce7'
+    demandOverColor: '#fde68a'
   },
   warm: {
     pageBackgroundColor: '#fffaf5',
@@ -881,8 +879,7 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#fffbeb',
     shiftColumnFontColor: '#7c2d12',
     nameDateColumnFontColor: '#44403c',
-    demandOverColor: '#fdba74',
-    groupSummaryRowBgColor: '#fdecc8'
+    demandOverColor: '#fdba74'
   },
   dark: {
     pageBackgroundColor: '#0f172a',
@@ -893,157 +890,82 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#172033',
     shiftColumnFontColor: '#f8fafc',
     nameDateColumnFontColor: '#e2e8f0',
-    demandOverColor: '#78350f',
-    groupSummaryRowBgColor: '#3f3a2b'
+    demandOverColor: '#78350f'
   }
 };
 
-const getThemeDefaultGroupSummaryRowBgColor = (themePreset = 'classic') => {
-  if (themePreset && themePreset !== 'custom' && UI_THEME_PRESETS[themePreset]?.groupSummaryRowBgColor) {
-    return UI_THEME_PRESETS[themePreset].groupSummaryRowBgColor;
-  }
-  return '#fef3c7';
-};
-
-const OFFICE_THEME_SWATCHES = [
-  '#fef3c7', '#dcfce7', '#dbeafe', '#fee2e2', '#ede9fe', '#cffafe', '#faf5e9', '#e5e7eb'
-];
-
-const OFFICE_STANDARD_SWATCHES = [
-  '#c00000', '#ff0000', '#ffc000', '#ffff00', '#92d050', '#00b050', '#00b0f0', '#0070c0', '#002060', '#7030a0'
-];
-
-const OFFICE_SWATCH_LEVELS = [0.12, 0.28, 0.46, 0.66];
-
-function OfficeColorPicker({ label, value, onChange, onReset, themeColors = OFFICE_THEME_SWATCHES, standardColors = OFFICE_STANDARD_SWATCHES }) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (event) => {
-      if (!wrapRef.current?.contains(event.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
-
-  const currentValue = normalizeHexColor(value || '#fef3c7', '#fef3c7');
-  const themeGrid = themeColors.map((base) => ({
-    base,
-    shades: OFFICE_SWATCH_LEVELS.map((ratio) => blendHexColors(base, '#ffffff', 1 - ratio))
-  }));
-  const softExtraColors = [
-    '#FFF7D6', '#FDF1C2', '#FCE7D6', '#FDE2E2', '#FBE7F3',
-    '#F1E8FF', '#E9E8FF', '#DFEFFC', '#DDF7F1', '#E8F5DE'
-  ];
-
-  const swatchButtonClass = 'h-6 w-6 rounded-[3px] border border-slate-300 transition hover:scale-105 hover:border-slate-500';
-  const currentRingClass = 'ring-2 ring-orange-500 ring-offset-1';
-
-  const applyColor = (nextColor) => {
-    onChange?.(nextColor);
+const WIDTH_ADJUST_MAP = { narrow: -12, standard: 0, wide: 12 };
+const HEIGHT_ADJUST_MAP = { compact: -4, standard: 0, roomy: 4 };
+const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
+  const shiftAdjust = WIDTH_ADJUST_MAP[uiSettings.shiftColumnWidthMode || 'standard'] || 0;
+  const nameAdjust = WIDTH_ADJUST_MAP[uiSettings.nameDateColumnWidthMode || 'standard'] || 0;
+  const dayAdjust = WIDTH_ADJUST_MAP[uiSettings.dayColumnWidthMode || 'standard'] || 0;
+  const heightAdjust = HEIGHT_ADJUST_MAP[uiSettings.cellHeightMode || 'standard'] || 0;
+  const dotClassMap = { compact: 'w-1.5 h-1.5', standard: 'w-2 h-2', roomy: 'w-2.5 h-2.5' };
+  return {
+    ...baseConfig,
+    shiftWidth: Math.max(48, baseConfig.shiftWidth + shiftAdjust),
+    nameWidth: Math.max(76, baseConfig.nameWidth + nameAdjust),
+    dayMinWidth: Math.max(28, baseConfig.dayMinWidth + dayAdjust),
+    rowMinHeight: Math.max(72, (baseConfig.rowMinHeight || 80) + heightAdjust * 4),
+    selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
   };
+};
 
-  return (
-    <div ref={wrapRef} className="relative flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-      <span className="text-sm font-medium">{label}</span>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen(prev => !prev)}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
-        >
-          <span className="inline-block h-5 w-5 rounded border border-slate-300" style={{ backgroundColor: currentValue }}></span>
-          選擇顏色
-        </button>
-      </div>
+const clampColorChannel = (value) => Math.max(0, Math.min(255, Math.round(value)));
 
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[350px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="inline-block h-6 w-6 rounded border border-slate-300" style={{ backgroundColor: currentValue }}></span>
-              <div>
-                <div className="text-sm font-bold text-slate-700">目前顏色</div>
-                <div className="text-xs text-slate-500">{currentValue.toUpperCase()}</div>
-              </div>
-            </div>
-            <button type="button" onClick={() => setOpen(false)} className="text-xs font-bold text-slate-500 hover:text-slate-700">關閉</button>
-          </div>
+const normalizeHexColor = (hex, fallback = '#000000') => {
+  const raw = String(hex || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
+  }
+  return fallback;
+};
 
-          <button
-            type="button"
-            onClick={() => { onReset?.(); setOpen(false); }}
-            className="mb-4 flex w-full items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
-          >
-            <span className="inline-block h-4 w-4 rounded border border-slate-300 bg-white"></span>
-            還原預設
-          </button>
+const hexToRgbObject = (hex, fallback = '#000000') => {
+  const normalized = normalizeHexColor(hex, fallback).replace('#', '');
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16)
+  };
+};
 
-          <div className="mb-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">佈景主題色彩</div>
-            <div className="grid grid-cols-8 gap-1.5">
-              {themeGrid.map(({ base, shades }) => (
-                <div key={base} className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => applyColor(base)}
-                    className={`${swatchButtonClass} ${currentValue === normalizeHexColor(base) ? currentRingClass : ''}`}
-                    style={{ backgroundColor: base }}
-                    aria-label={`主題色 ${base}`}
-                  />
-                  {shades.map((shade) => (
-                    <button
-                      key={shade}
-                      type="button"
-                      onClick={() => applyColor(shade)}
-                      className={`${swatchButtonClass} ${currentValue === normalizeHexColor(shade) ? currentRingClass : ''}`}
-                      style={{ backgroundColor: shade }}
-                      aria-label={`主題延伸色 ${shade}`}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
+const rgbObjectToHex = ({ r, g, b }) => {
+  const toHex = (value) => clampColorChannel(value).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
 
-          <div className="mb-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">柔和色推薦</div>
-            <div className="grid grid-cols-10 gap-1.5">
-              {softExtraColors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => applyColor(color)}
-                  className={`${swatchButtonClass} ${currentValue === normalizeHexColor(color) ? currentRingClass : ''}`}
-                  style={{ backgroundColor: color }}
-                  aria-label={`柔和色 ${color}`}
-                />
-              ))}
-            </div>
-          </div>
+const blendHexColors = (baseHex, mixHex, mixRatio = 0.5) => {
+  const ratio = Math.max(0, Math.min(1, Number(mixRatio) || 0));
+  const base = hexToRgbObject(baseHex, '#ffffff');
+  const mix = hexToRgbObject(mixHex, '#ffffff');
+  return rgbObjectToHex({
+    r: base.r * (1 - ratio) + mix.r * ratio,
+    g: base.g * (1 - ratio) + mix.g * ratio,
+    b: base.b * (1 - ratio) + mix.b * ratio
+  });
+};
 
-          <div>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">標準色彩</div>
-            <div className="grid grid-cols-10 gap-1.5">
-              {standardColors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => applyColor(color)}
-                  className={`${swatchButtonClass} ${currentValue === normalizeHexColor(color) ? currentRingClass : ''}`}
-                  style={{ backgroundColor: color }}
-                  aria-label={`標準色 ${color}`}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
+  return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
+};
+
+const FOUR_WEEK_CYCLE_START = '2026-04-13';
+const FOUR_WEEK_CYCLE_DAYS = 28;
+
+const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => {
+  if (!dateStr) return false;
+  const target = parseDateKey(dateStr);
+  const start = parseDateKey(cycleStart);
+  target.setHours(0, 0, 0, 0);
+  start.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
+  const cycleOffset = ((diffDays + 1) % FOUR_WEEK_CYCLE_DAYS + FOUR_WEEK_CYCLE_DAYS) % FOUR_WEEK_CYCLE_DAYS;
+  return cycleOffset === 0;
+};
+
 
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
@@ -3682,6 +3604,185 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
+
+const OFFICE_SOFT_THEME_SWATCHES = [
+  { name: '淡黃', value: '#fef3c7' },
+  { name: '淡綠', value: '#dcfce7' },
+  { name: '淡藍', value: '#dbeafe' },
+  { name: '淡紅', value: '#fee2e2' },
+  { name: '淡紫', value: '#ede9fe' },
+  { name: '淡青', value: '#cffafe' },
+  { name: '米白', value: '#fef7ed' },
+  { name: '淡灰', value: '#e5e7eb' }
+];
+
+const OFFICE_STANDARD_SWATCHES = [
+  { name: '紅', value: '#ef4444' },
+  { name: '橙', value: '#f97316' },
+  { name: '黃', value: '#eab308' },
+  { name: '綠', value: '#22c55e' },
+  { name: '青', value: '#06b6d4' },
+  { name: '藍', value: '#3b82f6' },
+  { name: '靛', value: '#4338ca' },
+  { name: '紫', value: '#8b5cf6' }
+];
+
+const OFFICE_THEME_DEFAULT_SUMMARY_COLOR = {
+  classic: '#fef3c7',
+  soft: '#ecfccb',
+  warm: '#fde68a',
+  dark: '#78350f',
+  custom: '#fef3c7'
+};
+
+const getThemeDefaultSummaryColor = (themePreset = 'classic') => {
+  return OFFICE_THEME_DEFAULT_SUMMARY_COLOR[themePreset] || '#fef3c7';
+};
+
+function OfficeColorPicker({ value, onChange, themePreset = 'classic' }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef(null);
+  const nativeInputRef = useRef(null);
+  const currentValue = normalizeHexColor(value || getThemeDefaultSummaryColor(themePreset), '#fef3c7');
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (event) => {
+      if (!wrapperRef.current?.contains(event.target)) setOpen(false);
+    };
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  const applyColor = (nextColor) => {
+    onChange?.(normalizeHexColor(nextColor, currentValue));
+    setOpen(false);
+  };
+
+  const renderSwatch = (swatch, extraClass = '') => (
+    <button
+      key={swatch.value}
+      type="button"
+      onClick={() => applyColor(swatch.value)}
+      className={`relative h-7 rounded-md border transition-all hover:scale-[1.03] hover:shadow-sm ${extraClass} ${currentValue.toLowerCase() === swatch.value.toLowerCase() ? 'border-slate-700 ring-2 ring-slate-300' : 'border-gray-200'}`}
+      style={{ backgroundColor: swatch.value }}
+      title={swatch.name}
+      aria-label={swatch.name}
+    >
+      {currentValue.toLowerCase() === swatch.value.toLowerCase() && (
+        <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-slate-700">✓</span>
+      )}
+    </button>
+  );
+
+  const themedColumns = OFFICE_SOFT_THEME_SWATCHES.map((swatch) => {
+    const lighter = blendHexColors(swatch.value, '#ffffff', 0.55);
+    const light = blendHexColors(swatch.value, '#ffffff', 0.32);
+    const base = swatch.value;
+    const deep = blendHexColors(swatch.value, '#111827', 0.18);
+    return [lighter, light, base, deep].map((colorValue, index) => ({
+      name: `${swatch.name}-${index + 1}`,
+      value: colorValue
+    }));
+  });
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1.5 hover:bg-gray-50 transition-colors"
+      >
+        <span className="inline-block w-8 h-6 rounded border border-gray-300" style={{ backgroundColor: currentValue }}></span>
+        <span className="text-xs font-medium text-gray-500">選色</span>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-[120] mt-2 w-[340px] rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-bold text-gray-800">群組統計列顏色</div>
+              <div className="text-xs text-gray-500">目前色彩</div>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1">
+              <span className="inline-block w-6 h-6 rounded border border-gray-300" style={{ backgroundColor: currentValue }}></span>
+              <span className="text-xs font-mono text-gray-600 uppercase">{currentValue}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => applyColor(getThemeDefaultSummaryColor(themePreset))}
+            className="mb-4 flex w-full items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            <span>還原預設</span>
+            <span className="text-xs text-gray-500">依主題配色</span>
+          </button>
+
+          <div className="mb-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">佈景主題色彩</div>
+            <div className="grid grid-cols-8 gap-2">
+              {OFFICE_SOFT_THEME_SWATCHES.map((swatch) => renderSwatch(swatch))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">主題延伸色階</div>
+            <div className="grid grid-cols-8 gap-x-2 gap-y-1">
+              {themedColumns.map((column, columnIndex) => (
+                <div key={`column-${columnIndex}`} className="space-y-1">
+                  {column.map((swatch) => renderSwatch(swatch, 'w-full'))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">標準色彩</div>
+            <div className="grid grid-cols-8 gap-2">
+              {OFFICE_STANDARD_SWATCHES.map((swatch) => renderSwatch(swatch))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+            <button
+              type="button"
+              onClick={() => nativeInputRef.current?.click()}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              其他色彩…
+            </button>
+            <input
+              ref={nativeInputRef}
+              type="color"
+              value={currentValue}
+              onChange={(e) => onChange?.(e.target.value)}
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+            >
+              關閉
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
@@ -3752,12 +3853,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">需求警示顯示</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求超編顏色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <OfficeColorPicker
-                      label="群組統計列顏色"
-                      value={uiSettings.groupSummaryRowBgColor || getThemeDefaultGroupSummaryRowBgColor(uiSettings.themePreset)}
-                      onChange={(nextColor) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: nextColor, themePreset: 'custom' }))}
-                      onReset={() => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: getThemeDefaultGroupSummaryRowBgColor(prev.themePreset), themePreset: prev.themePreset || 'classic' }))}
-                    />
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">群組統計列顏色</span><OfficeColorPicker value={uiSettings.groupSummaryRowBgColor || getThemeDefaultSummaryColor(uiSettings.themePreset)} themePreset={uiSettings.themePreset} onChange={(nextColor) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: nextColor, themePreset: 'custom' }))} /></div>
                   </div>
                 </div>
               </div>
@@ -3793,9 +3889,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                             shiftColumnBgColor: preset.shiftColumnBgColor,
                             nameDateColumnBgColor: preset.nameDateColumnBgColor,
                             shiftColumnFontColor: preset.shiftColumnFontColor,
-                            nameDateColumnFontColor: preset.nameDateColumnFontColor,
-                            demandOverColor: preset.demandOverColor,
-                            groupSummaryRowBgColor: preset.groupSummaryRowBgColor
+                            nameDateColumnFontColor: preset.nameDateColumnFontColor
                           }));
                         }}
                         className={`px-3 py-1.5 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
