@@ -431,41 +431,88 @@ const extractYearMonthCandidates = (...sources) => {
   return { year: null, month: null };
 };
 
-const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => {
+const detectImportedDayNumber = (label = '') => {
+  const text = String(label ?? '').replace(/\r/g, '').trim();
+  if (!text) return null;
+  const firstLine = text.split('\n').map(part => part.trim()).find(Boolean) || text;
+  const compact = text.replace(/\s+/g, '');
+  const firstCompact = firstLine.replace(/\s+/g, '');
+  const patterns = [
+    /^(\d{1,2})日$/,
+    /^(\d{1,2})$/,
+    /^(\d{1,2})\(.+\)$/,
+  ];
+  for (const source of [firstCompact, compact]) {
+    for (const pattern of patterns) {
+      const match = source.match(pattern);
+      if (match) {
+        const day = Number(match[1]);
+        if (day >= 1 && day <= 31) return day;
+      }
+    }
+  }
+  const looseMatch = compact.match(/^(\d{1,2})/);
+  if (looseMatch) {
+    const day = Number(looseMatch[1]);
+    if (day >= 1 && day <= 31) return day;
+  }
+  return null;
+};
+
+const inferImportedGroupFromCodes = (dayMap = {}) => {
+  const counts = { 白班: 0, 小夜: 0, 大夜: 0 };
+  Object.values(dayMap || {}).forEach((cell) => {
+    const code = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
+    const group = getShiftGroupByCode(code);
+    if (group && counts[group] !== undefined) counts[group] += 1;
+  });
+  const ranked = Object.entries(counts).sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return SHIFT_GROUPS.indexOf(a[0]) - SHIFT_GROUPS.indexOf(b[0]);
+  });
+  return ranked[0]?.[1] > 0 ? ranked[0][0] : '白班';
+};
+
+const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, customLeaveCodes = [] }) => {
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
   let headerRowIndex = -1;
-  let headerMap = {};
+  let nameColumnIndex = -1;
+  let groupColumnIndex = -1;
+  let dayColumnPairs = [];
+
   for (let rowIndex = 0; rowIndex < Math.min(20, rows.length); rowIndex += 1) {
     const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
-    const map = {};
+    let detectedNameIndex = -1;
+    let detectedGroupIndex = -1;
+    const detectedDayPairs = [];
+
     row.forEach((cellValue, columnIndex) => {
       const value = String(cellValue ?? '').trim();
-      if (value) map[value] = columnIndex;
+      if (!value) return;
+      if (value === '姓名') detectedNameIndex = columnIndex;
+      if (value === '班別群組') detectedGroupIndex = columnIndex;
+      const dayNumber = detectImportedDayNumber(value);
+      if (dayNumber) detectedDayPairs.push({ day: dayNumber, colNumber: columnIndex });
     });
-    if (map['姓名'] !== undefined && map['班別群組'] !== undefined) {
+
+    const uniqueDayPairs = Array.from(
+      new Map(detectedDayPairs.sort((a, b) => a.day - b.day).map(item => [item.day, item])).values()
+    );
+
+    if (detectedNameIndex !== -1 && uniqueDayPairs.length > 0) {
       headerRowIndex = rowIndex;
-      headerMap = map;
+      nameColumnIndex = detectedNameIndex;
+      groupColumnIndex = detectedGroupIndex;
+      dayColumnPairs = uniqueDayPairs;
       break;
     }
   }
 
-  if (headerRowIndex === -1) return null;
+  if (headerRowIndex === -1 || nameColumnIndex === -1 || dayColumnPairs.length === 0) return null;
 
   const validGroups = new Set(SHIFT_GROUPS);
-  const validCodes = new Set([...DICT.SHIFTS, ...DICT.LEAVES]);
-
-  const dayColumnPairs = Object.entries(headerMap)
-    .map(([label, colNumber]) => {
-      const match = String(label).match(/^(\d{1,2})日$/);
-      return match ? { day: Number(match[1]), colNumber } : null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.day - b.day);
-
-  if (dayColumnPairs.length === 0) {
-    throw new Error(`工作表「${sheetName}」找不到日期欄（格式需為 1日、2日 ...）`);
-  }
+  const validCodes = new Set([...DICT.SHIFTS, ...DICT.LEAVES, ...(customLeaveCodes || [])]);
 
   const importedStaffs = [];
   const importedSchedule = {};
@@ -473,27 +520,15 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
 
   for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
     const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
-    const rawName = String(row[headerMap['姓名']] ?? '').trim();
-    const rawGroup = String(row[headerMap['班別群組']] ?? '').trim();
+    const rawName = String(row[nameColumnIndex] ?? '').trim();
+    const rawGroup = groupColumnIndex === -1 ? '' : String(row[groupColumnIndex] ?? '').trim();
 
     const hasAnyContent = row.some((value) => String(value ?? '').trim() !== '');
     if (!hasAnyContent || !rawName) continue;
 
-    const normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
     const rowNumber = rowIndex + 1;
     const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
-
-    importedStaffs.push({
-      id: staffId,
-      name: rawName,
-      group: normalizedGroup,
-      pregnant: false
-    });
     importedSchedule[staffId] = {};
-
-    if (rawGroup && !validGroups.has(rawGroup)) {
-      invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，已自動改為白班`);
-    }
 
     dayColumnPairs.forEach(({ day, colNumber }) => {
       const rawValue = String(row[colNumber] ?? '').trim();
@@ -506,6 +541,23 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
       }
 
       importedSchedule[staffId][day] = { value: normalizedCode, source: 'manual' };
+    });
+
+    let normalizedGroup = '白班';
+    if (rawGroup) {
+      normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
+      if (!validGroups.has(rawGroup)) {
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，已自動改為白班`);
+      }
+    } else {
+      normalizedGroup = inferImportedGroupFromCodes(importedSchedule[staffId]);
+    }
+
+    importedStaffs.push({
+      id: staffId,
+      name: rawName,
+      group: normalizedGroup,
+      pregnant: false
     });
   }
 
@@ -560,7 +612,7 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => 
   };
 };
 
-const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().getFullYear()) => {
+const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().getFullYear(), options = {}) => {
   const XLSX = await loadSheetJS();
   const fileList = Array.from(files || []);
   const monthlySchedules = {};
@@ -617,7 +669,7 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
 
   const keys = Object.keys(monthlySchedules).sort();
   if (keys.length === 0) {
-    throw new Error('匯入失敗：找不到可匯入的月份資料，請確認檔案使用系統範本或至少包含「姓名」、「班別群組」、「1日~31日」欄位');
+    throw new Error('匯入失敗：找不到可匯入的月份資料，請確認檔案至少包含「姓名」與日期欄（可為 1日~31日，或系統匯出格式的 1\n(六) 這類表頭）；班別群組欄位可省略');
   }
 
   return {
@@ -4145,7 +4197,7 @@ export default function App() {
   };
 
   const handleImportFiles = async (files) => {
-    const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
+    const imported = await parseImportedExcelFiles(files, new Date().getFullYear(), { customLeaveCodes });
     setImportedSchedulePayload(imported);
     setPendingOpenMonthKey(imported.firstMonthKey || '');
     setLoadLatestOnEnter(false);
