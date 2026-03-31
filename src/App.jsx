@@ -1641,10 +1641,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return stats;
   };
 
-  const getDailyStats = (dateStr, staffList = staffs) => {
+  const getDailyStats = (dateStr) => {
     const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
 
-    (staffList || []).forEach(staff => {
+    staffs.forEach(staff => {
       const cellData = schedule[staff.id]?.[dateStr];
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
@@ -1661,6 +1661,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
 
     return stats;
+  };
+
+  const getGroupDailyLeaveCount = (group, dateStr) => {
+    return staffs.filter((staff) => {
+      if ((staff.group || '白班') !== group) return false;
+      const cellData = schedule[staff.id]?.[dateStr];
+      const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
+      return isConfiguredLeaveCode(code);
+    }).length;
   };
 
   const getRequiredCountForDate = (dateStr, rowKey) => {
@@ -1994,12 +2003,6 @@ const openSelectedCellFillModal = () => {
       staffs: staffs.filter(staff => (staff.group || '白班') === group)
     }));
   }, [staffs]);
-
-  const groupSummaryKeyMap = {
-    '白班': 'D',
-    '小夜': 'E',
-    '大夜': 'N'
-  };
 
   return (
     <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
@@ -2469,57 +2472,30 @@ const openSelectedCellFillModal = () => {
                     <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
                   </tr>
 
-                  {showBottomStats && (() => {
-                    const groupSummaryKey = groupSummaryKeyMap[group];
-                    return (
-                      <tr className="border-b border-slate-200 bg-slate-100/80">
-                        <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
-                        <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
-                          {groupSummaryKey} 班人數
-                        </td>
-                        {daysInMonth.map(d => {
-                          const count = getDailyStats(d.date, groupStaffList)[groupSummaryKey];
-                          return (
-                            <td
-                              key={d.date}
-                              className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                              style={{ color: tableFontColor, ...getDemandHighlightStyle(d.date, groupSummaryKey, count), ...getFourWeekDividerStyle(d.date) }}
-                            >
-                              {count || ''}
-                            </td>
-                          );
-                        })}
-                        <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
-                      </tr>
-                    );
-                  })()}
+                  {showBottomStats && (
+                    <tr className="border-b border-slate-200 bg-amber-50/70">
+                      <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
+                      <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                        {group}休假
+                      </td>
+                      {daysInMonth.map(d => {
+                        const count = getGroupDailyLeaveCount(group, d.date);
+                        return (
+                          <td
+                            key={d.date}
+                            className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
+                            style={{ color: tableFontColor }}
+                          >
+                            {count || ''}
+                          </td>
+                        );
+                      })}
+                      <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                    </tr>
+                  )}
                 </React.Fragment>
               ))}
             </tbody>
-
-            {showBottomStats && (
-            <tfoot className="bg-slate-100 border-t-2 border-slate-200">
-              <tr key="totalLeave">
-                <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
-                <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
-                  當日休假
-                </td>
-                {daysInMonth.map(d => {
-                  const count = getDailyStats(d.date).totalLeave;
-                  return (
-                    <td
-                      key={d.date}
-                      className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                      style={{ color: tableFontColor, ...getFourWeekDividerStyle(d.date) }}
-                    >
-                      {count || ''}
-                    </td>
-                  );
-                })}
-                <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
-              </tr>
-            </tfoot>
-            )}
           </table>
         </div>
       </div>
