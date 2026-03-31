@@ -918,7 +918,6 @@ const OFFICE_SWATCH_LEVELS = [0.12, 0.28, 0.46, 0.66];
 function OfficeColorPicker({ label, value, onChange, onReset, themeColors = OFFICE_THEME_SWATCHES, standardColors = OFFICE_STANDARD_SWATCHES }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
-  const nativeColorRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -934,8 +933,17 @@ function OfficeColorPicker({ label, value, onChange, onReset, themeColors = OFFI
     base,
     shades: OFFICE_SWATCH_LEVELS.map((ratio) => blendHexColors(base, '#ffffff', 1 - ratio))
   }));
+  const softExtraColors = [
+    '#FFF7D6', '#FDF1C2', '#FCE7D6', '#FDE2E2', '#FBE7F3',
+    '#F1E8FF', '#E9E8FF', '#DFEFFC', '#DDF7F1', '#E8F5DE'
+  ];
 
-  const swatchButtonClass = 'w-6 h-6 rounded-[3px] border border-slate-300 transition hover:scale-105';
+  const swatchButtonClass = 'h-6 w-6 rounded-[3px] border border-slate-300 transition hover:scale-105 hover:border-slate-500';
+  const currentRingClass = 'ring-2 ring-orange-500 ring-offset-1';
+
+  const applyColor = (nextColor) => {
+    onChange?.(nextColor);
+  };
 
   return (
     <div ref={wrapRef} className="relative flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
@@ -952,7 +960,7 @@ function OfficeColorPicker({ label, value, onChange, onReset, themeColors = OFFI
       </div>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[320px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[350px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="inline-block h-6 w-6 rounded border border-slate-300" style={{ backgroundColor: currentValue }}></span>
@@ -980,8 +988,8 @@ function OfficeColorPicker({ label, value, onChange, onReset, themeColors = OFFI
                 <div key={base} className="space-y-1">
                   <button
                     type="button"
-                    onClick={() => onChange(base)}
-                    className={`${swatchButtonClass} ${currentValue === normalizeHexColor(base) ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                    onClick={() => applyColor(base)}
+                    className={`${swatchButtonClass} ${currentValue === normalizeHexColor(base) ? currentRingClass : ''}`}
                     style={{ backgroundColor: base }}
                     aria-label={`主題色 ${base}`}
                   />
@@ -989,8 +997,8 @@ function OfficeColorPicker({ label, value, onChange, onReset, themeColors = OFFI
                     <button
                       key={shade}
                       type="button"
-                      onClick={() => onChange(shade)}
-                      className={`${swatchButtonClass} ${currentValue === normalizeHexColor(shade) ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                      onClick={() => applyColor(shade)}
+                      className={`${swatchButtonClass} ${currentValue === normalizeHexColor(shade) ? currentRingClass : ''}`}
                       style={{ backgroundColor: shade }}
                       aria-label={`主題延伸色 ${shade}`}
                     />
@@ -1000,116 +1008,42 @@ function OfficeColorPicker({ label, value, onChange, onReset, themeColors = OFFI
             </div>
           </div>
 
-          <div className="mb-4">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">標準色彩</div>
+          <div className="mb-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">柔和色推薦</div>
             <div className="grid grid-cols-10 gap-1.5">
-              {standardColors.map((color) => (
+              {softExtraColors.map((color) => (
                 <button
                   key={color}
                   type="button"
-                  onClick={() => onChange(color)}
-                  className={`${swatchButtonClass} ${currentValue === normalizeHexColor(color) ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                  onClick={() => applyColor(color)}
+                  className={`${swatchButtonClass} ${currentValue === normalizeHexColor(color) ? currentRingClass : ''}`}
                   style={{ backgroundColor: color }}
-                  aria-label={`標準色 ${color}`}
+                  aria-label={`柔和色 ${color}`}
                 />
               ))}
             </div>
           </div>
 
           <div>
-            <input
-              ref={nativeColorRef}
-              type="color"
-              value={currentValue}
-              onChange={(e) => onChange(e.target.value)}
-              className="sr-only"
-            />
-            <button
-              type="button"
-              onClick={() => nativeColorRef.current?.click()}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-            >
-              其他色彩…
-            </button>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">標準色彩</div>
+            <div className="grid grid-cols-10 gap-1.5">
+              {standardColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => applyColor(color)}
+                  className={`${swatchButtonClass} ${currentValue === normalizeHexColor(color) ? currentRingClass : ''}`}
+                  style={{ backgroundColor: color }}
+                  aria-label={`標準色 ${color}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
-
-const WIDTH_ADJUST_MAP = { narrow: -12, standard: 0, wide: 12 };
-const HEIGHT_ADJUST_MAP = { compact: -4, standard: 0, roomy: 4 };
-const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
-  const shiftAdjust = WIDTH_ADJUST_MAP[uiSettings.shiftColumnWidthMode || 'standard'] || 0;
-  const nameAdjust = WIDTH_ADJUST_MAP[uiSettings.nameDateColumnWidthMode || 'standard'] || 0;
-  const dayAdjust = WIDTH_ADJUST_MAP[uiSettings.dayColumnWidthMode || 'standard'] || 0;
-  const heightAdjust = HEIGHT_ADJUST_MAP[uiSettings.cellHeightMode || 'standard'] || 0;
-  const dotClassMap = { compact: 'w-1.5 h-1.5', standard: 'w-2 h-2', roomy: 'w-2.5 h-2.5' };
-  return {
-    ...baseConfig,
-    shiftWidth: Math.max(48, baseConfig.shiftWidth + shiftAdjust),
-    nameWidth: Math.max(76, baseConfig.nameWidth + nameAdjust),
-    dayMinWidth: Math.max(28, baseConfig.dayMinWidth + dayAdjust),
-    rowMinHeight: Math.max(72, (baseConfig.rowMinHeight || 80) + heightAdjust * 4),
-    selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
-  };
-};
-
-const clampColorChannel = (value) => Math.max(0, Math.min(255, Math.round(value)));
-
-const normalizeHexColor = (hex, fallback = '#000000') => {
-  const raw = String(hex || '').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
-  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
-    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
-  }
-  return fallback;
-};
-
-const hexToRgbObject = (hex, fallback = '#000000') => {
-  const normalized = normalizeHexColor(hex, fallback).replace('#', '');
-  return {
-    r: parseInt(normalized.slice(0, 2), 16),
-    g: parseInt(normalized.slice(2, 4), 16),
-    b: parseInt(normalized.slice(4, 6), 16)
-  };
-};
-
-const rgbObjectToHex = ({ r, g, b }) => {
-  const toHex = (value) => clampColorChannel(value).toString(16).padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
-
-const blendHexColors = (baseHex, mixHex, mixRatio = 0.5) => {
-  const ratio = Math.max(0, Math.min(1, Number(mixRatio) || 0));
-  const base = hexToRgbObject(baseHex, '#ffffff');
-  const mix = hexToRgbObject(mixHex, '#ffffff');
-  return rgbObjectToHex({
-    r: base.r * (1 - ratio) + mix.r * ratio,
-    g: base.g * (1 - ratio) + mix.g * ratio,
-    b: base.b * (1 - ratio) + mix.b * ratio
-  });
-};
-
-const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
-  return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
-};
-
-const FOUR_WEEK_CYCLE_START = '2026-04-13';
-const FOUR_WEEK_CYCLE_DAYS = 28;
-
-const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => {
-  if (!dateStr) return false;
-  const target = parseDateKey(dateStr);
-  const start = parseDateKey(cycleStart);
-  target.setHours(0, 0, 0, 0);
-  start.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
-  const cycleOffset = ((diffDays + 1) % FOUR_WEEK_CYCLE_DAYS + FOUR_WEEK_CYCLE_DAYS) % FOUR_WEEK_CYCLE_DAYS;
-  return cycleOffset === 0;
-};
-
 
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
