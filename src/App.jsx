@@ -1033,6 +1033,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
   const keyInputTimerRef = useRef(null);
+  const tableScrollContainerRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -2746,6 +2747,39 @@ const openSelectedCellFillModal = () => {
     setDragOverGroup(targetStaff.group || '白班');
   };
 
+  const handleTableContainerDragOver = (event) => {
+    if (!draggingStaffId) return;
+    const container = tableScrollContainerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const verticalThreshold = 72;
+    const horizontalThreshold = 56;
+    const maxStep = 26;
+
+    let nextScrollTop = container.scrollTop;
+    let nextScrollLeft = container.scrollLeft;
+
+    if (event.clientY < rect.top + verticalThreshold) {
+      const ratio = (rect.top + verticalThreshold - event.clientY) / verticalThreshold;
+      nextScrollTop -= Math.max(8, ratio * maxStep);
+    } else if (event.clientY > rect.bottom - verticalThreshold) {
+      const ratio = (event.clientY - (rect.bottom - verticalThreshold)) / verticalThreshold;
+      nextScrollTop += Math.max(8, ratio * maxStep);
+    }
+
+    if (event.clientX < rect.left + horizontalThreshold) {
+      const ratio = (rect.left + horizontalThreshold - event.clientX) / horizontalThreshold;
+      nextScrollLeft -= Math.max(6, ratio * 20);
+    } else if (event.clientX > rect.right - horizontalThreshold) {
+      const ratio = (event.clientX - (rect.right - horizontalThreshold)) / horizontalThreshold;
+      nextScrollLeft += Math.max(6, ratio * 20);
+    }
+
+    if (nextScrollTop !== container.scrollTop) container.scrollTop = nextScrollTop;
+    if (nextScrollLeft !== container.scrollLeft) container.scrollLeft = nextScrollLeft;
+  };
+
   const handleStaffDrop = (event, targetStaff) => {
     event.preventDefault();
     event.stopPropagation();
@@ -3095,7 +3129,7 @@ const openSelectedCellFillModal = () => {
       </div>
 
       <div className="max-w-[98vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
-        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-150px)]">
+        <div ref={tableScrollContainerRef} onDragOver={handleTableContainerDragOver} className="overflow-auto rounded-2xl max-h-[calc(100vh-150px)]">
           <table className="w-max min-w-full border-collapse select-none">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
@@ -3145,14 +3179,19 @@ const openSelectedCellFillModal = () => {
                     const isDraggingRow = draggingStaffId === staff.id;
                     const isDragOverBefore = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'before';
                     const isDragOverAfter = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'after';
+                    const rowInsertStyle = isDragOverBefore
+                      ? { boxShadow: 'inset 0 3px 0 #3b82f6' }
+                      : isDragOverAfter
+                        ? { boxShadow: 'inset 0 -3px 0 #10b981' }
+                        : null;
 
                     return (
                       <tr
                         key={staff.id}
-                        className={`relative border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isDraggingRow ? 'opacity-45 bg-blue-50/40' : ''}`}
+                        className={`relative border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isDraggingRow ? 'opacity-45 bg-blue-50/40' : ''} ${isDragOverBefore ? 'drag-insert-before' : ''} ${isDragOverAfter ? 'drag-insert-after' : ''}`}
                       >
                         {index === 0 && (
-                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
+                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, ...(rowInsertStyle || {}) }}>
                             <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
                               {showShiftLabels && (
                                 <span
@@ -3168,24 +3207,10 @@ const openSelectedCellFillModal = () => {
 
                         <td
                           className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5 relative`}
-                          style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}
+                          style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, ...(rowInsertStyle || {}) }}
                           onDragOver={(e) => handleStaffDragOver(e, staff)}
                           onDrop={(e) => handleStaffDrop(e, staff)}
                         >
-                          {isDragOverBefore && (
-                            <div className="pointer-events-none absolute left-1 right-1 top-0 z-40">
-                              <div className="relative h-0.5 bg-blue-500 rounded-full">
-                                <span className="absolute -left-1 -top-1 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white shadow-sm"></span>
-                              </div>
-                            </div>
-                          )}
-                          {isDragOverAfter && (
-                            <div className="pointer-events-none absolute left-1 right-1 bottom-0 z-40">
-                              <div className="relative h-0.5 bg-emerald-500 rounded-full">
-                                <span className="absolute -left-1 -top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white shadow-sm"></span>
-                              </div>
-                            </div>
-                          )}
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
@@ -3280,7 +3305,8 @@ const openSelectedCellFillModal = () => {
                               style={{
                                 backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
                                 opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                                ...getFourWeekDividerStyle(d.date)
+                                ...getFourWeekDividerStyle(d.date),
+                                ...(rowInsertStyle || {})
                               }}
                               onMouseDown={(e) => {
                                 if (e.button !== 0) return;
@@ -3346,18 +3372,18 @@ const openSelectedCellFillModal = () => {
 
                         {showRightStats && (
                         <>
-                        <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.work}</td>
-                        <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.holidayLeave}</td>
-                        <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.totalLeave}</td>
+                        <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.work}</td>
+                        <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.holidayLeave}</td>
+                        <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.totalLeave}</td>
                         </>
                         )}
                         {showLeaveStats && mergedLeaveCodes.map(l => (
-                          <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
+                          <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>
                             {stats.leaveDetails[l] || ''}
                           </td>
                         ))}
                         {(customColumns || []).map(col => (
-                          <td key={col} className={`border-r bg-violet-50/10 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
+                          <td key={col} className={`border-r bg-violet-50/10 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>
                             <input
                               type="text"
                               value={customColumnValues?.[staff.id]?.[col] || ''}
