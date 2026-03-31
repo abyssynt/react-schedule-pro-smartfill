@@ -5,7 +5,7 @@ import {
   ArrowUp, ArrowDown, Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
-  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2
+  Database, Cpu, Monitor, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Trash2
 } from 'lucide-react';
 
 // ==========================================
@@ -923,6 +923,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [isRangeDragging, setIsRangeDragging] = useState(false);
   const [clipboardGrid, setClipboardGrid] = useState([]);
   const [keyInputBuffer, setKeyInputBuffer] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState({ 白班: false, 小夜: false, 大夜: false });
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [editingNameDraft, setEditingNameDraft] = useState('');
 
@@ -2873,12 +2874,15 @@ const openSelectedCellFillModal = () => {
             </thead>
 
             <tbody>
-              {groupedStaffs.map(({ group, staffs: groupStaffList }) => (
+              {groupedStaffs.map(({ group, staffs: groupStaffList }) => {
+                const isCollapsed = Boolean(collapsedGroups[group]);
+                const visibleGroupStaffList = isCollapsed ? [] : groupStaffList;
+                return (
                 <React.Fragment key={group}>
-                  {groupStaffList.map((staff, index) => {
+                  {visibleGroupStaffList.map((staff, index) => {
                     const stats = getStaffStats(staff.id);
-                    const groupCount = groupStaffList.length + 1;
-                    const groupIndex = groupStaffList.findIndex(s => s.id === staff.id);
+                    const groupCount = visibleGroupStaffList.length + 1;
+                    const groupIndex = visibleGroupStaffList.findIndex(s => s.id === staff.id);
 
                     return (
                       <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
@@ -2909,7 +2913,7 @@ const openSelectedCellFillModal = () => {
                               </button>
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'down')}
-                                disabled={groupIndex === groupStaffList.length - 1}
+                                disabled={groupIndex === visibleGroupStaffList.length - 1}
                                 className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
                               >
                                 <ArrowDown size={14} />
@@ -3088,6 +3092,7 @@ const openSelectedCellFillModal = () => {
                     );
                   })}
 
+                  {!isCollapsed && (
                   <tr className="border-b border-slate-200 bg-slate-50/70">
                     <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
@@ -3114,9 +3119,22 @@ const openSelectedCellFillModal = () => {
 
                     <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
                   </tr>
+                  )}
 
                   <tr className="bg-amber-50/95 border-b border-slate-200">
-                    <td className={`sticky left-0 z-30 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}></td>
+                    <td className={`sticky left-0 z-30 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
+                      <div className="flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }))}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+                          title={isCollapsed ? `展開${group}` : `收合${group}`}
+                          aria-label={isCollapsed ? `展開${group}` : `收合${group}`}
+                        >
+                          {isCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                        </button>
+                      </div>
+                    </td>
                     <td className={`sticky z-30 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
                       {group === '白班' ? '白班上班' : group === '小夜' ? '小夜上班' : '大夜上班'}
                     </td>
@@ -3140,7 +3158,7 @@ const openSelectedCellFillModal = () => {
                     ></td>
                   </tr>
                 </React.Fragment>
-              ))}
+              )})}
             </tbody>
 
             {showBottomStats && (
