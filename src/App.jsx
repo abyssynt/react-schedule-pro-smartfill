@@ -2936,7 +2936,7 @@ const openSelectedCellFillModal = () => {
                                 <button
                                   type="button"
                                   onClick={() => toggleGroupCollapse(group)}
-                                  className="absolute left-2 top-2 w-6 h-6 rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 flex items-center justify-center font-black leading-none shadow-sm"
+                                  className="absolute left-1 top-1 w-7 h-7 rounded-xl border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 flex items-center justify-center font-black leading-none shadow-sm"
                                   title={isCollapsed ? '展開白班' : '收合白班'}
                                 >
                                   {isCollapsed ? '+' : '-'}
