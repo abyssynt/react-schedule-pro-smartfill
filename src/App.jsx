@@ -2885,8 +2885,8 @@ const openSelectedCellFillModal = () => {
                 <React.Fragment key={group}>
                   {isCollapsed && group === '白班' && (
                     <tr className="border-b border-slate-200 bg-slate-50/70">
-                      <td className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
-                        <div className="relative flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
+                      <td className="sticky left-0 z-20 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
+                        <div className="relative flex items-start h-full px-2 py-2" style={{ minHeight: densityConfig.rowMinHeight }}>
                           <button
                             type="button"
                             onClick={() => toggleGroupCollapse(group)}
@@ -2895,18 +2895,18 @@ const openSelectedCellFillModal = () => {
                           >
                             +
                           </button>
-                          {showShiftLabels && (
+                          <div className="w-full pl-8 pt-0.5">
                             <span
-                              className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`}
-                              style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}
+                              className={`${shiftColumnFontSizeClass} font-black leading-none whitespace-nowrap`}
+                              style={{ color: shiftColumnFontColor, fontSize: shiftLabelFontSize }}
                             >
                               {group}
                             </span>
-                          )}
+                          </div>
                         </div>
                       </td>
-                      <td className={`sticky z-30 border-r text-center font-black ${shiftColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor, fontSize: shiftCellLabelFontSize }}>
-                        白班已收合
+                      <td className={`sticky z-30 border-r text-center font-black ${shiftColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                        已收合
                       </td>
                       {daysInMonth.map(d => (
                         <td
