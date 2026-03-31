@@ -857,7 +857,8 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#ffffff',
     shiftColumnFontColor: '#1e293b',
     nameDateColumnFontColor: '#1e293b',
-    demandOverColor: '#fde68a'
+    demandOverColor: '#fde68a',
+    groupSummaryRowBgColor: '#fef3c7'
   },
   soft: {
     pageBackgroundColor: '#f7faf7',
@@ -868,7 +869,8 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#fcfdfc',
     shiftColumnFontColor: '#365314',
     nameDateColumnFontColor: '#334155',
-    demandOverColor: '#fde68a'
+    demandOverColor: '#fde68a',
+    groupSummaryRowBgColor: '#dcfce7'
   },
   warm: {
     pageBackgroundColor: '#fffaf5',
@@ -879,7 +881,8 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#fffbeb',
     shiftColumnFontColor: '#7c2d12',
     nameDateColumnFontColor: '#44403c',
-    demandOverColor: '#fdba74'
+    demandOverColor: '#fdba74',
+    groupSummaryRowBgColor: '#fdecc8'
   },
   dark: {
     pageBackgroundColor: '#0f172a',
@@ -890,9 +893,150 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#172033',
     shiftColumnFontColor: '#f8fafc',
     nameDateColumnFontColor: '#e2e8f0',
-    demandOverColor: '#78350f'
+    demandOverColor: '#78350f',
+    groupSummaryRowBgColor: '#3f3a2b'
   }
 };
+
+const getThemeDefaultGroupSummaryRowBgColor = (themePreset = 'classic') => {
+  if (themePreset && themePreset !== 'custom' && UI_THEME_PRESETS[themePreset]?.groupSummaryRowBgColor) {
+    return UI_THEME_PRESETS[themePreset].groupSummaryRowBgColor;
+  }
+  return '#fef3c7';
+};
+
+const OFFICE_THEME_SWATCHES = [
+  '#fef3c7', '#dcfce7', '#dbeafe', '#fee2e2', '#ede9fe', '#cffafe', '#faf5e9', '#e5e7eb'
+];
+
+const OFFICE_STANDARD_SWATCHES = [
+  '#c00000', '#ff0000', '#ffc000', '#ffff00', '#92d050', '#00b050', '#00b0f0', '#0070c0', '#002060', '#7030a0'
+];
+
+const OFFICE_SWATCH_LEVELS = [0.12, 0.28, 0.46, 0.66];
+
+function OfficeColorPicker({ label, value, onChange, onReset, themeColors = OFFICE_THEME_SWATCHES, standardColors = OFFICE_STANDARD_SWATCHES }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const nativeColorRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (event) => {
+      if (!wrapRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const currentValue = normalizeHexColor(value || '#fef3c7', '#fef3c7');
+  const themeGrid = themeColors.map((base) => ({
+    base,
+    shades: OFFICE_SWATCH_LEVELS.map((ratio) => blendHexColors(base, '#ffffff', 1 - ratio))
+  }));
+
+  const swatchButtonClass = 'w-6 h-6 rounded-[3px] border border-slate-300 transition hover:scale-105';
+
+  return (
+    <div ref={wrapRef} className="relative flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+      <span className="text-sm font-medium">{label}</span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen(prev => !prev)}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+        >
+          <span className="inline-block h-5 w-5 rounded border border-slate-300" style={{ backgroundColor: currentValue }}></span>
+          選擇顏色
+        </button>
+      </div>
+
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[320px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-6 w-6 rounded border border-slate-300" style={{ backgroundColor: currentValue }}></span>
+              <div>
+                <div className="text-sm font-bold text-slate-700">目前顏色</div>
+                <div className="text-xs text-slate-500">{currentValue.toUpperCase()}</div>
+              </div>
+            </div>
+            <button type="button" onClick={() => setOpen(false)} className="text-xs font-bold text-slate-500 hover:text-slate-700">關閉</button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { onReset?.(); setOpen(false); }}
+            className="mb-4 flex w-full items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
+          >
+            <span className="inline-block h-4 w-4 rounded border border-slate-300 bg-white"></span>
+            還原預設
+          </button>
+
+          <div className="mb-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">佈景主題色彩</div>
+            <div className="grid grid-cols-8 gap-1.5">
+              {themeGrid.map(({ base, shades }) => (
+                <div key={base} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => onChange(base)}
+                    className={`${swatchButtonClass} ${currentValue === normalizeHexColor(base) ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                    style={{ backgroundColor: base }}
+                    aria-label={`主題色 ${base}`}
+                  />
+                  {shades.map((shade) => (
+                    <button
+                      key={shade}
+                      type="button"
+                      onClick={() => onChange(shade)}
+                      className={`${swatchButtonClass} ${currentValue === normalizeHexColor(shade) ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                      style={{ backgroundColor: shade }}
+                      aria-label={`主題延伸色 ${shade}`}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">標準色彩</div>
+            <div className="grid grid-cols-10 gap-1.5">
+              {standardColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => onChange(color)}
+                  className={`${swatchButtonClass} ${currentValue === normalizeHexColor(color) ? 'ring-2 ring-orange-500 ring-offset-1' : ''}`}
+                  style={{ backgroundColor: color }}
+                  aria-label={`標準色 ${color}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <input
+              ref={nativeColorRef}
+              type="color"
+              value={currentValue}
+              onChange={(e) => onChange(e.target.value)}
+              className="sr-only"
+            />
+            <button
+              type="button"
+              onClick={() => nativeColorRef.current?.click()}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+            >
+              其他色彩…
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const WIDTH_ADJUST_MAP = { narrow: -12, standard: 0, wide: 12 };
 const HEIGHT_ADJUST_MAP = { compact: -4, standard: 0, roomy: 4 };
@@ -3674,7 +3818,12 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">需求警示顯示</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求超編顏色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">群組統計列顏色</span><input type="color" value={uiSettings.groupSummaryRowBgColor || '#fef3c7'} onChange={(e) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <OfficeColorPicker
+                      label="群組統計列顏色"
+                      value={uiSettings.groupSummaryRowBgColor || getThemeDefaultGroupSummaryRowBgColor(uiSettings.themePreset)}
+                      onChange={(nextColor) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: nextColor, themePreset: 'custom' }))}
+                      onReset={() => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: getThemeDefaultGroupSummaryRowBgColor(prev.themePreset), themePreset: prev.themePreset || 'classic' }))}
+                    />
                   </div>
                 </div>
               </div>
@@ -3710,7 +3859,9 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                             shiftColumnBgColor: preset.shiftColumnBgColor,
                             nameDateColumnBgColor: preset.nameDateColumnBgColor,
                             shiftColumnFontColor: preset.shiftColumnFontColor,
-                            nameDateColumnFontColor: preset.nameDateColumnFontColor
+                            nameDateColumnFontColor: preset.nameDateColumnFontColor,
+                            demandOverColor: preset.demandOverColor,
+                            groupSummaryRowBgColor: preset.groupSummaryRowBgColor
                           }));
                         }}
                         className={`px-3 py-1.5 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
