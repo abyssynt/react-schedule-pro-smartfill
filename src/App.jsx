@@ -1701,10 +1701,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       ? `排班規則：<br/>${schedulingRuleLines.map((line, index) => `${index + 1}. ${line}`).join('<br/>')}`
       : '排班規則：';
 
+    const webSummaryRowBg = '#fef3c7';
     const summaryRows = [
-      { group: '白班', key: 'D', label: '白班上班', bg: exportTheme.statWorkBg },
-      { group: '小夜', key: 'E', label: '小夜上班', bg: exportTheme.statHolidayBg },
-      { group: '大夜', key: 'N', label: '大夜上班', bg: exportTheme.statTotalBg }
+      { group: '白班', key: 'D', label: '白班上班', bg: webSummaryRowBg },
+      { group: '小夜', key: 'E', label: '小夜上班', bg: webSummaryRowBg },
+      { group: '大夜', key: 'N', label: '大夜上班', bg: webSummaryRowBg }
     ];
 
     const groupedExportRowsHtml = SHIFT_GROUPS.map((group) => {
