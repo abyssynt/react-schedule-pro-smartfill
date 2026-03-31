@@ -965,8 +965,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
-  const stickyGroupSummaryBottom = 0;
-  const stickyGroupSummaryShadow = '0 -6px 12px rgba(15, 23, 42, 0.08)';
+  const stickyGroupSummaryTop = 44;
+  const stickyGroupSummaryShadow = '0 6px 12px rgba(15, 23, 42, 0.08)';
   const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
   const fourWeekDividerColor = blendHexColors(fourWeekDividerBaseColor, pageBackgroundColor, 0.18);
 
@@ -3116,8 +3116,8 @@ const openSelectedCellFillModal = () => {
                   </tr>
 
                   <tr className="bg-amber-50/95 border-b border-slate-200">
-                    <td className={`sticky left-0 z-30 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, bottom: stickyGroupSummaryBottom, boxShadow: stickyGroupSummaryShadow }}></td>
-                    <td className={`sticky z-30 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor, bottom: stickyGroupSummaryBottom, boxShadow: stickyGroupSummaryShadow }}>
+                    <td className={`sticky left-0 z-30 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}></td>
+                    <td className={`sticky z-30 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
                       {group === '白班' ? '白班上班' : group === '小夜' ? '小夜上班' : '大夜上班'}
                     </td>
                     {daysInMonth.map(d => {
@@ -3127,7 +3127,7 @@ const openSelectedCellFillModal = () => {
                         <td
                           key={d.date}
                           className={`sticky z-20 border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                          style={{ backgroundColor: '#fef3c7', color: tableFontColor, bottom: stickyGroupSummaryBottom, boxShadow: stickyGroupSummaryShadow, ...getDemandHighlightStyle(d.date, rowKey, count), ...getFourWeekDividerStyle(d.date) }}
+                          style={{ backgroundColor: '#fef3c7', color: tableFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow, ...getDemandHighlightStyle(d.date, rowKey, count), ...getFourWeekDividerStyle(d.date) }}
                         >
                           {count || ''}
                         </td>
@@ -3136,7 +3136,7 @@ const openSelectedCellFillModal = () => {
                     <td
                       colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}
                       className="sticky z-20"
-                      style={{ backgroundColor: '#fef3c7', bottom: stickyGroupSummaryBottom, boxShadow: stickyGroupSummaryShadow }}
+                      style={{ backgroundColor: '#fef3c7', top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}
                     ></td>
                   </tr>
                 </React.Fragment>
