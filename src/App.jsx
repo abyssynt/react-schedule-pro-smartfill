@@ -546,6 +546,13 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       importedSchedule[staffId][day] = { value: normalizedCode, source: 'manual' };
     });
 
+    const importedCodes = Object.values(importedSchedule[staffId] || {}).map((cell) => {
+      if (!cell) return '';
+      return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
+    }).filter(Boolean);
+    const hasShiftCode = importedCodes.some(code => DICT.SHIFTS.includes(code));
+    const hasLeaveCode = importedCodes.some(code => isConfiguredImportedLeaveCode(code, customLeaveCodes));
+
     let normalizedGroup = '白班';
     if (rawGroup) {
       normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
@@ -555,9 +562,14 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
     } else {
       normalizedGroup = inferImportedGroupFromCodes(importedSchedule[staffId]);
       if (!normalizedGroup) {
-        delete importedSchedule[staffId];
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已略過`);
-        continue;
+        if (hasLeaveCode && !hasShiftCode) {
+          normalizedGroup = '白班';
+          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有休假代碼，已先歸入白班保留資料`);
+        } else {
+          delete importedSchedule[staffId];
+          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已略過`);
+          continue;
+        }
       }
     }
 
@@ -3215,6 +3227,20 @@ const openSelectedCellFillModal = () => {
 
                   {!isCollapsed && (
                   <tr className="border-b border-slate-200 bg-slate-50/70">
+                    {visibleGroupStaffList.length === 0 && (
+                      <td rowSpan={2} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
+                        <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
+                          {showShiftLabels && (
+                            <span
+                              className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`}
+                              style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}
+                            >
+                              {group}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    )}
                     <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
                         <button
@@ -3243,6 +3269,7 @@ const openSelectedCellFillModal = () => {
                   )}
 
                   <tr className="bg-amber-50/95 border-b border-slate-200">
+                    {visibleGroupStaffList.length > 0 || isCollapsed ? (
                     <td className={`sticky left-0 z-30 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
                       <div className="flex items-center justify-center">
                         <button
@@ -3256,6 +3283,7 @@ const openSelectedCellFillModal = () => {
                         </button>
                       </div>
                     </td>
+                    ) : null}
                     <td className={`sticky z-30 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
                       {group === '白班' ? '白班上班' : group === '小夜' ? '小夜上班' : '大夜上班'}
                     </td>
@@ -4312,4 +4340,9 @@ export default function App() {
       discardActiveDraft={discardActiveDraft}
     />
   );
-}
+}const isConfiguredImportedLeaveCode = (code = '', customLeaveCodes = []) => {
+  const mergedLeaveCodes = Array.from(new Set([...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).filter(Boolean);
+  const prefix = getCodePrefix(code);
+  return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
+};
+
