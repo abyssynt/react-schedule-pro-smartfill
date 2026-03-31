@@ -5,7 +5,7 @@ import {
   ArrowUp, ArrowDown, Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
-  Database, Cpu, Monitor, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Trash2
+  Database, Cpu, Monitor, ArrowLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, Trash2, GripVertical
 } from 'lucide-react';
 
 // ==========================================
@@ -996,6 +996,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [clipboardGrid, setClipboardGrid] = useState([]);
   const [keyInputBuffer, setKeyInputBuffer] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState({ 白班: false, 小夜: false, 大夜: false });
+  const [draggingStaffId, setDraggingStaffId] = useState(null);
+  const [dragOverTarget, setDragOverTarget] = useState(null);
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [editingNameDraft, setEditingNameDraft] = useState('');
 
@@ -1289,6 +1291,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setKeyInputBuffer('');
     setEditingStaffId(null);
     setEditingNameDraft('');
+    setDraggingStaffId(null);
+    setDragOverTarget(null);
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
@@ -2669,6 +2673,76 @@ const openSelectedCellFillModal = () => {
     resetKeyInputBuffer();
   };
 
+  const moveStaffWithinGroupByDrag = (draggedStaffId, targetStaffId, position = 'before') => {
+    if (!draggedStaffId || !targetStaffId || draggedStaffId === targetStaffId) return;
+
+    const draggedStaff = staffs.find(staff => staff.id === draggedStaffId);
+    const targetStaff = staffs.find(staff => staff.id === targetStaffId);
+    if (!draggedStaff || !targetStaff) return;
+    if ((draggedStaff.group || '白班') !== (targetStaff.group || '白班')) return;
+
+    const nextStaffs = [...staffs];
+    const draggedIndex = nextStaffs.findIndex(staff => staff.id === draggedStaffId);
+    const targetIndex = nextStaffs.findIndex(staff => staff.id === targetStaffId);
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const [draggedItem] = nextStaffs.splice(draggedIndex, 1);
+    const targetIndexAfterRemoval = nextStaffs.findIndex(staff => staff.id === targetStaffId);
+    let insertIndex = position === 'after' ? targetIndexAfterRemoval + 1 : targetIndexAfterRemoval;
+    if (insertIndex < 0) insertIndex = nextStaffs.length;
+    nextStaffs.splice(insertIndex, 0, draggedItem);
+
+    setStaffs(nextStaffs);
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
+  };
+
+  const handleStaffDragStart = (event, staff) => {
+    if (!staff?.id) return;
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', staff.id);
+    setDraggingStaffId(staff.id);
+    setDragOverTarget(null);
+  };
+
+  const handleStaffDragOver = (event, targetStaff) => {
+    if (!draggingStaffId || !targetStaff?.id || draggingStaffId === targetStaff.id) return;
+    const draggingStaff = staffs.find(staff => staff.id === draggingStaffId);
+    if (!draggingStaff) return;
+    if ((draggingStaff.group || '白班') !== (targetStaff.group || '白班')) return;
+
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const nextPosition = (event.clientY - bounds.top) < (bounds.height / 2) ? 'before' : 'after';
+    setDragOverTarget({ staffId: targetStaff.id, position: nextPosition });
+  };
+
+  const handleStaffDrop = (event, targetStaff) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!draggingStaffId || !targetStaff?.id) return;
+    const draggingStaff = staffs.find(staff => staff.id === draggingStaffId);
+    if (!draggingStaff) return;
+    if ((draggingStaff.group || '白班') !== (targetStaff.group || '白班')) {
+      setDraggingStaffId(null);
+      setDragOverTarget(null);
+      return;
+    }
+    const dropPosition = dragOverTarget?.staffId === targetStaff.id ? dragOverTarget.position : 'before';
+    moveStaffWithinGroupByDrag(draggingStaffId, targetStaff.id, dropPosition);
+    setDraggingStaffId(null);
+    setDragOverTarget(null);
+  };
+
+  const handleStaffDragEnd = () => {
+    setDraggingStaffId(null);
+    setDragOverTarget(null);
+  };
+
   const commitEditingStaffName = (staffId, nextName) => {
     const trimmedName = String(nextName ?? '').trim();
     setStaffs(prev => {
@@ -2695,6 +2769,8 @@ const openSelectedCellFillModal = () => {
     setIsRangeDragging(false);
     setEditingStaffId(null);
     setEditingNameDraft('');
+    setDraggingStaffId(null);
+    setDragOverTarget(null);
     resetKeyInputBuffer();
   }, [staffs.length]);
 
@@ -3017,8 +3093,15 @@ const openSelectedCellFillModal = () => {
                     const groupCount = visibleGroupStaffList.length + 1;
                     const groupIndex = visibleGroupStaffList.findIndex(s => s.id === staff.id);
 
+                    const isDraggingRow = draggingStaffId === staff.id;
+                    const isDragOverBefore = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'before';
+                    const isDragOverAfter = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'after';
+
                     return (
-                      <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                      <tr
+                        key={staff.id}
+                        className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isDraggingRow ? 'opacity-45' : ''}`}
+                      >
                         {index === 0 && (
                           <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
                             <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
@@ -3034,8 +3117,26 @@ const openSelectedCellFillModal = () => {
                           </td>
                         )}
 
-                        <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
-                          <div className="flex items-center gap-0.5">
+                        <td
+                          className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5 ${isDragOverBefore ? 'ring-2 ring-inset ring-blue-400' : ''} ${isDragOverAfter ? 'ring-2 ring-inset ring-emerald-400' : ''}`}
+                          style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}
+                          onDragOver={(e) => handleStaffDragOver(e, staff)}
+                          onDrop={(e) => handleStaffDrop(e, staff)}
+                        >
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              draggable
+                              onDragStart={(e) => handleStaffDragStart(e, staff)}
+                              onDragEnd={handleStaffDragEnd}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              className="shrink-0 w-4 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-grab active:cursor-grabbing"
+                              title="拖曳排序（第一刀：僅支援同群組內排序）"
+                              aria-label={`拖曳排序 ${staff.name}`}
+                            >
+                              <GripVertical size={14} />
+                            </button>
                             <div className="flex flex-col items-center justify-center shrink-0 w-3">
                               <button
                                 onClick={() => moveStaffInGroup(staff.id, 'up')}
