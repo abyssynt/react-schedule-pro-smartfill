@@ -1521,18 +1521,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
       holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
       monthTitleBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.55),
-      summaryRowBg: '#fef3c7',
-      leaveBottomBg: blendHexColors(exportTheme?.pageBg || '#f8fafc', exportTheme?.nameBg || '#ffffff', 0.5)
+      summaryBg: '#fef3c7',
+      leaveRowBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.2)
     };
 
     const statHeaders = ['上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
     const lastDateColumn = daysInMonth.length + 1;
-
-    const baseBorder = {
-      top: { style: 'thin' }, left: { style: 'thin' },
-      bottom: { style: 'thin' }, right: { style: 'thin' }
-    };
 
     const monthTitleRow = worksheet.addRow([]);
     monthTitleRow.height = 26;
@@ -1560,9 +1555,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       leaveCell.font = { bold: true, size: 11, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
     }
 
-    for (let col = 1; col <= totalColumns; col++) {
+    for (let col = 1; col <= totalColumns; col += 1) {
       const cell = monthTitleRow.getCell(col);
-      cell.border = baseBorder;
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
       if (col === 1 || col > lastDateColumn) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#FFFFFF') } };
       }
@@ -1575,6 +1573,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     header.eachCell((cell, colNumber) => {
       cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      const baseBorder = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
       cell.border = baseBorder;
 
       if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
@@ -1583,26 +1585,33 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayHeadBg, '#FFCACA') } };
         else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendHeadBg, '#DCFCE7') } };
         else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekdayHeadBg, '#F1F5F9') } };
+      } else if (colNumber === 1) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
+        cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
       } else {
-        if (colNumber === 1) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
-        } else {
-          const statIndex = colNumber - (daysInMonth.length + 2);
-          const statKey = statHeaders[statIndex];
-          const statBg = statKey === '上班'
-            ? blendHexColors(exportTheme.pageBg, '#93c5fd', 0.45)
-            : statKey === '假日休'
-              ? blendHexColors(exportTheme.pageBg, colors.weekend || '#dcfce7', 0.5)
-              : statKey === '總休'
-                ? blendHexColors(exportTheme.pageBg, colors.holiday || '#fca5a5', 0.45)
-                : exportTheme.pageBg;
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(statBg, '#F8FAFC') } };
-        }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#F8FAFC') } };
       }
     });
 
-    const appendStaffRow = (staff) => {
+    const makeBaseBorder = () => ({
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' }
+    });
+
+    const applyStandardCellStyle = (cell, colNumber, dateObj = null) => {
+      const baseBorder = makeBaseBorder();
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.font = { color: { argb: hexToExcelArgb(colNumber === 1 ? exportTheme.nameFont : exportTheme.tableFont, '#1F2937') } };
+      cell.border = baseBorder;
+      if (dateObj) {
+        cell.numFmt = '@';
+        cell.border = applyExcelFourWeekDivider(baseBorder, dateObj.date);
+        if (dateObj.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayCellBg, '#FFE4E4') } };
+        else if (dateObj.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendCellBg, '#F0FDF4') } };
+      }
+    };
+
+    const addStaffRow = (staff) => {
       const stats = getStaffStats(staff.id);
       const rowData = [
         staff.name,
@@ -1610,55 +1619,45 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           const cellData = schedule[staff.id]?.[d.date];
           return typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
         }),
-        stats.work, stats.holidayLeave, stats.totalLeave,
-        ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''), ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
+        stats.work,
+        stats.holidayLeave,
+        stats.totalLeave,
+        ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''),
+        ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
       ];
       const row = worksheet.addRow(rowData);
       row.eachCell((cell, colNumber) => {
-        cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.font = { color: { argb: hexToExcelArgb(colNumber === 1 ? exportTheme.nameFont : exportTheme.tableFont, '#1F2937') } };
-        cell.border = baseBorder;
-
-        if (colNumber === 1) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.nameBg, '#FFFFFF') } };
-        }
-        if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
-          cell.numFmt = '@';
-          const d = daysInMonth[colNumber - 2];
-          cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
-          if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayCellBg, '#FFE4E4') } };
-          else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendCellBg, '#F0FDF4') } };
-        }
+        const dateObj = (colNumber >= 2 && colNumber <= daysInMonth.length + 1) ? daysInMonth[colNumber - 2] : null;
+        applyStandardCellStyle(cell, colNumber, dateObj);
       });
+      return row;
     };
 
-    const appendGroupSummaryRow = (group) => {
-      const rowKey = group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N';
+    const addSummaryRow = (summaryKey, includeRightStats = false) => {
       const rowData = [
         '',
-        ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || ''),
-        ...Array(statHeaders.length).fill('')
+        ...daysInMonth.map(d => getDailyStats(d.date)[summaryKey] || ''),
+        ...(includeRightStats ? Array(statHeaders.length).fill('') : Array(statHeaders.length).fill(''))
       ];
       const row = worksheet.addRow(rowData);
       row.eachCell((cell, colNumber) => {
+        const baseBorder = makeBaseBorder();
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.font = { color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+        cell.font = { bold: true, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
         cell.border = baseBorder;
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.summaryRowBg, '#FEF3C7') } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.summaryBg, '#FEF3C7') } };
         if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
           const d = daysInMonth[colNumber - 2];
           cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
-          const demandStyle = getDemandHighlightStyle(d.date, rowKey, getDailyStats(d.date)[rowKey]);
-          if (demandStyle?.backgroundColor) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(demandStyle.backgroundColor, '#FEF3C7') } };
-          }
         }
       });
+      return row;
     };
 
     groupedStaffs.forEach(({ group, staffs: groupStaffList }) => {
-      groupStaffList.forEach(appendStaffRow);
-      appendGroupSummaryRow(group);
+      groupStaffList.forEach(addStaffRow);
+      const summaryKey = group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N';
+      addSummaryRow(summaryKey);
     });
 
     const leaveRowData = [
@@ -1668,10 +1667,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     ];
     const leaveRow = worksheet.addRow(leaveRowData);
     leaveRow.eachCell((cell, colNumber) => {
+      const baseBorder = makeBaseBorder();
       cell.alignment = { vertical: 'middle', horizontal: 'center' };
-      cell.font = { color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      cell.font = { bold: true, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
       cell.border = baseBorder;
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(blendHexColors(exportTheme.pageBg, exportTheme.nameBg, 0.5), '#F1F5F9') } };
+      if (colNumber >= 1 && colNumber <= totalColumns) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.leaveRowBg, '#FFFFFF') } };
+      }
       if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
         const d = daysInMonth[colNumber - 2];
         cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
@@ -1681,8 +1683,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
 
     worksheet.getColumn(1).width = 15;
-    for (let i = 2; i <= daysInMonth.length + 1; i++) worksheet.getColumn(i).width = 5;
-    for (let i = daysInMonth.length + 2; i <= totalColumns; i++) worksheet.getColumn(i).width = 8;
+    for (let i = 2; i <= daysInMonth.length + 1; i += 1) worksheet.getColumn(i).width = 5;
+    for (let i = daysInMonth.length + 2; i <= totalColumns; i += 1) worksheet.getColumn(i).width = 8;
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
@@ -1693,11 +1695,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     a.href = url;
     a.download = `排班表_${year}年${month}月.xlsx`;
     a.click();
+    URL.revokeObjectURL(url);
     setShowExportMenu(false);
     setRuleFillFeedback("✅ Excel 導出成功！");
   };
-
-
 
   const exportToWord = () => {
     const statHeaders = ['上班', '假日休', '總休'];
