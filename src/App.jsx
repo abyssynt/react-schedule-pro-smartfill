@@ -998,6 +998,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [collapsedGroups, setCollapsedGroups] = useState({ 白班: false, 小夜: false, 大夜: false });
   const [draggingStaffId, setDraggingStaffId] = useState(null);
   const [dragOverTarget, setDragOverTarget] = useState(null);
+  const [dragOverGroup, setDragOverGroup] = useState('');
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [editingNameDraft, setEditingNameDraft] = useState('');
 
@@ -2700,6 +2701,53 @@ const openSelectedCellFillModal = () => {
     resetKeyInputBuffer();
   };
 
+  const warnGroupMismatchIfNeeded = (staff, nextGroup) => {
+    if (!staff || !nextGroup) return;
+    const mismatchCodes = daysInMonth
+      .map(day => getCellCode(staff.id, day.date))
+      .filter(code => code && isShiftCode(code) && getShiftGroupByCode(code) && getShiftGroupByCode(code) !== nextGroup);
+    if (mismatchCodes.length > 0) {
+      const uniqueCodes = Array.from(new Set(mismatchCodes));
+      setRuleFillFeedback(`⚠️ 已將 ${staff.name} 移到${nextGroup}，但此人仍包含不屬於新群組的班別：${uniqueCodes.join('、')}`);
+    }
+  };
+
+  const moveStaffAcrossGroupsByDrag = (draggedStaffId, targetGroup, targetStaffId = '', position = 'before') => {
+    if (!draggedStaffId || !targetGroup) return;
+    const draggedStaff = staffs.find(staff => staff.id === draggedStaffId);
+    if (!draggedStaff) return;
+
+    const nextStaffs = [...staffs];
+    const draggedIndex = nextStaffs.findIndex(staff => staff.id === draggedStaffId);
+    if (draggedIndex === -1) return;
+
+    const [draggedItem] = nextStaffs.splice(draggedIndex, 1);
+    const updatedDraggedItem = { ...draggedItem, group: targetGroup };
+
+    let insertIndex = nextStaffs.length;
+    if (targetStaffId) {
+      const targetIndex = nextStaffs.findIndex(staff => staff.id === targetStaffId);
+      if (targetIndex !== -1) {
+        insertIndex = position === 'after' ? targetIndex + 1 : targetIndex;
+      }
+    } else {
+      const groupIndexes = nextStaffs
+        .map((staff, index) => ({ staff, index }))
+        .filter(item => (item.staff.group || '白班') === targetGroup)
+        .map(item => item.index);
+      insertIndex = groupIndexes.length > 0 ? groupIndexes[groupIndexes.length - 1] + 1 : nextStaffs.length;
+    }
+
+    nextStaffs.splice(insertIndex, 0, updatedDraggedItem);
+    setStaffs(nextStaffs);
+    setSelectedGridCell(null);
+    setRangeSelection(null);
+    setSelectionAnchor(null);
+    setIsRangeDragging(false);
+    resetKeyInputBuffer();
+    warnGroupMismatchIfNeeded(updatedDraggedItem, targetGroup);
+  };
+
   const handleStaffDragStart = (event, staff) => {
     if (!staff?.id) return;
     event.stopPropagation();
@@ -2707,18 +2755,19 @@ const openSelectedCellFillModal = () => {
     event.dataTransfer.setData('text/plain', staff.id);
     setDraggingStaffId(staff.id);
     setDragOverTarget(null);
+    setDragOverGroup(staff.group || '白班');
   };
 
   const handleStaffDragOver = (event, targetStaff) => {
     if (!draggingStaffId || !targetStaff?.id || draggingStaffId === targetStaff.id) return;
     const draggingStaff = staffs.find(staff => staff.id === draggingStaffId);
     if (!draggingStaff) return;
-    if ((draggingStaff.group || '白班') !== (targetStaff.group || '白班')) return;
 
     event.preventDefault();
     const bounds = event.currentTarget.getBoundingClientRect();
     const nextPosition = (event.clientY - bounds.top) < (bounds.height / 2) ? 'before' : 'after';
-    setDragOverTarget({ staffId: targetStaff.id, position: nextPosition });
+    setDragOverTarget({ staffId: targetStaff.id, position: nextPosition, group: targetStaff.group || '白班' });
+    setDragOverGroup(targetStaff.group || '白班');
   };
 
   const handleStaffDrop = (event, targetStaff) => {
@@ -2727,20 +2776,43 @@ const openSelectedCellFillModal = () => {
     if (!draggingStaffId || !targetStaff?.id) return;
     const draggingStaff = staffs.find(staff => staff.id === draggingStaffId);
     if (!draggingStaff) return;
-    if ((draggingStaff.group || '白班') !== (targetStaff.group || '白班')) {
-      setDraggingStaffId(null);
-      setDragOverTarget(null);
-      return;
-    }
+
+    const targetGroup = targetStaff.group || '白班';
     const dropPosition = dragOverTarget?.staffId === targetStaff.id ? dragOverTarget.position : 'before';
-    moveStaffWithinGroupByDrag(draggingStaffId, targetStaff.id, dropPosition);
+
+    if ((draggingStaff.group || '白班') === targetGroup) {
+      moveStaffWithinGroupByDrag(draggingStaffId, targetStaff.id, dropPosition);
+    } else {
+      moveStaffAcrossGroupsByDrag(draggingStaffId, targetGroup, targetStaff.id, dropPosition);
+    }
     setDraggingStaffId(null);
     setDragOverTarget(null);
+    setDragOverGroup('');
+  };
+
+  const handleGroupDragOver = (event, group) => {
+    if (!draggingStaffId) return;
+    event.preventDefault();
+    setDragOverTarget({ staffId: '', position: 'after', group });
+    setDragOverGroup(group);
+  };
+
+  const handleGroupDrop = (event, group) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!draggingStaffId) return;
+    const draggingStaff = staffs.find(staff => staff.id === draggingStaffId);
+    if (!draggingStaff) return;
+    moveStaffAcrossGroupsByDrag(draggingStaffId, group);
+    setDraggingStaffId(null);
+    setDragOverTarget(null);
+    setDragOverGroup('');
   };
 
   const handleStaffDragEnd = () => {
     setDraggingStaffId(null);
     setDragOverTarget(null);
+    setDragOverGroup('');
   };
 
   const commitEditingStaffName = (staffId, nextName) => {
@@ -2771,6 +2843,7 @@ const openSelectedCellFillModal = () => {
     setEditingNameDraft('');
     setDraggingStaffId(null);
     setDragOverTarget(null);
+    setDragOverGroup('');
     resetKeyInputBuffer();
   }, [staffs.length]);
 
@@ -3086,6 +3159,7 @@ const openSelectedCellFillModal = () => {
               {groupedStaffs.map(({ group, staffs: groupStaffList }) => {
                 const isCollapsed = Boolean(collapsedGroups[group]);
                 const visibleGroupStaffList = isCollapsed ? [] : groupStaffList;
+                const isGroupDropActive = Boolean(draggingStaffId) && dragOverGroup === group;
                 return (
                 <React.Fragment key={group}>
                   {visibleGroupStaffList.map((staff, index) => {
@@ -3132,7 +3206,7 @@ const openSelectedCellFillModal = () => {
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => e.stopPropagation()}
                               className="shrink-0 w-4 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-grab active:cursor-grabbing"
-                              title="拖曳排序（第一刀：僅支援同群組內排序）"
+                              title="拖曳移動（第二刀：支援跨群組移動與同群組排序）"
                               aria-label={`拖曳排序 ${staff.name}`}
                             >
                               <GripVertical size={14} />
@@ -3327,7 +3401,7 @@ const openSelectedCellFillModal = () => {
                   })}
 
                   {!isCollapsed && (
-                  <tr className="border-b border-slate-200 bg-slate-50/70">
+                  <tr className={`border-b border-slate-200 bg-slate-50/70 ${isGroupDropActive ? 'bg-blue-50/80' : ''}`} onDragOver={(e) => handleGroupDragOver(e, group)} onDrop={(e) => handleGroupDrop(e, group)}>
                     {visibleGroupStaffList.length === 0 && (
                       <td rowSpan={2} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
                         <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
@@ -3369,7 +3443,7 @@ const openSelectedCellFillModal = () => {
                   </tr>
                   )}
 
-                  <tr className="bg-amber-50/95 border-b border-slate-200">
+                  <tr className={`bg-amber-50/95 border-b border-slate-200 ${isGroupDropActive ? 'ring-2 ring-inset ring-blue-400' : ''}`} onDragOver={(e) => handleGroupDragOver(e, group)} onDrop={(e) => handleGroupDrop(e, group)}>
                     {visibleGroupStaffList.length > 0 || isCollapsed ? (
                     <td className={`sticky left-0 z-30 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
                       <div className="flex items-center justify-center">
