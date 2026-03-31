@@ -3181,7 +3181,6 @@ const openSelectedCellFillModal = () => {
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => e.stopPropagation()}
                               className="shrink-0 w-4 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-grab active:cursor-grabbing"
-                              title="拖曳移動（第二刀：支援跨群組移動與同群組排序）"
                               aria-label={`拖曳排序 ${staff.name}`}
                             >
                               <GripVertical size={14} />
