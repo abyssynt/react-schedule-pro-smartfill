@@ -2883,6 +2883,48 @@ const openSelectedCellFillModal = () => {
 
                 return (
                 <React.Fragment key={group}>
+                  {isCollapsed && group === '白班' && (
+                    <tr className="border-b border-slate-200 bg-slate-50/70">
+                      <td className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
+                        <div className="flex items-start justify-center h-full pt-2" style={{ minHeight: densityConfig.rowMinHeight }}>
+                          <div className="flex flex-col items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleGroupCollapse(group)}
+                              className="w-6 h-6 rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 flex items-center justify-center font-black leading-none shadow-sm"
+                              title="展開白班"
+                            >
+                              +
+                            </button>
+                            {showShiftLabels && (
+                              <span
+                                className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`}
+                                style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}
+                              >
+                                {group}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className={`sticky z-30 border-r text-center font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                        已收合
+                      </td>
+                      {daysInMonth.map(d => (
+                        <td
+                          key={d.date}
+                          className="border-r"
+                          style={{
+                            backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
+                            opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
+                            ...getFourWeekDividerStyle(d.date)
+                          }}
+                        />
+                      ))}
+                      <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                    </tr>
+                  )}
+
                   {visibleGroupStaffList.map((staff, index) => {
                     const stats = getStaffStats(staff.id);
                     const groupIndex = groupStaffList.findIndex(s => s.id === staff.id);
