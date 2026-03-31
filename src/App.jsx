@@ -1042,6 +1042,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
+  const groupSummaryRowBgColor = uiSettings?.groupSummaryRowBgColor || '#fef3c7';
   const stickyGroupSummaryTop = 44;
   const stickyGroupSummaryShadow = '0 6px 12px rgba(15, 23, 42, 0.08)';
   const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
@@ -1599,7 +1600,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
       holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
       monthTitleBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.55),
-      summaryBg: '#fef3c7',
+      summaryBg: uiSettings?.groupSummaryRowBgColor || '#fef3c7',
       leaveRowBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.2)
     };
 
@@ -1808,7 +1809,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       ? `排班規則：<br/>${schedulingRuleLines.map((line, index) => `${index + 1}. ${line}`).join('<br/>')}`
       : '排班規則：';
 
-    const webSummaryRowBg = '#fef3c7';
+    const webSummaryRowBg = uiSettings?.groupSummaryRowBgColor || '#fef3c7';
     const summaryRows = [
       { group: '白班', key: 'D', label: '白班上班', bg: webSummaryRowBg },
       { group: '小夜', key: 'E', label: '小夜上班', bg: webSummaryRowBg },
@@ -3466,7 +3467,7 @@ const openSelectedCellFillModal = () => {
                         <td
                           key={d.date}
                           className={`sticky z-20 border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                          style={{ backgroundColor: '#fef3c7', color: tableFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow, ...getDemandHighlightStyle(d.date, rowKey, count), ...getFourWeekDividerStyle(d.date) }}
+                          style={{ backgroundColor: groupSummaryRowBgColor, color: tableFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow, ...getDemandHighlightStyle(d.date, rowKey, count), ...getFourWeekDividerStyle(d.date) }}
                         >
                           {count || ''}
                         </td>
@@ -3475,7 +3476,7 @@ const openSelectedCellFillModal = () => {
                     <td
                       colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}
                       className="sticky z-20"
-                      style={{ backgroundColor: '#fef3c7', top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}
+                      style={{ backgroundColor: groupSummaryRowBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}
                     ></td>
                   </tr>
                 </React.Fragment>
@@ -3673,6 +3674,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">需求警示顯示</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求超編顏色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">群組統計列顏色</span><input type="color" value={uiSettings.groupSummaryRowBgColor || '#fef3c7'} onChange={(e) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                   </div>
                 </div>
               </div>
@@ -4147,7 +4149,8 @@ export default function App() {
     nameDateColumnWidthMode: 'standard',
     dayColumnWidthMode: 'standard',
     cellHeightMode: 'standard',
-    demandOverColor: '#fde68a'
+    demandOverColor: '#fde68a',
+    groupSummaryRowBgColor: '#fef3c7'
   });
   const [staffingConfig, setStaffingConfig] = useState({
     hospitalLevel: 'regional',
@@ -4230,7 +4233,8 @@ export default function App() {
       nameDateColumnWidthMode: 'standard',
       dayColumnWidthMode: 'standard',
       cellHeightMode: 'standard',
-      demandOverColor: '#fde68a'
+      demandOverColor: '#fde68a',
+      groupSummaryRowBgColor: '#fef3c7'
     });
     setStaffingConfig(state.staffingConfig || {
       hospitalLevel: 'regional',
