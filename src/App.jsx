@@ -1718,6 +1718,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
       statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
     };
+
     const titleColSpan = daysInMonth.length;
     const leaveColSpan = statHeaders.length;
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
@@ -1728,6 +1729,50 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const schedulingRulesHtml = schedulingRuleLines.length > 0
       ? `排班規則：<br/>${schedulingRuleLines.map((line, index) => `${index + 1}. ${line}`).join('<br/>')}`
       : '排班規則：';
+
+    const webSummaryRowBg = '#fef3c7';
+    const summaryRows = [
+      { group: '白班', key: 'D', label: '白班上班', bg: webSummaryRowBg },
+      { group: '小夜', key: 'E', label: '小夜上班', bg: webSummaryRowBg },
+      { group: '大夜', key: 'N', label: '大夜上班', bg: webSummaryRowBg }
+    ];
+
+    const groupedExportRowsHtml = SHIFT_GROUPS.map((group) => {
+      const groupStaffsForExport = staffs.filter((staff) => (staff.group || '白班') === group);
+
+      const staffRowsHtml = groupStaffsForExport.map((staff) => {
+        const stats = getStaffStats(staff.id);
+        return `
+                <tr>
+                  <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
+                  ${daysInMonth.map(d => {
+                    const cellData = schedule[staff.id]?.[d.date];
+                    const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
+                    const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
+                    const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
+                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${value}</td>`;
+                  }).join('')}
+                  <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
+                  <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
+                  <td class="stat-col stat-total-cell" style="background:${exportTheme.statTotalBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
+                </tr>`;
+      }).join('');
+
+      const summaryConfig = summaryRows.find((item) => item.group === group);
+      const summaryRowHtml = summaryConfig ? `
+                <tr>
+                  <td class="name-col summary-label-cell" style="background:${summaryConfig.bg}; color:${exportTheme.nameFont}; mso-pattern:auto none;"></td>
+                  ${daysInMonth.map(d => {
+                    const count = getDailyStats(d.date)[summaryConfig.key];
+                    return `<td class="day-col summary-value-cell" style="background:${summaryConfig.bg}; color:${exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${count || ''}</td>`;
+                  }).join('')}
+                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
+                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
+                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
+                </tr>` : '';
+
+      return `${staffRowsHtml}${summaryRowHtml}`;
+    }).join('');
 
     const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -1827,6 +1872,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .stat-work-cell { background-color: ${exportTheme.statWorkBg}; }
           .stat-holiday-cell { background-color: ${exportTheme.statHolidayBg}; }
           .stat-total-cell { background-color: ${exportTheme.statTotalBg}; }
+          .summary-label-cell, .summary-value-cell {
+            font-weight: 700;
+          }
           .rules-row td {
             padding: 8pt 10pt;
             text-align: left;
@@ -1861,23 +1909,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
               </tr>
             </thead>
             <tbody>
-              ${staffs.map(staff => {
-                const stats = getStaffStats(staff.id);
-                return `
-                <tr>
-                  <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
-                  ${daysInMonth.map(d => {
-                    const cellData = schedule[staff.id]?.[d.date];
-                    const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
-                    const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
-                    const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
-                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${value}</td>`;
-                  }).join('')}
-                  <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
-                  <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
-                  <td class="stat-col stat-total-cell" style="background:${exportTheme.statTotalBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
-                </tr>`;
-              }).join('')}
+              ${groupedExportRowsHtml}
             </tbody>
             <tfoot>
               <tr class="rules-row">
