@@ -1521,14 +1521,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
       holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
       monthTitleBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.55),
-      statWorkBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#93c5fd', 0.45),
-      statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
-      statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
+      summaryRowBg: '#fef3c7',
+      leaveBottomBg: blendHexColors(exportTheme?.pageBg || '#f8fafc', exportTheme?.nameBg || '#ffffff', 0.5)
     };
 
     const statHeaders = ['上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
     const lastDateColumn = daysInMonth.length + 1;
+
+    const baseBorder = {
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' }
+    };
 
     const monthTitleRow = worksheet.addRow([]);
     monthTitleRow.height = 26;
@@ -1558,27 +1562,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     for (let col = 1; col <= totalColumns; col++) {
       const cell = monthTitleRow.getCell(col);
-      cell.border = {
-        top: { style: 'thin' }, left: { style: 'thin' },
-        bottom: { style: 'thin' }, right: { style: 'thin' }
-      };
+      cell.border = baseBorder;
       if (col === 1 || col > lastDateColumn) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#FFFFFF') } };
       }
     }
 
-    const headerRow = ['姓名', ...daysInMonth.map(d => `${d.day}
-(${d.weekStr})`), ...statHeaders];
+    const headerRow = ['姓名', ...daysInMonth.map(d => `${d.day}\n(${d.weekStr})`), ...statHeaders];
     const header = worksheet.addRow(headerRow);
     header.height = 30;
 
     header.eachCell((cell, colNumber) => {
       cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      const baseBorder = {
-        top: { style: 'thin' }, left: { style: 'thin' },
-        bottom: { style: 'thin' }, right: { style: 'thin' }
-      };
       cell.border = baseBorder;
 
       if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
@@ -1591,20 +1587,22 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (colNumber === 1) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
           cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
-        } else if (colNumber === 2) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.nameBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.nameFont, '#1E293B') } };
         } else {
           const statIndex = colNumber - (daysInMonth.length + 2);
           const statKey = statHeaders[statIndex];
-          const statBg = statKey === '上班' ? exportTheme.statWorkBg : statKey === '假日休' ? exportTheme.statHolidayBg : statKey === '總休' ? exportTheme.statTotalBg : exportTheme.pageBg;
+          const statBg = statKey === '上班'
+            ? blendHexColors(exportTheme.pageBg, '#93c5fd', 0.45)
+            : statKey === '假日休'
+              ? blendHexColors(exportTheme.pageBg, colors.weekend || '#dcfce7', 0.5)
+              : statKey === '總休'
+                ? blendHexColors(exportTheme.pageBg, colors.holiday || '#fca5a5', 0.45)
+                : exportTheme.pageBg;
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(statBg, '#F8FAFC') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
         }
       }
     });
 
-    staffs.forEach(staff => {
+    const appendStaffRow = (staff) => {
       const stats = getStaffStats(staff.id);
       const rowData = [
         staff.name,
@@ -1616,16 +1614,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''), ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
       ];
       const row = worksheet.addRow(rowData);
-
       row.eachCell((cell, colNumber) => {
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
         cell.font = { color: { argb: hexToExcelArgb(colNumber === 1 ? exportTheme.nameFont : exportTheme.tableFont, '#1F2937') } };
-        const baseBorder = {
-          top: { style: 'thin' }, left: { style: 'thin' },
-          bottom: { style: 'thin' }, right: { style: 'thin' }
-        };
         cell.border = baseBorder;
 
+        if (colNumber === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.nameBg, '#FFFFFF') } };
+        }
         if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
           cell.numFmt = '@';
           const d = daysInMonth[colNumber - 2];
@@ -1634,25 +1630,52 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendCellBg, '#F0FDF4') } };
         }
       });
-    });
+    };
 
-    ['D', 'E', 'N', 'totalLeave'].forEach(rowKey => {
-      const summaryBg = '#fef3c7';
-      const rowData = ['', ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || ''), ...Array(statHeaders.length).fill('')];
+    const appendGroupSummaryRow = (group) => {
+      const rowKey = group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N';
+      const rowData = [
+        '',
+        ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || ''),
+        ...Array(statHeaders.length).fill('')
+      ];
       const row = worksheet.addRow(rowData);
       row.eachCell((cell, colNumber) => {
-        const baseBorder = {
-          top: { style: 'thin' }, left: { style: 'thin' },
-          bottom: { style: 'thin' }, right: { style: 'thin' }
-        };
-        cell.border = baseBorder;
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(summaryBg, '#FEF3C7') } };
+        cell.font = { color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+        cell.border = baseBorder;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.summaryRowBg, '#FEF3C7') } };
         if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
           const d = daysInMonth[colNumber - 2];
           cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
+          const demandStyle = getDemandHighlightStyle(d.date, rowKey, getDailyStats(d.date)[rowKey]);
+          if (demandStyle?.backgroundColor) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(demandStyle.backgroundColor, '#FEF3C7') } };
+          }
         }
       });
+    };
+
+    groupedStaffs.forEach(({ group, staffs: groupStaffList }) => {
+      groupStaffList.forEach(appendStaffRow);
+      appendGroupSummaryRow(group);
+    });
+
+    const leaveRowData = [
+      '',
+      ...daysInMonth.map(d => getDailyStats(d.date).totalLeave || ''),
+      ...Array(statHeaders.length).fill('')
+    ];
+    const leaveRow = worksheet.addRow(leaveRowData);
+    leaveRow.eachCell((cell, colNumber) => {
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.font = { color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      cell.border = baseBorder;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(blendHexColors(exportTheme.pageBg, exportTheme.nameBg, 0.5), '#F1F5F9') } };
+      if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
+        const d = daysInMonth[colNumber - 2];
+        cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
+      }
     });
 
     worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
@@ -1675,6 +1698,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
 
+
   const exportToWord = () => {
     const statHeaders = ['上班', '假日休', '總休'];
     const exportTheme = {
@@ -1693,7 +1717,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
       statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
     };
-
     const titleColSpan = daysInMonth.length;
     const leaveColSpan = statHeaders.length;
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
@@ -1704,50 +1727,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const schedulingRulesHtml = schedulingRuleLines.length > 0
       ? `排班規則：<br/>${schedulingRuleLines.map((line, index) => `${index + 1}. ${line}`).join('<br/>')}`
       : '排班規則：';
-
-    const webSummaryRowBg = '#fef3c7';
-    const summaryRows = [
-      { group: '白班', key: 'D', label: '白班上班', bg: webSummaryRowBg },
-      { group: '小夜', key: 'E', label: '小夜上班', bg: webSummaryRowBg },
-      { group: '大夜', key: 'N', label: '大夜上班', bg: webSummaryRowBg }
-    ];
-
-    const groupedExportRowsHtml = SHIFT_GROUPS.map((group) => {
-      const groupStaffsForExport = staffs.filter((staff) => (staff.group || '白班') === group);
-
-      const staffRowsHtml = groupStaffsForExport.map((staff) => {
-        const stats = getStaffStats(staff.id);
-        return `
-                <tr>
-                  <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
-                  ${daysInMonth.map(d => {
-                    const cellData = schedule[staff.id]?.[d.date];
-                    const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
-                    const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
-                    const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
-                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${value}</td>`;
-                  }).join('')}
-                  <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
-                  <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
-                  <td class="stat-col stat-total-cell" style="background:${exportTheme.statTotalBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
-                </tr>`;
-      }).join('');
-
-      const summaryConfig = summaryRows.find((item) => item.group === group);
-      const summaryRowHtml = summaryConfig ? `
-                <tr>
-                  <td class="name-col summary-label-cell" style="background:${summaryConfig.bg}; color:${exportTheme.nameFont}; mso-pattern:auto none;"></td>
-                  ${daysInMonth.map(d => {
-                    const count = getDailyStats(d.date)[summaryConfig.key];
-                    return `<td class="day-col summary-value-cell" style="background:${summaryConfig.bg}; color:${exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${count || ''}</td>`;
-                  }).join('')}
-                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
-                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
-                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
-                </tr>` : '';
-
-      return `${staffRowsHtml}${summaryRowHtml}`;
-    }).join('');
 
     const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -1847,9 +1826,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .stat-work-cell { background-color: ${exportTheme.statWorkBg}; }
           .stat-holiday-cell { background-color: ${exportTheme.statHolidayBg}; }
           .stat-total-cell { background-color: ${exportTheme.statTotalBg}; }
-          .summary-label-cell, .summary-value-cell {
-            font-weight: 700;
-          }
           .rules-row td {
             padding: 8pt 10pt;
             text-align: left;
@@ -1884,7 +1860,23 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
               </tr>
             </thead>
             <tbody>
-              ${groupedExportRowsHtml}
+              ${staffs.map(staff => {
+                const stats = getStaffStats(staff.id);
+                return `
+                <tr>
+                  <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
+                  ${daysInMonth.map(d => {
+                    const cellData = schedule[staff.id]?.[d.date];
+                    const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
+                    const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
+                    const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
+                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${value}</td>`;
+                  }).join('')}
+                  <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
+                  <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
+                  <td class="stat-col stat-total-cell" style="background:${exportTheme.statTotalBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
+                </tr>`;
+              }).join('')}
             </tbody>
             <tfoot>
               <tr class="rules-row">
