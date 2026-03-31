@@ -3651,40 +3651,42 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
       const dayHeaders = Array.from({ length: 31 }, (_, i) => `${i + 1}日`);
       const headers = ['姓名', '班別群組', ...dayHeaders];
 
+      const templateTheme = {
+        titleBg: '#EFF6FF',
+        titleFont: '#1F2937',
+        shiftBg: '#F8FAFC',
+        shiftFont: '#1E293B',
+        nameBg: '#FFFFFF',
+        nameFont: '#1E293B',
+        dayBg: '#F8FAFC'
+      };
+
       dataSheet.addRow([`${templateMonth}月班表匯入範本`]);
       dataSheet.mergeCells(1, 1, 1, headers.length);
       const titleCell = dataSheet.getCell(1, 1);
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
-      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(templateTheme.titleBg, '#EFF6FF') } };
+      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(templateTheme.titleFont, '#1F2937') } };
       dataSheet.getRow(1).height = 24;
 
       const headerRow = dataSheet.addRow(headers);
       headerRow.height = 24;
       headerRow.eachCell((cell, colNumber) => {
-        cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+        cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(templateTheme.titleFont, '#1F2937') } };
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
-        if (colNumber === 1 || colNumber === 2) {
-          if (colNumber === 1) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
+
+        if (colNumber === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(templateTheme.shiftBg, '#F8FAFC') } };
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(templateTheme.shiftFont, '#1E293B') } };
         } else if (colNumber === 2) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.nameBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.nameFont, '#1E293B') } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(templateTheme.nameBg, '#FFFFFF') } };
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(templateTheme.nameFont, '#1E293B') } };
         } else {
-          const statIndex = colNumber - (daysInMonth.length + 2);
-          const statKey = statHeaders[statIndex];
-          const statBg = statKey === '上班' ? exportTheme.statWorkBg : statKey === '假日休' ? exportTheme.statHolidayBg : statKey === '總休' ? exportTheme.statTotalBg : exportTheme.pageBg;
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(statBg, '#F8FAFC') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
-        }
-        } else {
-          const summaryBg = rowKey === 'D' ? exportTheme.statWorkBg : rowKey === 'E' ? exportTheme.statHolidayBg : rowKey === 'N' ? exportTheme.statTotalBg : blendHexColors(exportTheme.pageBg, exportTheme.nameBg, 0.5);
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(summaryBg, '#F1F5F9') } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(templateTheme.dayBg, '#F8FAFC') } };
         }
       });
 
