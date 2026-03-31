@@ -1663,13 +1663,27 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return stats;
   };
 
-  const getGroupDailyLeaveCount = (group, dateStr) => {
-    return staffs.filter((staff) => {
-      if ((staff.group || '白班') !== group) return false;
+  const getGroupDailyStats = (group, dateStr) => {
+    const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
+
+    staffs.forEach((staff) => {
+      if ((staff.group || '白班') !== group) return;
       const cellData = schedule[staff.id]?.[dateStr];
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
-      return isConfiguredLeaveCode(code);
-    }).length;
+      if (!code) return;
+
+      if (['D', '白8-8', '8-12', '12-16'].includes(code)) {
+        stats.D += 1;
+      } else if (['E', '夜8-8'].includes(code)) {
+        stats.E += 1;
+      } else if (code === 'N') {
+        stats.N += 1;
+      } else if (isConfiguredLeaveCode(code)) {
+        stats.totalLeave += 1;
+      }
+    });
+
+    return stats;
   };
 
   const getRequiredCountForDate = (dateStr, rowKey) => {
@@ -2473,25 +2487,35 @@ const openSelectedCellFillModal = () => {
                   </tr>
 
                   {showBottomStats && (
-                    <tr className="border-b border-slate-200 bg-amber-50/70">
-                      <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
-                      <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
-                        {group}休假
-                      </td>
-                      {daysInMonth.map(d => {
-                        const count = getGroupDailyLeaveCount(group, d.date);
-                        return (
-                          <td
-                            key={d.date}
-                            className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                            style={{ color: tableFontColor }}
-                          >
-                            {count || ''}
+                    <>
+                      {[
+                        { key: 'D', label: '白班上班' },
+                        { key: 'E', label: '小夜上班' },
+                        { key: 'N', label: '大夜上班' },
+                        { key: 'totalLeave', label: '休假人數' }
+                      ].map((statRow) => (
+                        <tr key={`${group}_${statRow.key}`} className="border-b border-slate-200 bg-amber-50/70">
+                          <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
+                          <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                            {statRow.label}
                           </td>
-                        );
-                      })}
-                      <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
-                    </tr>
+                          {daysInMonth.map(d => {
+                            const groupStats = getGroupDailyStats(group, d.date);
+                            const count = groupStats[statRow.key];
+                            return (
+                              <td
+                                key={d.date}
+                                className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
+                                style={{ color: tableFontColor }}
+                              >
+                                {count || ''}
+                              </td>
+                            );
+                          })}
+                          <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
+                        </tr>
+                      ))}
+                    </>
                   )}
                 </React.Fragment>
               ))}
