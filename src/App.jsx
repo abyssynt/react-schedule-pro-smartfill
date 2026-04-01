@@ -1376,15 +1376,37 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!isValid) return false;
 
     if (isShiftCode(normalized)) {
-      for (const cell of selectedRangeCells) {
-        const staff = staffs.find((item) => item.id === cell.staffId);
-        if (!staff) continue;
-        const result = canAssignByKeyboardInput(staff, cell.dateStr, normalized);
-        if (!result.allowed) {
-          window.alert(`此班別不可直接輸入\n${result.reasons.join('\n')}`);
-          resetKeyInputBuffer();
-          return true;
+      const blockingReasons = [];
+
+      selectedRangeCells.forEach(({ staffId, dateStr }) => {
+        const staff = staffs.find(item => item.id === staffId);
+        if (!staff) return;
+
+        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+        const prevCode = getCellCode(staffId, prevKey);
+        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+        if (disallowed.includes(normalized)) {
+          blockingReasons.push(`${staff.name} ${dateStr}：${prevCode} 後不可接 ${normalized}`);
+          return;
         }
+
+        const consecutiveBefore = countConsecutiveWorkDaysBefore(staffId, dateStr);
+        if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
+          blockingReasons.push(`${staff.name} ${dateStr}：連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+          return;
+        }
+
+        if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(normalized)) {
+          blockingReasons.push(`${staff.name} ${dateStr}：懷孕標記人員不可排 ${normalized}`);
+        }
+      });
+
+      if (blockingReasons.length > 0) {
+        window.alert(`此班別不可直接輸入：
+${blockingReasons.join('
+')}`);
+        resetKeyInputBuffer();
+        return false;
       }
     }
 
@@ -2458,36 +2480,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const shiftGroup = getShiftGroupByCode(shiftCode);
     if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
       reasons.push('不可跨群組排班');
-    }
-
-    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-    const prevCode = getCellCode(staff.id, prevKey);
-    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-    if (disallowed.includes(shiftCode)) {
-      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
-    }
-
-    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
-    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
-      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
-    }
-
-    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
-      reasons.push('懷孕標記人員不可排 N / 夜8-8');
-    }
-
-    return { allowed: reasons.length === 0, reasons };
-  };
-
-  const canAssignByKeyboardInput = (staff, dateStr, shiftCode) => {
-    const reasons = [];
-    const currentCode = getCellCode(staff.id, dateStr);
-    if (currentCode) {
-      reasons.push('該格已有排班或休假代碼');
-    }
-
-    if (isConfiguredLeaveCode(currentCode)) {
-      reasons.push('該格已有休假，不可再排班');
     }
 
     const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
