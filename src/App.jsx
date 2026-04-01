@@ -1374,6 +1374,28 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!buffer || selectedRangeCells.length === 0) return false;
     const { normalized, isValid } = normalizeManualShiftCode(buffer, mergedLeaveCodes);
     if (!isValid) return false;
+
+    if (normalized && isShiftCode(normalized)) {
+      const firstBlockedCell = selectedRangeCells
+        .map(({ staffId, dateStr }) => {
+          const staff = staffs.find(item => item.id === staffId);
+          if (!staff) return null;
+          const result = canAssignForKeyboardInput(staff, dateStr, normalized);
+          return result.allowed ? null : { staff, dateStr, reasons: result.reasons };
+        })
+        .find(Boolean);
+
+      if (firstBlockedCell) {
+        window.alert([
+          `不可輸入 ${normalized}`,
+          `${firstBlockedCell.staff.name}｜${firstBlockedCell.dateStr}`,
+          ...firstBlockedCell.reasons
+        ].join('\n'));
+        resetKeyInputBuffer();
+        return true;
+      }
+    }
+
     applyValueToCells(selectedRangeCells, normalized);
     resetKeyInputBuffer();
     return true;
@@ -2465,6 +2487,36 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return { allowed: reasons.length === 0, reasons };
   };
 
+  const canAssignForKeyboardInput = (staff, dateStr, shiftCode) => {
+    const reasons = [];
+    const currentCode = getCellCode(staff.id, dateStr);
+    if (currentCode) {
+      reasons.push('該格已有排班或休假代碼');
+    }
+
+    if (isConfiguredLeaveCode(currentCode)) {
+      reasons.push('該格已有休假，不可再排班');
+    }
+
+    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+    const prevCode = getCellCode(staff.id, prevKey);
+    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+    if (disallowed.includes(shiftCode)) {
+      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+    }
+
+    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
+    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
+      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+    }
+
+    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
+      reasons.push('懷孕標記人員不可排 N / 夜8-8');
+    }
+
+    return { allowed: reasons.length === 0, reasons };
+  };
+
   const getShiftCountForStaff = (staffId, shiftCode) => {
     return daysInMonth.reduce((sum, d) => sum + (getCellCode(staffId, d.date) === shiftCode ? 1 : 0), 0);
   };
@@ -3334,7 +3386,6 @@ const openSelectedCellFillModal = () => {
                                   <select
                                     value={val}
                                     onChange={(e) => {
-                                      window.alert(`手動規則檢查已觸發\n${staff.name}｜${d.date}｜${e.target.value || '(空白)'}`);
                                       handleCellChange(staff.id, d.date, e.target.value);
                                       startRangeSelection(staff, d.date);
                                       e.currentTarget.blur();
