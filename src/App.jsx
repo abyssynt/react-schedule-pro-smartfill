@@ -2445,16 +2445,43 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return monthlySchedules?.[monthKey] || null;
   };
 
-  const resolveMatchedStaffIdForMonth = (staff, monthState) => {
+  const getStaffGroupOrderIndex = (targetStaff, staffList = []) => {
+    if (!targetStaff || !Array.isArray(staffList)) return -1;
+    const targetGroup = targetStaff.group || '白班';
+    const grouped = staffList.filter(item => (item?.group || '白班') === targetGroup);
+    return grouped.findIndex(item => item?.id === targetStaff.id);
+  };
+
+  const resolveMatchedStaffIdForMonth = (staff, monthState, referenceStaffList = staffs) => {
     if (!staff || !monthState) return '';
     const monthStaffs = Array.isArray(monthState.staffs) ? monthState.staffs : [];
     if (monthState.scheduleData?.[staff.id]) return staff.id;
     const byId = monthStaffs.find(item => item?.id === staff.id);
     if (byId) return byId.id;
+
     const staffName = String(staff.name || '').trim();
-    if (!staffName) return '';
-    const byName = monthStaffs.find(item => String(item?.name || '').trim() === staffName);
-    return byName?.id || '';
+    if (staffName) {
+      const sameNameList = monthStaffs.filter(item => String(item?.name || '').trim() === staffName);
+      if (sameNameList.length === 1) return sameNameList[0]?.id || '';
+      if (sameNameList.length > 1) {
+        const currentOrder = getStaffGroupOrderIndex(staff, referenceStaffList);
+        const sameGroupSameName = sameNameList.filter(item => (item?.group || '白班') === (staff.group || '白班'));
+        if (sameGroupSameName.length === 1) return sameGroupSameName[0]?.id || '';
+        if (sameGroupSameName.length > 1 && currentOrder !== -1) {
+          const target = sameGroupSameName[currentOrder];
+          if (target?.id) return target.id;
+        }
+      }
+    }
+
+    const currentOrder = getStaffGroupOrderIndex(staff, referenceStaffList);
+    if (currentOrder !== -1) {
+      const sameGroupList = monthStaffs.filter(item => (item?.group || '白班') === (staff.group || '白班'));
+      const samePositionStaff = sameGroupList[currentOrder];
+      if (samePositionStaff?.id) return samePositionStaff.id;
+    }
+
+    return '';
   };
 
   const getHistoricalCellInfo = (staff, dateStr, snapshot = null) => {
