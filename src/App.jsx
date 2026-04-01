@@ -2465,41 +2465,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return { allowed: reasons.length === 0, reasons };
   };
 
-  const canAssignForManualInput = (staff, dateStr, nextValue) => {
-    const normalizedValue = String(nextValue || '').trim();
-    if (!normalizedValue) return { allowed: true, reasons: [] };
-    if (!isShiftCode(normalizedValue)) return { allowed: true, reasons: [] };
-
-    const reasons = [];
-    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-    const prevCode = getCellCode(staff.id, prevKey);
-    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-    if (disallowed.includes(normalizedValue)) {
-      reasons.push(`${prevCode} 後不可接 ${normalizedValue}`);
-    }
-
-    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
-    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
-      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
-    }
-
-    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(normalizedValue)) {
-      reasons.push('懷孕標記人員不可排 N / 夜8-8');
-    }
-
-    return { allowed: reasons.length === 0, reasons };
-  };
-
-  const attemptManualCellChange = (staff, dateStr, nextValue) => {
-    const result = canAssignForManualInput(staff, dateStr, nextValue);
-    if (!result.allowed) {
-      window.alert(`此班別不可直接輸入：\n${result.reasons.join('\n')}`);
-      return false;
-    }
-    handleCellChange(staff.id, dateStr, nextValue);
-    return true;
-  };
-
   const getShiftCountForStaff = (staffId, shiftCode) => {
     return daysInMonth.reduce((sum, d) => sum + (getCellCode(staffId, d.date) === shiftCode ? 1 : 0), 0);
   };
@@ -3369,7 +3334,8 @@ const openSelectedCellFillModal = () => {
                                   <select
                                     value={val}
                                     onChange={(e) => {
-                                      attemptManualCellChange(staff, d.date, e.target.value);
+                                      window.alert(`手動規則檢查已觸發\n${staff.name}｜${d.date}｜${e.target.value || '(空白)'}`);
+                                      handleCellChange(staff.id, d.date, e.target.value);
                                       startRangeSelection(staff, d.date);
                                       e.currentTarget.blur();
                                     }}
