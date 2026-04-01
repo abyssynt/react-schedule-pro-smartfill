@@ -2032,6 +2032,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const normalizedTargetShift = RULE_FILL_MAIN_SHIFTS.includes(ruleFillConfig.targetShift) ? ruleFillConfig.targetShift : '';
       const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
       const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
+      let missingPreviousMonthNotice = false;
 
       const getScheduleCode = (snapshot, staffId, dateStr) => {
         const cellData = snapshot[staffId]?.[dateStr];
@@ -2057,12 +2058,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }, 0);
       };
 
-      const countConsecutiveBeforeFromSnapshot = (snapshot, staffId, dateStr) => {
+      const countConsecutiveBeforeFromSnapshot = (snapshot, staff, dateStr) => {
         let count = 0;
         let cursor = addDays(parseDateKey(dateStr), -1);
         while (true) {
           const key = formatDateKey(cursor);
-          const code = getScheduleCode(snapshot, staffId, key);
+          const code = getHistoricalCellCode(staff, key, { snapshot });
           if (!isShiftCode(code)) break;
           count += 1;
           cursor = addDays(cursor, -1);
@@ -2074,19 +2075,20 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const reasons = [];
         const currentCode = getScheduleCode(snapshot, staff.id, dateStr);
         if (currentCode) reasons.push('該格已有排班或休假代碼');
-        const prefix = getCodePrefix(currentCode);
         if (isConfiguredLeaveCode(currentCode)) reasons.push('該格已有休假，不可再排班');
         const staffGroup = staff.group || '白班';
         const shiftGroup = getShiftGroupByCode(shiftCode);
         if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) reasons.push('不可跨群組排班');
-        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-        const prevCode = getScheduleCode(snapshot, staff.id, prevKey);
-        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-        if (disallowed.includes(shiftCode)) reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
-        const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff.id, dateStr);
+
+        const prevContext = getPreviousShiftContext(staff, dateStr, { snapshot });
+        const disallowed = SMART_RULES.disallowedNextShiftMap[prevContext.code] || [];
+        if (disallowed.includes(shiftCode)) reasons.push(`${prevContext.code} 後不可接 ${shiftCode}`);
+        if (prevContext.missingPreviousMonth) reasons.push('未找到前月資料，月初銜接規則未檢查');
+
+        const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff, dateStr);
         if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
         if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) reasons.push('懷孕標記人員不可排 N / 夜8-8');
-        return { allowed: reasons.length === 0, reasons };
+        return { allowed: reasons.filter(reason => reason !== '未找到前月資料，月初銜接規則未檢查').length === 0, reasons, missingPreviousMonth: prevContext.missingPreviousMonth };
       };
 
       const getWorkCountFromSnapshot = (snapshot, staffId) => {
@@ -2234,6 +2236,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
               .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
               .map(staff => {
                 const result = canAssignWithSnapshot(mergedSchedule, staff, day.date, shiftCode);
+                if (result.missingPreviousMonth) missingPreviousMonthNotice = true;
                 const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesIfAssignShift(mergedSchedule, staff.id) : false;
                 return {
                   staff,
@@ -2277,7 +2280,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       setSchedule(mergedSchedule);
       saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
-      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
+      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格${missingPreviousMonthNotice ? '｜⚠️ 未找到前月資料，部分月初銜接規則未檢查' : ''}`);
     } catch (error) {
       console.error(error);
       setRuleFillFeedback("❌ 規則補空失敗，請檢查設定。");
@@ -2396,6 +2399,80 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
   };
 
+
+  const currentMonthKey = buildMonthKey(year, month);
+
+  const getCellCodeFromScheduleMap = (scheduleMap, staffId, dateStr) => {
+    const cellData = scheduleMap?.[staffId]?.[dateStr];
+    return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+  };
+
+  const getCellCodeFromMonthData = (monthData, staffId, dateStr) => {
+    if (!monthData || !staffId) return '';
+    const directCode = getCellCodeFromScheduleMap(monthData.scheduleData || {}, staffId, dateStr);
+    if (directCode) return directCode;
+
+    const dateObj = parseDateKey(dateStr);
+    const legacyCell = monthData.scheduleByDay?.[staffId]?.[String(dateObj.getDate())] ?? monthData.scheduleByDay?.[staffId]?.[dateObj.getDate()];
+    return typeof legacyCell === 'object' && legacyCell !== null ? (legacyCell.value || '') : (legacyCell || '');
+  };
+
+  const getStaffIdentity = (staffOrId) => {
+    if (staffOrId && typeof staffOrId === 'object') {
+      return {
+        id: staffOrId.id || '',
+        name: String(staffOrId.name || '').trim()
+      };
+    }
+    const fallbackStaff = staffs.find(item => item.id === staffOrId);
+    return {
+      id: String(staffOrId || ''),
+      name: String(fallbackStaff?.name || '').trim()
+    };
+  };
+
+  const findMatchingStaffIdInMonthData = (staffOrId, monthData) => {
+    if (!monthData) return '';
+    const identity = getStaffIdentity(staffOrId);
+    const monthStaffs = Array.isArray(monthData.staffs) ? monthData.staffs : [];
+    if (identity.id && monthStaffs.some(item => item.id === identity.id)) return identity.id;
+    if (identity.name) {
+      const matched = monthStaffs.find(item => String(item?.name || '').trim() === identity.name);
+      if (matched?.id) return matched.id;
+    }
+    return '';
+  };
+
+  const getHistoricalCellCode = (staffOrId, dateStr, options = {}) => {
+    const monthKey = buildMonthKey(parseDateKey(dateStr).getFullYear(), parseDateKey(dateStr).getMonth() + 1);
+    const identity = getStaffIdentity(staffOrId);
+
+    if (monthKey === currentMonthKey) {
+      const sourceSchedule = options.snapshot || schedule;
+      return getCellCodeFromScheduleMap(sourceSchedule, identity.id, dateStr);
+    }
+
+    const monthData = monthlySchedules?.[monthKey];
+    const matchedStaffId = findMatchingStaffIdInMonthData(identity, monthData);
+    return getCellCodeFromMonthData(monthData, matchedStaffId, dateStr);
+  };
+
+  const getPreviousShiftContext = (staffOrId, dateStr, options = {}) => {
+    const currentDate = parseDateKey(dateStr);
+    const prevDate = addDays(currentDate, -1);
+    const prevKey = formatDateKey(prevDate);
+    const isMonthBoundary = currentDate.getDate() === 1;
+    const prevMonthKey = buildMonthKey(prevDate.getFullYear(), prevDate.getMonth() + 1);
+    const prevMonthMissing = isMonthBoundary && !monthlySchedules?.[prevMonthKey];
+    const code = getHistoricalCellCode(staffOrId, prevKey, options);
+    return {
+      dateKey: prevKey,
+      code,
+      missingPreviousMonth: Boolean(prevMonthMissing && !code)
+    };
+  };
+
+
   const handleCellChange = (staffId, dateStr, value) => {
     setSchedule(prev => ({
       ...prev,
@@ -2415,12 +2492,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return 'manual';
   };
 
-  const countConsecutiveWorkDaysBefore = (staffId, dateStr) => {
+  const countConsecutiveWorkDaysBefore = (staff, dateStr) => {
     let count = 0;
     let cursor = addDays(parseDateKey(dateStr), -1);
     while (true) {
       const key = formatDateKey(cursor);
-      const code = getCellCode(staffId, key);
+      const code = getHistoricalCellCode(staff, key);
       if (!isShiftCode(code)) break;
       count += 1;
       cursor = addDays(cursor, -1);
@@ -2435,7 +2512,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       reasons.push('該格已有排班或休假代碼');
     }
 
-    const prefix = getCodePrefix(currentCode);
     if (isConfiguredLeaveCode(currentCode)) {
       reasons.push('該格已有休假，不可再排班');
     }
@@ -2446,14 +2522,16 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       reasons.push('不可跨群組排班');
     }
 
-    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-    const prevCode = getCellCode(staff.id, prevKey);
-    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+    const prevContext = getPreviousShiftContext(staff, dateStr);
+    const disallowed = SMART_RULES.disallowedNextShiftMap[prevContext.code] || [];
     if (disallowed.includes(shiftCode)) {
-      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+      reasons.push(`${prevContext.code} 後不可接 ${shiftCode}`);
+    }
+    if (prevContext.missingPreviousMonth) {
+      reasons.push('未找到前月資料，月初銜接規則未檢查');
     }
 
-    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
+    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff, dateStr);
     if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
       reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
     }
@@ -2462,7 +2540,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       reasons.push('懷孕標記人員不可排 N / 夜8-8');
     }
 
-    return { allowed: reasons.length === 0, reasons };
+    return { allowed: reasons.filter(reason => reason !== '未找到前月資料，月初銜接規則未檢查').length === 0, reasons, missingPreviousMonth: prevContext.missingPreviousMonth };
   };
 
   const getShiftCountForStaff = (staffId, shiftCode) => {
@@ -4521,4 +4599,3 @@ export default function App() {
   const prefix = getCodePrefix(code);
   return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
 };
-
