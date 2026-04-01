@@ -1394,8 +1394,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return false;
     }
 
-    const applied = handleManualCellChange(staffId, dateStr, normalized);
-    if (!applied) return false;
+    handleCellChange(staffId, dateStr, normalized);
     setCellDrafts(prev => {
       const next = { ...prev };
       delete next[cellKey];
@@ -2429,21 +2428,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return count;
   };
 
-  const canAssign = (staff, dateStr, shiftCode, options = {}) => {
+  const canAssign = (staff, dateStr, shiftCode) => {
     const reasons = [];
-    const { ignoreCrossGroup = false, ignoreOccupied = false } = options;
     const currentCode = getCellCode(staff.id, dateStr);
-    if (!ignoreOccupied && currentCode) {
+    if (currentCode) {
       reasons.push('該格已有排班或休假代碼');
     }
 
-    if (!ignoreOccupied && isConfiguredLeaveCode(currentCode)) {
+    const prefix = getCodePrefix(currentCode);
+    if (isConfiguredLeaveCode(currentCode)) {
       reasons.push('該格已有休假，不可再排班');
     }
 
     const staffGroup = staff.group || '白班';
     const shiftGroup = getShiftGroupByCode(shiftCode);
-    if (!ignoreCrossGroup && !SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
+    if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
       reasons.push('不可跨群組排班');
     }
 
@@ -2466,31 +2465,38 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return { allowed: reasons.length === 0, reasons };
   };
 
-  const handleManualCellChange = (staffId, dateStr, value) => {
-    const staff = staffs.find((item) => item.id === staffId);
-    if (!staff) {
-      handleCellChange(staffId, dateStr, value);
-      return true;
+  const canAssignForManualInput = (staff, dateStr, nextValue) => {
+    const normalizedValue = String(nextValue || '').trim();
+    if (!normalizedValue) return { allowed: true, reasons: [] };
+    if (!isShiftCode(normalizedValue)) return { allowed: true, reasons: [] };
+
+    const reasons = [];
+    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+    const prevCode = getCellCode(staff.id, prevKey);
+    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+    if (disallowed.includes(normalizedValue)) {
+      reasons.push(`${prevCode} 後不可接 ${normalizedValue}`);
     }
 
-    const normalizedValue = String(value || '').trim();
-    if (!normalizedValue) {
-      handleCellChange(staffId, dateStr, '');
-      return true;
+    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
+    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
+      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
     }
 
-    if (!isShiftCode(normalizedValue)) {
-      handleCellChange(staffId, dateStr, normalizedValue);
-      return true;
+    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(normalizedValue)) {
+      reasons.push('懷孕標記人員不可排 N / 夜8-8');
     }
 
-    const result = canAssign(staff, dateStr, normalizedValue, { ignoreCrossGroup: true, ignoreOccupied: true });
+    return { allowed: reasons.length === 0, reasons };
+  };
+
+  const attemptManualCellChange = (staff, dateStr, nextValue) => {
+    const result = canAssignForManualInput(staff, dateStr, nextValue);
     if (!result.allowed) {
       window.alert(`此班別不可直接輸入：\n${result.reasons.join('\n')}`);
       return false;
     }
-
-    handleCellChange(staffId, dateStr, normalizedValue);
+    handleCellChange(staff.id, dateStr, nextValue);
     return true;
   };
 
@@ -3363,7 +3369,7 @@ const openSelectedCellFillModal = () => {
                                   <select
                                     value={val}
                                     onChange={(e) => {
-                                      handleManualCellChange(staff.id, d.date, e.target.value);
+                                      attemptManualCellChange(staff, d.date, e.target.value);
                                       startRangeSelection(staff, d.date);
                                       e.currentTarget.blur();
                                     }}
