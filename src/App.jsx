@@ -1402,10 +1402,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       });
 
       if (blockingReasons.length > 0) {
-        window.alert(`此班別不可直接輸入：
-${blockingReasons.join('
-')}`);
+      if (blockingReasons.length > 0) {
+        window.alert(`此班別不可直接輸入：\n${blockingReasons.join('\n')}`);
         resetKeyInputBuffer();
+        return false;
+      }
         return false;
       }
     }
