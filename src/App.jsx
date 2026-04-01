@@ -1394,7 +1394,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return false;
     }
 
-    const applied = handleCellChange(staffId, dateStr, normalized);
+    const applied = handleManualCellChange(staffId, dateStr, normalized);
     if (!applied) return false;
     setCellDrafts(prev => {
       const next = { ...prev };
@@ -2033,7 +2033,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const normalizedTargetShift = RULE_FILL_MAIN_SHIFTS.includes(ruleFillConfig.targetShift) ? ruleFillConfig.targetShift : '';
       const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
       const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
-      let encounteredMissingCrossMonthReference = false;
 
       const getScheduleCode = (snapshot, staffId, dateStr) => {
         const cellData = snapshot[staffId]?.[dateStr];
@@ -2059,10 +2058,36 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }, 0);
       };
 
+      const countConsecutiveBeforeFromSnapshot = (snapshot, staffId, dateStr) => {
+        let count = 0;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        while (true) {
+          const key = formatDateKey(cursor);
+          const code = getScheduleCode(snapshot, staffId, key);
+          if (!isShiftCode(code)) break;
+          count += 1;
+          cursor = addDays(cursor, -1);
+        }
+        return count;
+      };
+
       const canAssignWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
-        const result = evaluateAssignmentRules(staff, dateStr, shiftCode, { snapshot, sourceStaffList: staffs });
-        if (result.missingCrossMonthReference) encounteredMissingCrossMonthReference = true;
-        return result;
+        const reasons = [];
+        const currentCode = getScheduleCode(snapshot, staff.id, dateStr);
+        if (currentCode) reasons.push('該格已有排班或休假代碼');
+        const prefix = getCodePrefix(currentCode);
+        if (isConfiguredLeaveCode(currentCode)) reasons.push('該格已有休假，不可再排班');
+        const staffGroup = staff.group || '白班';
+        const shiftGroup = getShiftGroupByCode(shiftCode);
+        if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) reasons.push('不可跨群組排班');
+        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+        const prevCode = getScheduleCode(snapshot, staff.id, prevKey);
+        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+        if (disallowed.includes(shiftCode)) reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+        const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff.id, dateStr);
+        if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+        if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) reasons.push('懷孕標記人員不可排 N / 夜8-8');
+        return { allowed: reasons.length === 0, reasons };
       };
 
       const getWorkCountFromSnapshot = (snapshot, staffId) => {
@@ -2253,11 +2278,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       setSchedule(mergedSchedule);
       saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
-      const crossMonthNote = encounteredMissingCrossMonthReference ? '（部分月初未找到前月資料或前月同人對位，跨月銜接規則未檢查）' : '';
-      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格${crossMonthNote}`);
-      if (encounteredMissingCrossMonthReference) {
-        window.alert('規則補空完成，但部分月初未找到前月資料或前月同人對位，跨月銜接規則未檢查。');
-      }
+      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
     } catch (error) {
       console.error(error);
       setRuleFillFeedback("❌ 規則補空失敗，請檢查設定。");
@@ -2376,165 +2397,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
   };
 
-  const getNormalizedMonthScheduleData = (monthData, monthKey) => {
-    if (!monthData) return {};
-    if (monthData.scheduleData) return monthData.scheduleData;
-    const legacyScheduleByDay = monthData.scheduleByDay || {};
-    return Object.fromEntries(
-      Object.entries(legacyScheduleByDay).map(([staffId, dayMap]) => [
-        staffId,
-        Object.fromEntries(
-          Object.entries(dayMap || {}).map(([day, cell]) => {
-            const dateKey = `${monthKey}-${String(Number(day)).padStart(2, '0')}`;
-            return [dateKey, cell];
-          })
-        )
-      ])
-    );
-  };
-
-  const getGroupScopedIndex = (staff, sourceStaffList = staffs) => {
-    if (!staff) return -1;
-    const group = staff.group || '白班';
-    return (sourceStaffList || []).filter(item => (item.group || '白班') === group).findIndex(item => item.id === staff.id);
-  };
-
-  const resolveMatchingStaffInMonth = (staff, targetStaffs = [], sourceStaffList = staffs) => {
-    if (!staff || !Array.isArray(targetStaffs) || targetStaffs.length === 0) return null;
-    const normalizedGroup = staff.group || '白班';
-    const normalizedName = String(staff.name || '').trim();
-
-    const exactById = targetStaffs.find(item => item.id === staff.id);
-    if (exactById) return exactById;
-
-    const sameGroupByName = targetStaffs.filter(item => (item.group || '白班') === normalizedGroup && String(item.name || '').trim() === normalizedName);
-    if (normalizedName && sameGroupByName.length === 1) return sameGroupByName[0];
-
-    const groupScopedIndex = getGroupScopedIndex(staff, sourceStaffList);
-    if (groupScopedIndex !== -1) {
-      const sameGroupStaffs = targetStaffs.filter(item => (item.group || '白班') === normalizedGroup);
-      if (sameGroupStaffs[groupScopedIndex]) return sameGroupStaffs[groupScopedIndex];
-    }
-
-    const anyGroupByName = targetStaffs.filter(item => String(item.name || '').trim() === normalizedName);
-    if (normalizedName && anyGroupByName.length === 1) return anyGroupByName[0];
-
-    return null;
-  };
-
-  const getHistoricalCellCode = (staff, dateStr, snapshot = schedule, sourceStaffList = staffs) => {
-    if (!staff || !dateStr) return { code: '', missingCrossMonthReference: false, matchedStaff: null };
-
-    const targetMonthKey = String(dateStr).slice(0, 7);
-    const currentMonthKey = buildMonthKey(year, month);
-
-    if (targetMonthKey === currentMonthKey) {
-      const cellData = snapshot?.[staff.id]?.[dateStr];
-      const code = typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-      return { code, missingCrossMonthReference: false, matchedStaff: staff };
-    }
-
-    const targetMonthData = monthlySchedules?.[targetMonthKey];
-    if (!targetMonthData) {
-      return { code: '', missingCrossMonthReference: true, matchedStaff: null };
-    }
-
-    const targetStaffs = normalizeStaffGroup(targetMonthData.staffs || []);
-    const matchedStaff = resolveMatchingStaffInMonth(staff, targetStaffs, sourceStaffList);
-    if (!matchedStaff) {
-      return { code: '', missingCrossMonthReference: true, matchedStaff: null };
-    }
-
-    const targetScheduleData = getNormalizedMonthScheduleData(targetMonthData, targetMonthKey);
-    const cellData = targetScheduleData?.[matchedStaff.id]?.[dateStr];
-    const code = typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-    return { code, missingCrossMonthReference: false, matchedStaff };
-  };
-
-  const getPreviousShiftInfo = (staff, dateStr, snapshot = schedule, sourceStaffList = staffs) => {
-    if (!staff || !dateStr) return { code: '', missingCrossMonthReference: false };
-    const prevDate = addDays(parseDateKey(dateStr), -1);
-    const prevDateKey = formatDateKey(prevDate);
-    return getHistoricalCellCode(staff, prevDateKey, snapshot, sourceStaffList);
-  };
-
-  const countConsecutiveWorkDaysBeforeResolved = (staff, dateStr, snapshot = schedule, sourceStaffList = staffs) => {
-    if (!staff || !dateStr) return { count: 0, missingCrossMonthReference: false };
-    let count = 0;
-    let sawMissingCrossMonthReference = false;
-    let cursor = addDays(parseDateKey(dateStr), -1);
-    while (true) {
-      const key = formatDateKey(cursor);
-      const result = getHistoricalCellCode(staff, key, snapshot, sourceStaffList);
-      if (result.missingCrossMonthReference) sawMissingCrossMonthReference = true;
-      if (!isShiftCode(result.code)) break;
-      count += 1;
-      cursor = addDays(cursor, -1);
-    }
-    return { count, missingCrossMonthReference: sawMissingCrossMonthReference };
-  };
-
-  const evaluateAssignmentRules = (staff, dateStr, shiftCode, options = {}) => {
-    const { snapshot = schedule, sourceStaffList = staffs, ignoreCurrentCell = false } = options;
-    const reasons = [];
-    const currentCellData = snapshot?.[staff.id]?.[dateStr];
-    const currentCode = typeof currentCellData === 'object' && currentCellData !== null ? (currentCellData.value || '') : (currentCellData || '');
-
-    if (!ignoreCurrentCell && currentCode) {
-      reasons.push('該格已有排班或休假代碼');
-    }
-
-    if (!ignoreCurrentCell && isConfiguredLeaveCode(currentCode)) {
-      reasons.push('該格已有休假，不可再排班');
-    }
-
-    const staffGroup = staff.group || '白班';
-    const shiftGroup = getShiftGroupByCode(shiftCode);
-    if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
-      reasons.push('不可跨群組排班');
-    }
-
-    const previousShiftInfo = getPreviousShiftInfo(staff, dateStr, snapshot, sourceStaffList);
-    const disallowed = SMART_RULES.disallowedNextShiftMap[previousShiftInfo.code] || [];
-    if (disallowed.includes(shiftCode)) {
-      reasons.push(`${previousShiftInfo.code} 後不可接 ${shiftCode}`);
-    }
-
-    const consecutiveResult = countConsecutiveWorkDaysBeforeResolved(staff, dateStr, snapshot, sourceStaffList);
-    if (consecutiveResult.count + 1 > SMART_RULES.maxConsecutiveWorkDays) {
-      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
-    }
-
-    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
-      reasons.push('懷孕標記人員不可排 N / 夜8-8');
-    }
-
-    return {
-      allowed: reasons.length === 0,
-      reasons,
-      missingCrossMonthReference: Boolean(previousShiftInfo.missingCrossMonthReference || consecutiveResult.missingCrossMonthReference)
-    };
-  };
-
   const handleCellChange = (staffId, dateStr, value) => {
-    const targetStaff = staffs.find(staff => staff.id === staffId);
-
-    if (value && targetStaff && isShiftCode(value)) {
-      const validation = evaluateAssignmentRules(targetStaff, dateStr, value, { ignoreCurrentCell: true });
-      if (!validation.allowed) {
-        window.alert(`此班別不可直接輸入：\n${validation.reasons.join('、')}`);
-        return false;
-      }
-      if (validation.missingCrossMonthReference) {
-        window.alert('未找到前月資料或前月同人對位，月初跨月銜接規則未檢查。');
-      }
-    }
-
     setSchedule(prev => ({
       ...prev,
       [staffId]: { ...prev[staffId], [dateStr]: value ? { value, source: 'manual' } : null }
     }));
-    return true;
   };
 
   const getCellCode = (staffId, dateStr) => {
@@ -2550,13 +2417,81 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const countConsecutiveWorkDaysBefore = (staffId, dateStr) => {
-    const targetStaff = staffs.find(staff => staff.id === staffId);
-    if (!targetStaff) return 0;
-    return countConsecutiveWorkDaysBeforeResolved(targetStaff, dateStr).count;
+    let count = 0;
+    let cursor = addDays(parseDateKey(dateStr), -1);
+    while (true) {
+      const key = formatDateKey(cursor);
+      const code = getCellCode(staffId, key);
+      if (!isShiftCode(code)) break;
+      count += 1;
+      cursor = addDays(cursor, -1);
+    }
+    return count;
   };
 
   const canAssign = (staff, dateStr, shiftCode, options = {}) => {
-    return evaluateAssignmentRules(staff, dateStr, shiftCode, options);
+    const reasons = [];
+    const { ignoreCrossGroup = false, ignoreOccupied = false } = options;
+    const currentCode = getCellCode(staff.id, dateStr);
+    if (!ignoreOccupied && currentCode) {
+      reasons.push('該格已有排班或休假代碼');
+    }
+
+    if (!ignoreOccupied && isConfiguredLeaveCode(currentCode)) {
+      reasons.push('該格已有休假，不可再排班');
+    }
+
+    const staffGroup = staff.group || '白班';
+    const shiftGroup = getShiftGroupByCode(shiftCode);
+    if (!ignoreCrossGroup && !SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
+      reasons.push('不可跨群組排班');
+    }
+
+    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+    const prevCode = getCellCode(staff.id, prevKey);
+    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+    if (disallowed.includes(shiftCode)) {
+      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+    }
+
+    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
+    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
+      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+    }
+
+    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
+      reasons.push('懷孕標記人員不可排 N / 夜8-8');
+    }
+
+    return { allowed: reasons.length === 0, reasons };
+  };
+
+  const handleManualCellChange = (staffId, dateStr, value) => {
+    const staff = staffs.find((item) => item.id === staffId);
+    if (!staff) {
+      handleCellChange(staffId, dateStr, value);
+      return true;
+    }
+
+    const normalizedValue = String(value || '').trim();
+    if (!normalizedValue) {
+      handleCellChange(staffId, dateStr, '');
+      return true;
+    }
+
+    if (!isShiftCode(normalizedValue)) {
+      handleCellChange(staffId, dateStr, normalizedValue);
+      return true;
+    }
+
+    const result = canAssign(staff, dateStr, normalizedValue, { ignoreCrossGroup: true, ignoreOccupied: true });
+    if (!result.allowed) {
+      window.alert(`此班別不可直接輸入：\n${result.reasons.join('\n')}`);
+      return false;
+    }
+
+    handleCellChange(staffId, dateStr, normalizedValue);
+    return true;
   };
 
   const getShiftCountForStaff = (staffId, shiftCode) => {
@@ -3428,7 +3363,7 @@ const openSelectedCellFillModal = () => {
                                   <select
                                     value={val}
                                     onChange={(e) => {
-                                      handleCellChange(staff.id, d.date, e.target.value);
+                                      handleManualCellChange(staff.id, d.date, e.target.value);
                                       startRangeSelection(staff, d.date);
                                       e.currentTarget.blur();
                                     }}
