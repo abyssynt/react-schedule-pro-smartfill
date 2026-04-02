@@ -3042,13 +3042,6 @@ const openSelectedCellFillModal = () => {
         </div>
       </div>
 
-      {selectedGridCell && (
-        <div className="max-w-[98vw] mx-auto mb-3 rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3 text-sm text-blue-900">
-          已選取：<span className="font-black">{selectedGridCell.staff?.name}</span>｜{selectedGridCell.dateStr}
-          <span className="mx-2 text-blue-300">|</span>
-          直接輸入代碼即可，例如 D、E、N、off、AM、PM；F1~F4 為輔助快捷鍵，右側下拉功能仍可使用。
-        </div>
-      )}
 
       {showRuleFillControl && (
         <div className="max-w-[98vw] mx-auto mb-4 rounded-3xl border border-slate-200 bg-slate-100/90 px-4 py-4 shadow-sm animate-fade-in-down lg:px-5">
