@@ -549,7 +549,27 @@ const inferImportedGroupFromCodes = (dayMap = {}) => {
   return ranked[0]?.[1] > 0 ? ranked[0][0] : '';
 };
 
-const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, customLeaveCodes = [] }) => {
+const buildExistingStaffGroupLookup = (monthlySchedules = {}) => {
+  const byMonth = {};
+  const fallback = {};
+
+  Object.entries(monthlySchedules || {}).forEach(([monthKey, monthState]) => {
+    const monthLookup = {};
+    const monthStaffs = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
+    monthStaffs.forEach((staff) => {
+      const nameKey = String(staff?.name || '').trim();
+      const group = staff?.group || '';
+      if (!nameKey || !group) return;
+      if (!monthLookup[nameKey]) monthLookup[nameKey] = group;
+      if (!fallback[nameKey]) fallback[nameKey] = group;
+    });
+    byMonth[monthKey] = monthLookup;
+  });
+
+  return { byMonth, fallback };
+};
+
+const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, customLeaveCodes = [], importMode = 'schedule', existingStaffGroupLookup = { byMonth: {}, fallback: {} } }) => {
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
   let headerRowIndex = -1;
@@ -590,6 +610,28 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
   const validGroups = new Set(SHIFT_GROUPS);
   const validCodes = new Set([...DICT.SHIFTS, ...DICT.LEAVES, ...(customLeaveCodes || [])]);
 
+  const scanTexts = [];
+  const maxRowsToScan = Math.min(rows.length, 8);
+  for (let r = 0; r < maxRowsToScan; r += 1) {
+    const row = Array.isArray(rows[r]) ? rows[r] : [];
+    for (let c = 0; c < Math.min(row.length, 8); c += 1) {
+      const cellText = String(row[c] ?? '').trim();
+      if (cellText) scanTexts.push(cellText);
+    }
+  }
+
+  const detected = extractYearMonthCandidates(...scanTexts, sheetName, fileName);
+  const month = detected.month;
+  const year = detected.year || fallbackYear;
+
+  if (!month) {
+    throw new Error(`工作表「${sheetName}」無法辨識月份，請確認表頭、sheet 名稱或檔名包含幾月資訊`);
+  }
+
+  const monthKey = buildMonthKey(year, month);
+  const monthGroupLookup = existingStaffGroupLookup?.byMonth?.[monthKey] || {};
+  const fallbackGroupLookup = existingStaffGroupLookup?.fallback || {};
+
   const importedStaffs = [];
   const importedSchedule = {};
   const invalidMessages = [];
@@ -629,23 +671,38 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
     const hasShiftCode = importedCodes.some(code => DICT.SHIFTS.includes(code));
     const hasLeaveCode = importedCodes.some(code => isConfiguredImportedLeaveCode(code, customLeaveCodes));
 
-    let normalizedGroup = '白班';
+    let normalizedGroup = '';
     if (rawGroup) {
-      normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
-      if (!validGroups.has(rawGroup)) {
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，已自動改為白班`);
+      if (validGroups.has(rawGroup)) {
+        normalizedGroup = rawGroup;
+      } else {
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，將改用其他規則判定`);
       }
-    } else {
+    }
+
+    if (!normalizedGroup && importMode === 'preSchedule') {
+      normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '';
+    }
+
+    if (!normalizedGroup) {
       normalizedGroup = inferImportedGroupFromCodes(importedSchedule[staffId]);
-      if (!normalizedGroup) {
+    }
+
+    if (!normalizedGroup) {
+      if (importMode === 'preSchedule') {
+        normalizedGroup = '白班';
         if (hasLeaveCode && !hasShiftCode) {
-          normalizedGroup = '白班';
-          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有休假代碼，已先歸入白班保留資料`);
+          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有預假代碼，且無可對照群組，已先歸入白班保留資料`);
         } else {
-          delete importedSchedule[staffId];
-          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已略過`);
-          continue;
+          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」無法判定群組，已依預班規則先歸入白班`);
         }
+      } else if (hasLeaveCode && !hasShiftCode) {
+        normalizedGroup = '白班';
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有休假代碼，已先歸入白班保留資料`);
+      } else {
+        delete importedSchedule[staffId];
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已略過`);
+        continue;
       }
     }
 
@@ -659,25 +716,6 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
 
   if (importedStaffs.length === 0) return null;
 
-  const scanTexts = [];
-  const maxRowsToScan = Math.min(rows.length, 8);
-  for (let r = 0; r < maxRowsToScan; r += 1) {
-    const row = Array.isArray(rows[r]) ? rows[r] : [];
-    for (let c = 0; c < Math.min(row.length, 8); c += 1) {
-      const cellText = String(row[c] ?? '').trim();
-      if (cellText) scanTexts.push(cellText);
-    }
-  }
-
-  const detected = extractYearMonthCandidates(...scanTexts, sheetName, fileName);
-  const month = detected.month;
-  const year = detected.year || fallbackYear;
-
-  if (!month) {
-    throw new Error(`工作表「${sheetName}」無法辨識月份，請確認表頭、sheet 名稱或檔名包含幾月資訊`);
-  }
-
-  const monthKey = buildMonthKey(year, month);
   const importedScheduleByDate = Object.fromEntries(
     Object.entries(importedSchedule).map(([staffId, dayMap]) => [
       staffId,
@@ -699,11 +737,12 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
     schedulingRulesText: '',
     warnings: invalidMessages,
     importMeta: {
-      sourceType: 'excel',
+      sourceType: importMode === 'preSchedule' ? 'preScheduleExcel' : 'excel',
       sourceFiles: [fileName],
       sourceSheets: [sheetName],
       importedAt: new Date().toISOString(),
-      lastUpdatedAt: new Date().toISOString()
+      lastUpdatedAt: new Date().toISOString(),
+      importMode
     }
   };
 };
@@ -714,6 +753,8 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
   const monthlySchedules = {};
   const warnings = [];
   let firstMonthKey = '';
+  const importMode = options.importMode || 'schedule';
+  const existingStaffGroupLookup = buildExistingStaffGroupLookup(options.existingMonthlySchedules || {});
 
   for (const file of fileList) {
     const buffer = await file.arrayBuffer();
@@ -734,7 +775,10 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
           rows,
           sheetName,
           fileName: file.name,
-          fallbackYear
+          fallbackYear,
+          customLeaveCodes: options.customLeaveCodes || [],
+          importMode,
+          existingStaffGroupLookup
         });
 
         if (!parsed) continue;
@@ -771,10 +815,10 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
   return {
     monthlySchedules,
     firstMonthKey: firstMonthKey || keys[0],
-    warnings
+    warnings,
+    importMode
   };
 };
-
 
 
 const normalizeStaffGroup = (staffList = []) => {
@@ -1072,7 +1116,7 @@ const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => 
 };
 
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, importedPreSchedulePayload, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -4773,14 +4817,16 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
   );
 }
 
-function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDraft, activeDraftMeta, restoreActiveDraft, discardActiveDraft }) {
-  const importInputRef = useRef(null);
+function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onImportPreScheduleFiles, hasActiveDraft, activeDraftMeta, restoreActiveDraft, discardActiveDraft }) {
+  const scheduleImportInputRef = useRef(null);
+  const preScheduleImportInputRef = useRef(null);
 
-  const handleImportButtonClick = () => {
-    importInputRef.current?.click();
+  const handleImportButtonClick = (mode = 'schedule') => {
+    if (mode === 'preSchedule') preScheduleImportInputRef.current?.click();
+    else scheduleImportInputRef.current?.click();
   };
 
-  const handleImportInputChange = async (event) => {
+  const handleImportInputChange = async (event, mode = 'schedule') => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
     if (files.length === 0) return;
@@ -4795,7 +4841,8 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
     }
 
     try {
-      await onImportFiles?.(files);
+      if (mode === 'preSchedule') await onImportPreScheduleFiles?.(files);
+      else await onImportScheduleFiles?.(files);
     } catch (error) {
       console.error('匯入檔案失敗:', error);
       window.alert(error?.message || '匯入檔案失敗，請確認是否使用系統範本。');
@@ -4955,12 +5002,20 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
           </div>
 
           <input
-            ref={importInputRef}
+            ref={scheduleImportInputRef}
             type="file"
             multiple
             accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
-            onChange={handleImportInputChange}
+            onChange={(event) => handleImportInputChange(event, 'schedule')}
+          />
+          <input
+            ref={preScheduleImportInputRef}
+            type="file"
+            multiple
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            className="hidden"
+            onChange={(event) => handleImportInputChange(event, 'preSchedule')}
           />
 
           <div className="space-y-4">
@@ -4984,11 +5039,20 @@ function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDr
 
             <button
               type="button"
-              onClick={handleImportButtonClick}
+              onClick={() => handleImportButtonClick('schedule')}
               className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
             >
               <Database className="w-4 h-4 text-slate-500" />
               匯入檔案
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleImportButtonClick('preSchedule')}
+              className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
+            >
+              <CalendarDays className="w-4 h-4 text-slate-500" />
+              匯入預班表
             </button>
 
             <button
@@ -5067,7 +5131,9 @@ export default function App() {
   const [schedulingRulesText, setSchedulingRulesText] = useState('');
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
   const [importedSchedulePayload, setImportedSchedulePayload] = useState(null);
+  const [importedPreSchedulePayload, setImportedPreSchedulePayload] = useState(null);
   const [monthlySchedules, setMonthlySchedules] = useState({});
+  const [preScheduleMonthlySchedules, setPreScheduleMonthlySchedules] = useState({});
   const [pendingOpenMonthKey, setPendingOpenMonthKey] = useState('');
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(3);
@@ -5098,6 +5164,7 @@ export default function App() {
     customColumnValues,
     schedulingRulesText,
     monthlySchedules,
+    preScheduleMonthlySchedules,
     year,
     month,
     staffs,
@@ -5156,11 +5223,13 @@ export default function App() {
     setCustomColumnValues(state.customColumnValues || {});
     setSchedulingRulesText(typeof state.schedulingRulesText === 'string' ? state.schedulingRulesText : '');
     setMonthlySchedules(state.monthlySchedules || {});
+    setPreScheduleMonthlySchedules(state.preScheduleMonthlySchedules || {});
     setYear(Number(state.year) || 2025);
     setMonth(Number(state.month) || 3);
     setStaffs(normalizeStaffGroup(state.staffs || createBlankMonthState(Number(state.year) || 2025, Number(state.month) || 3).staffs));
     setSchedule(state.schedule || createBlankMonthState(Number(state.year) || 2025, Number(state.month) || 3).schedule);
     setImportedSchedulePayload(null);
+    setImportedPreSchedulePayload(null);
     setPendingOpenMonthKey('');
     setLoadLatestOnEnter(false);
   };
@@ -5211,6 +5280,7 @@ export default function App() {
         customColumnValues,
         schedulingRulesText,
         monthlySchedules,
+        preScheduleMonthlySchedules,
         year,
         month,
         staffs,
@@ -5225,7 +5295,7 @@ export default function App() {
     } catch (error) {
       console.error('寫入自動暫存失敗', error);
     }
-  }, [colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, year, month, staffs, schedule]);
+  }, [colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, preScheduleMonthlySchedules, year, month, staffs, schedule]);
 
   const restoreActiveDraft = () => {
     try {
@@ -5315,11 +5385,33 @@ export default function App() {
   };
 
   const handleImportFiles = async (files) => {
-    const imported = await parseImportedExcelFiles(files, new Date().getFullYear(), { customLeaveCodes });
+    const imported = await parseImportedExcelFiles(files, new Date().getFullYear(), {
+      customLeaveCodes,
+      importMode: 'schedule',
+      existingMonthlySchedules: monthlySchedules
+    });
     setImportedSchedulePayload(imported);
     setPendingOpenMonthKey(imported.firstMonthKey || '');
     setLoadLatestOnEnter(false);
     setScreen('schedule');
+  };
+
+  const handleImportPreScheduleFiles = async (files) => {
+    const imported = await parseImportedExcelFiles(files, new Date().getFullYear(), {
+      customLeaveCodes,
+      importMode: 'preSchedule',
+      existingMonthlySchedules: monthlySchedules
+    });
+    setPreScheduleMonthlySchedules(prev => ({
+      ...prev,
+      ...(imported.monthlySchedules || {})
+    }));
+    setImportedPreSchedulePayload(imported);
+    setPendingOpenMonthKey(imported.firstMonthKey || '');
+    setLoadLatestOnEnter(false);
+    setScreen('schedule');
+    const importedMonths = Object.keys(imported.monthlySchedules || {}).length;
+    window.alert(`預班表匯入完成，共載入 ${importedMonths} 個月份。第 1 刀目前只建立資料層，畫面顯示會在下一刀接上。`);
   };
 
   const goToSchedule = () => {
@@ -5364,6 +5456,8 @@ export default function App() {
         onImportedScheduleApplied={() => setImportedSchedulePayload(null)}
         monthlySchedules={monthlySchedules}
         setMonthlySchedules={setMonthlySchedules}
+        preScheduleMonthlySchedules={preScheduleMonthlySchedules}
+        importedPreSchedulePayload={importedPreSchedulePayload}
         pendingOpenMonthKey={pendingOpenMonthKey}
         onPendingOpenHandled={() => setPendingOpenMonthKey('')}
         year={year}
@@ -5415,15 +5509,12 @@ export default function App() {
         else setScreen(target);
       }}
       goToLatestHistory={goToLatestHistory}
-      onImportFiles={handleImportFiles}
+      onImportScheduleFiles={handleImportFiles}
+      onImportPreScheduleFiles={handleImportPreScheduleFiles}
       hasActiveDraft={hasActiveDraft}
       activeDraftMeta={activeDraftMeta}
       restoreActiveDraft={restoreActiveDraft}
       discardActiveDraft={discardActiveDraft}
     />
   );
-}const isConfiguredImportedLeaveCode = (code = '', customLeaveCodes = []) => {
-  const mergedLeaveCodes = Array.from(new Set([...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).filter(Boolean);
-  const prefix = getCodePrefix(code);
-  return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
-};
+}
