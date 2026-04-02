@@ -1658,16 +1658,22 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const applyValueToCells = (cells, normalized, options = {}) => {
     if (!cells || cells.length === 0) return false;
     const targetCells = Array.isArray(cells) ? cells : [];
+    const source = options.source || 'manual';
+    const rawEntries = targetCells.map(({ staffId, dateStr }) => ({
+      staffId,
+      dateStr,
+      value: normalized,
+      source
+    }));
+    const { allowedEntries, blockedEntries } = source === 'manual'
+      ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
+      : { allowedEntries: rawEntries, blockedEntries: [] };
+    if (allowedEntries.length === 0) return false;
     return applyScheduleEntries(
-      targetCells.map(({ staffId, dateStr }) => ({
-        staffId,
-        dateStr,
-        value: normalized,
-        source: options.source || 'manual'
-      })),
+      allowedEntries,
       {
         ...options,
-        preserveSelection: options.preserveSelection === true,
+        preserveSelection: options.preserveSelection === true || blockedEntries.length > 0,
         selectionCells: options.selectionCells || targetCells,
         activeCell: options.activeCell || targetCells[targetCells.length - 1]
       }
@@ -2958,12 +2964,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const handleCellChange = (staffId, dateStr, value, options = {}) => {
+    const source = options.source || 'manual';
+    const rawEntries = [{ staffId, dateStr, value, source }];
+    const { allowedEntries, blockedEntries } = source === 'manual'
+      ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
+      : { allowedEntries: rawEntries, blockedEntries: [] };
+    if (allowedEntries.length === 0) return false;
     return applyScheduleEntries(
-      [{ staffId, dateStr, value, source: options.source || 'manual' }],
+      allowedEntries,
       {
         clearAssist: options.clearAssist !== false,
         resetBuffer: options.resetBuffer !== false,
-        preserveSelection: options.preserveSelection === true,
+        preserveSelection: options.preserveSelection === true || blockedEntries.length > 0,
         selectionCells: options.selectionCells || [{ staffId, dateStr }],
         activeCell: options.activeCell || { staffId, dateStr }
       }
