@@ -319,8 +319,12 @@ const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
   const value = String(rawValue ?? '').trim();
   if (!value) return { normalized: '', isValid: true };
 
-  const collapsed = value.replace(/\s+/g, '');
+  const toHalfWidth = (input = '') => String(input).replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
+  const normalizedBase = toHalfWidth(value).trim();
+  const collapsed = normalizedBase.replace(/\s+/g, '');
   const lower = collapsed.toLowerCase();
+  const compact = lower.replace(/[－—–~～_]/g, '-');
+  const compactNoHyphen = compact.replace(/-/g, '');
   const allowedCodes = Array.from(new Set([...(DICT.SHIFTS || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
   const directMap = {
     d: 'D',
@@ -328,19 +332,39 @@ const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
     n: 'N',
     off: 'off',
     of: 'off',
+    o: 'off',
     am: 'AM',
     pm: 'PM',
+    a: 'AM',
+    p: 'PM',
     '8-12': '8-12',
+    '812': '8-12',
+    '08-12': '8-12',
+    '0812': '8-12',
     '12-16': '12-16',
+    '1216': '12-16',
     '白8-8': '白8-8',
-    '夜8-8': '夜8-8'
+    '白88': '白8-8',
+    '白8-08': '白8-8',
+    '白8to8': '白8-8',
+    '夜8-8': '夜8-8',
+    '夜88': '夜8-8',
+    '夜8to8': '夜8-8'
   };
 
-  if (directMap[lower]) return { normalized: directMap[lower], isValid: allowedCodes.includes(directMap[lower]) };
-  const directAllowed = allowedCodes.find(code => String(code).toLowerCase() === lower);
+  const directCandidate = directMap[compact] || directMap[compactNoHyphen] || directMap[lower];
+  if (directCandidate) return { normalized: directCandidate, isValid: allowedCodes.includes(directCandidate) };
+
+  const directAllowed = allowedCodes.find(code => {
+    const codeString = String(code);
+    const codeLower = toHalfWidth(codeString).trim().replace(/\s+/g, '').toLowerCase();
+    const codeCompact = codeLower.replace(/[－—–~～_]/g, '-');
+    const codeCompactNoHyphen = codeCompact.replace(/-/g, '');
+    return codeLower === lower || codeCompact === compact || codeCompactNoHyphen === compactNoHyphen;
+  });
   if (directAllowed) return { normalized: directAllowed, isValid: true };
 
-  return { normalized: value, isValid: false };
+  return { normalized: normalizedBase, isValid: false };
 };
 
 const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
