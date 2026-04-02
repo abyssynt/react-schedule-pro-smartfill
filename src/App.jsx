@@ -933,7 +933,14 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#ffffff',
     shiftColumnFontColor: '#1e293b',
     nameDateColumnFontColor: '#1e293b',
-    demandOverColor: '#fde68a'
+    demandOverColor: '#fde68a',
+    groupSummaryRowBgColor: '#fef3c7',
+    warningTintColor: '#f59e0b',
+    warningTextColor: '#92400e',
+    infoTintColor: '#38bdf8',
+    infoTextColor: '#075985',
+    dangerTintColor: '#ef4444',
+    dangerTextColor: '#9f1239'
   },
   soft: {
     pageBackgroundColor: '#f7faf7',
@@ -944,7 +951,14 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#fcfdfc',
     shiftColumnFontColor: '#365314',
     nameDateColumnFontColor: '#334155',
-    demandOverColor: '#fde68a'
+    demandOverColor: '#d9f99d',
+    groupSummaryRowBgColor: '#ecfccb',
+    warningTintColor: '#65a30d',
+    warningTextColor: '#3f6212',
+    infoTintColor: '#14b8a6',
+    infoTextColor: '#115e59',
+    dangerTintColor: '#fb7185',
+    dangerTextColor: '#9f1239'
   },
   warm: {
     pageBackgroundColor: '#fffaf5',
@@ -955,7 +969,14 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#fffbeb',
     shiftColumnFontColor: '#7c2d12',
     nameDateColumnFontColor: '#44403c',
-    demandOverColor: '#fdba74'
+    demandOverColor: '#fdba74',
+    groupSummaryRowBgColor: '#fed7aa',
+    warningTintColor: '#ea580c',
+    warningTextColor: '#9a3412',
+    infoTintColor: '#f59e0b',
+    infoTextColor: '#92400e',
+    dangerTintColor: '#f87171',
+    dangerTextColor: '#991b1b'
   },
   dark: {
     pageBackgroundColor: '#0f172a',
@@ -966,7 +987,14 @@ const UI_THEME_PRESETS = {
     nameDateColumnBgColor: '#172033',
     shiftColumnFontColor: '#f8fafc',
     nameDateColumnFontColor: '#e2e8f0',
-    demandOverColor: '#78350f'
+    demandOverColor: '#78350f',
+    groupSummaryRowBgColor: '#334155',
+    warningTintColor: '#fbbf24',
+    warningTextColor: '#fef3c7',
+    infoTintColor: '#38bdf8',
+    infoTextColor: '#e0f2fe',
+    dangerTintColor: '#fb7185',
+    dangerTextColor: '#ffe4e6'
   }
 };
 
@@ -1126,6 +1154,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
   const groupSummaryRowBgColor = uiSettings?.groupSummaryRowBgColor || '#fef3c7';
+  const warningTintColor = uiSettings?.warningTintColor || '#f59e0b';
+  const warningTextColor = uiSettings?.warningTextColor || '#92400e';
+  const infoTintColor = uiSettings?.infoTintColor || '#38bdf8';
+  const infoTextColor = uiSettings?.infoTextColor || '#075985';
+  const dangerTintColor = uiSettings?.dangerTintColor || '#ef4444';
+  const dangerTextColor = uiSettings?.dangerTextColor || '#9f1239';
+  const warningSoftBgColor = blendHexColors(pageBackgroundColor, warningTintColor, 0.16);
+  const warningSoftBorderColor = blendHexColors(pageBackgroundColor, warningTintColor, 0.35);
+  const infoSoftBgColor = blendHexColors(pageBackgroundColor, infoTintColor, 0.16);
+  const infoSoftBorderColor = blendHexColors(pageBackgroundColor, infoTintColor, 0.35);
+  const dangerSoftBgColor = blendHexColors(pageBackgroundColor, dangerTintColor, 0.14);
+  const dangerSoftBorderColor = blendHexColors(pageBackgroundColor, dangerTintColor, 0.32);
   const stickyGroupSummaryTop = 44;
   const stickyGroupSummaryShadow = '0 6px 12px rgba(15, 23, 42, 0.08)';
   const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
@@ -3727,20 +3767,27 @@ const openSelectedCellFillModal = () => {
             </div>
           )}
           {inputAssist.message && (
-            <div className={`p-3 rounded-xl text-sm animate-fade-in-down flex items-center gap-2 border ${inputAssist.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-900' : inputAssist.type === 'info' ? 'bg-sky-50 border-sky-200 text-sky-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
-              <AlertTriangle size={16} className={inputAssist.type === 'warning' ? 'text-amber-600' : inputAssist.type === 'info' ? 'text-sky-600' : 'text-rose-600'} />
+            <div
+              className="p-3 rounded-xl text-sm animate-fade-in-down flex items-center gap-2 border"
+              style={{
+                backgroundColor: inputAssist.type === 'warning' ? warningSoftBgColor : inputAssist.type === 'info' ? infoSoftBgColor : dangerSoftBgColor,
+                borderColor: inputAssist.type === 'warning' ? warningSoftBorderColor : inputAssist.type === 'info' ? infoSoftBorderColor : dangerSoftBorderColor,
+                color: inputAssist.type === 'warning' ? warningTextColor : inputAssist.type === 'info' ? infoTextColor : dangerTextColor
+              }}
+            >
+              <AlertTriangle size={16} style={{ color: inputAssist.type === 'warning' ? warningTintColor : inputAssist.type === 'info' ? infoTintColor : dangerTintColor }} />
               <span>{inputAssist.message}</span>
             </div>
           )}
           {showImportViolationSummary && importRuleViolations.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-900 text-sm animate-fade-in-down flex items-center justify-between gap-3">
+            <div className="p-3 rounded-xl text-sm animate-fade-in-down flex items-center justify-between gap-3 border" style={{ backgroundColor: warningSoftBgColor, borderColor: warningSoftBorderColor, color: warningTextColor }}>
               <div className="flex items-center gap-2">
-                <AlertTriangle size={16} className="text-amber-600" />
+                <AlertTriangle size={16} style={{ color: warningTintColor }} />
                 <span>匯入完成，發現 {importRuleViolations.length} 筆規則衝突</span>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setShowImportViolationList(true)} className="px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 font-bold hover:bg-amber-100">查看違規</button>
-                <button type="button" onClick={() => setShowImportViolationSummary(false)} className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-700 font-bold hover:bg-amber-100">關閉</button>
+                <button type="button" onClick={() => setShowImportViolationList(true)} className="px-3 py-1.5 rounded-lg border bg-white font-bold" style={{ borderColor: warningSoftBorderColor, color: warningTextColor }}>查看違規</button>
+                <button type="button" onClick={() => setShowImportViolationSummary(false)} className="px-2.5 py-1.5 rounded-lg border bg-white font-bold" style={{ borderColor: warningSoftBorderColor, color: warningTextColor }}>關閉</button>
               </div>
             </div>
           )}
@@ -4094,10 +4141,11 @@ const openSelectedCellFillModal = () => {
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''} ${isRuleWarning ? 'ring-2 ring-amber-400 ring-inset' : ''}`}
+                              className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
                               style={{
                                 backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
                                 opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
+                                boxShadow: `${inRangeSelection ? 'inset 0 0 0 2px #a78bfa' : isPrimarySelected ? 'inset 0 0 0 2px #3b82f6' : ''}${isInvalid ? `${inRangeSelection || isPrimarySelected ? ', ' : ''}inset 0 0 0 2px ${dangerTintColor}` : ''}${isRuleWarning ? `${inRangeSelection || isPrimarySelected || isInvalid ? ', ' : ''}inset 0 0 0 2px ${warningTintColor}` : ''}` || undefined,
                                 ...getFourWeekDividerStyle(d.date),
                                 ...(rowInsertStyle || {})
                               }}
@@ -4121,7 +4169,8 @@ const openSelectedCellFillModal = () => {
                                 </div>
                                 {isRuleWarning && (
                                   <div
-                                    className="absolute top-0 right-0 w-0 h-0 border-l-[10px] border-l-transparent border-t-[10px] border-t-amber-500 z-20"
+                                    className="absolute top-0 right-0 w-0 h-0 border-l-[10px] border-l-transparent z-20"
+                                    style={{ borderTop: `10px solid ${warningTintColor}` }}
                                     title={ruleWarningMessage}
                                   ></div>
                                 )}
@@ -4341,7 +4390,7 @@ const openSelectedCellFillModal = () => {
                       <td className="px-4 py-3">{item.staffName}</td>
                       <td className="px-4 py-3">{item.dateStr}</td>
                       <td className="px-4 py-3 font-bold">{item.code}</td>
-                      <td className="px-4 py-3 text-amber-700">{item.reason}</td>
+                      <td className="px-4 py-3" style={{ color: warningTextColor }}>{item.reason}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -4515,6 +4564,9 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求超編顏色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">群組統計列顏色</span><input type="color" value={uiSettings.groupSummaryRowBgColor || '#fef3c7'} onChange={(e) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">警示色</span><input type="color" value={uiSettings.warningTintColor || '#f59e0b'} onChange={(e) => setUiSettings(prev => ({ ...prev, warningTintColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">資訊提示色</span><input type="color" value={uiSettings.infoTintColor || '#38bdf8'} onChange={(e) => setUiSettings(prev => ({ ...prev, infoTintColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">錯誤色</span><input type="color" value={uiSettings.dangerTintColor || '#ef4444'} onChange={(e) => setUiSettings(prev => ({ ...prev, dangerTintColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                   </div>
                 </div>
               </div>
@@ -4550,7 +4602,15 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                             shiftColumnBgColor: preset.shiftColumnBgColor,
                             nameDateColumnBgColor: preset.nameDateColumnBgColor,
                             shiftColumnFontColor: preset.shiftColumnFontColor,
-                            nameDateColumnFontColor: preset.nameDateColumnFontColor
+                            nameDateColumnFontColor: preset.nameDateColumnFontColor,
+                            demandOverColor: preset.demandOverColor,
+                            groupSummaryRowBgColor: preset.groupSummaryRowBgColor,
+                            warningTintColor: preset.warningTintColor,
+                            warningTextColor: preset.warningTextColor,
+                            infoTintColor: preset.infoTintColor,
+                            infoTextColor: preset.infoTextColor,
+                            dangerTintColor: preset.dangerTintColor,
+                            dangerTextColor: preset.dangerTextColor
                           }));
                         }}
                         className={`px-3 py-1.5 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
@@ -5074,7 +5134,13 @@ export default function App() {
       dayColumnWidthMode: 'standard',
       cellHeightMode: 'standard',
       demandOverColor: '#fde68a',
-      groupSummaryRowBgColor: '#fef3c7'
+      groupSummaryRowBgColor: '#fef3c7',
+      warningTintColor: '#f59e0b',
+      warningTextColor: '#92400e',
+      infoTintColor: '#38bdf8',
+      infoTextColor: '#075985',
+      dangerTintColor: '#ef4444',
+      dangerTextColor: '#9f1239'
     });
     setStaffingConfig(state.staffingConfig || {
       hospitalLevel: 'regional',
