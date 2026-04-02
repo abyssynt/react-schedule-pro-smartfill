@@ -587,6 +587,89 @@ const buildExistingStaffGroupLookup = (monthlySchedules = {}) => {
   return { byMonth, fallback };
 };
 
+const mergeImportedMonthStates = (baseState = null, incomingState = null) => {
+  if (!baseState) return incomingState;
+  if (!incomingState) return baseState;
+
+  const mergedStaffs = [];
+  const mergedSchedule = {};
+  const staffKeyToId = new Map();
+  const signatureToKey = new Map();
+
+  const registerStaffs = (monthState, priority = 'base') => {
+    const staffList = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
+    const scheduleData = monthState?.scheduleData || monthState?.schedule || {};
+
+    staffList.forEach((staff) => {
+      const name = String(staff?.name || '').trim();
+      const group = staff?.group || '白班';
+      if (!name) return;
+      const signature = `${name}__${group}`;
+      const fallbackSignature = `${name}__*`;
+      const matchedSignature = signatureToKey.has(signature)
+        ? signature
+        : (signatureToKey.has(fallbackSignature) ? signatureToKey.get(fallbackSignature) : null);
+
+      let staffKey = matchedSignature || signature;
+      let existingId = staffKeyToId.get(staffKey);
+
+      if (!existingId) {
+        existingId = priority === 'base' ? (staff.id || `${priority}_${mergedStaffs.length + 1}`) : (staff.id || `${priority}_${mergedStaffs.length + 1}`);
+        staffKeyToId.set(staffKey, existingId);
+        signatureToKey.set(signature, staffKey);
+        signatureToKey.set(fallbackSignature, staffKey);
+        mergedStaffs.push({
+          ...staff,
+          id: existingId,
+          name,
+          group
+        });
+        mergedSchedule[existingId] = { ...(scheduleData?.[staff.id] || {}) };
+        return;
+      }
+
+      const existingIndex = mergedStaffs.findIndex((item) => item.id === existingId);
+      if (existingIndex !== -1 && priority === 'incoming') {
+        mergedStaffs[existingIndex] = {
+          ...mergedStaffs[existingIndex],
+          ...staff,
+          id: existingId,
+          name,
+          group
+        };
+      }
+
+      mergedSchedule[existingId] = {
+        ...(mergedSchedule[existingId] || {}),
+        ...(scheduleData?.[staff.id] || {})
+      };
+    });
+  };
+
+  registerStaffs(baseState, 'base');
+  registerStaffs(incomingState, 'incoming');
+
+  const baseImportMeta = baseState?.importMeta || {};
+  const incomingImportMeta = incomingState?.importMeta || {};
+
+  return {
+    ...baseState,
+    ...incomingState,
+    staffs: mergedStaffs,
+    scheduleData: mergedSchedule,
+    importMeta: {
+      ...baseImportMeta,
+      ...incomingImportMeta,
+      sourceType: incomingImportMeta.sourceType || baseImportMeta.sourceType || 'preScheduleExcel',
+      sourceFiles: Array.from(new Set([...(baseImportMeta.sourceFiles || []), ...(incomingImportMeta.sourceFiles || [])])),
+      sourceSheets: Array.from(new Set([...(baseImportMeta.sourceSheets || []), ...(incomingImportMeta.sourceSheets || [])])),
+      importedAt: baseImportMeta.importedAt || incomingImportMeta.importedAt || new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString()
+    },
+    warnings: [...(baseState?.warnings || []), ...(incomingState?.warnings || [])]
+  };
+};
+
 const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, customLeaveCodes = [], importMode = 'schedule', existingStaffGroupLookup = { byMonth: {}, fallback: {} } }) => {
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
@@ -5502,12 +5585,16 @@ export default function App() {
     const imported = await parseImportedExcelFiles(files, new Date().getFullYear(), {
       customLeaveCodes,
       importMode: 'preSchedule',
-      existingMonthlySchedules: monthlySchedules
+      existingMonthlySchedules: monthlySchedules,
+      existingImportedMonthStates: preScheduleMonthlySchedules
     });
-    setPreScheduleMonthlySchedules(prev => ({
-      ...prev,
-      ...(imported.monthlySchedules || {})
-    }));
+    setPreScheduleMonthlySchedules(prev => {
+      const next = { ...(prev || {}) };
+      Object.entries(imported.monthlySchedules || {}).forEach(([monthKey, monthState]) => {
+        next[monthKey] = mergeImportedMonthStates(next[monthKey], monthState);
+      });
+      return next;
+    });
     setImportedPreSchedulePayload(imported);
     setPendingOpenMonthKey(imported.firstMonthKey || '');
     setLoadLatestOnEnter(false);
