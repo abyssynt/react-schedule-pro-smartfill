@@ -1466,17 +1466,46 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return true;
   };
 
-  const applyValueToCells = (cells, normalized) => {
-    if (!cells || cells.length === 0) return false;
+  const applyScheduleEntries = (entries = [], options = {}) => {
+    if (!Array.isArray(entries) || entries.length === 0) return false;
+
+    const normalizedEntries = entries
+      .map((entry) => ({
+        staffId: entry?.staffId,
+        dateStr: entry?.dateStr,
+        value: entry?.value || '',
+        source: entry?.source || 'manual'
+      }))
+      .filter((entry) => entry.staffId && entry.dateStr);
+
+    if (normalizedEntries.length === 0) return false;
+
     setSchedule(prev => {
       const next = JSON.parse(JSON.stringify(prev));
-      cells.forEach(({ staffId, dateStr }) => {
+      normalizedEntries.forEach(({ staffId, dateStr, value, source }) => {
         if (!next[staffId]) next[staffId] = {};
-        next[staffId][dateStr] = normalized ? { value: normalized, source: 'manual' } : null;
+        next[staffId][dateStr] = value ? { value, source } : null;
       });
       return next;
     });
+
+    if (options.clearAssist !== false) clearInputAssist();
+    if (options.resetBuffer !== false) resetKeyInputBuffer();
+
     return true;
+  };
+
+  const applyValueToCells = (cells, normalized, options = {}) => {
+    if (!cells || cells.length === 0) return false;
+    return applyScheduleEntries(
+      cells.map(({ staffId, dateStr }) => ({
+        staffId,
+        dateStr,
+        value: normalized,
+        source: options.source || 'manual'
+      })),
+      options
+    );
   };
 
   const moveSelectionAfterInput = (cells = [], direction = 1) => {
@@ -1657,6 +1686,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const rect = getRectFromSelection(selection, staffs, daysInMonth);
     if (!rect) return;
 
+    let invalidCount = 0;
     let grid = clipboardGrid;
     if (!grid || grid.length === 0) {
       try {
@@ -1700,22 +1730,27 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (!staff || !day) continue;
         const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
         const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
-        if (!isValid) continue;
-        updates.push({ staffId: staff.id, dateStr: day.date, value: normalized });
+        if (!isValid) {
+          invalidCount += 1;
+          continue;
+        }
+        updates.push({ staffId: staff.id, dateStr: day.date, value: normalized, source: 'manual' });
       }
     }
 
-    if (updates.length === 0) return;
+    if (updates.length === 0) {
+      if (invalidCount > 0) {
+        flashInvalidSelection(selectedRangeCells);
+        showInputAssist(`貼上內容有 ${invalidCount} 格不是可用代碼，已略過`, 'error');
+      }
+      return;
+    }
 
-    setSchedule(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      updates.forEach(({ staffId, dateStr, value }) => {
-        if (!next[staffId]) next[staffId] = {};
-        next[staffId][dateStr] = value ? { value, source: 'manual' } : null;
-      });
-      return next;
-    });
-    resetKeyInputBuffer();
+    applyScheduleEntries(updates, { clearAssist: invalidCount === 0, resetBuffer: true });
+    if (invalidCount > 0) {
+      flashInvalidSelection(selectedRangeCells);
+      showInputAssist(`已貼上 ${updates.length} 格，另有 ${invalidCount} 格不是可用代碼，已略過`, 'error');
+    }
   };
 
   useEffect(() => {
@@ -2685,11 +2720,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
   };
 
-  const handleCellChange = (staffId, dateStr, value) => {
-    setSchedule(prev => ({
-      ...prev,
-      [staffId]: { ...prev[staffId], [dateStr]: value ? { value, source: 'manual' } : null }
-    }));
+  const handleCellChange = (staffId, dateStr, value, options = {}) => {
+    return applyScheduleEntries(
+      [{ staffId, dateStr, value, source: options.source || 'manual' }],
+      { clearAssist: options.clearAssist !== false, resetBuffer: options.resetBuffer !== false }
+    );
   };
 
   const getCellCode = (staffId, dateStr) => {
@@ -2907,7 +2942,7 @@ const openSelectedCellFillModal = () => {
 
   const applyFillCandidate = (candidate) => {
     if (!selectedFillCell) return;
-    handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode);
+    handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode, { source: 'manual' });
     setShowFillModal(false);
     setSelectedFillCell(null);
     setFillCandidates([]);
