@@ -314,6 +314,12 @@ const normalizeImportedShiftCode = (rawValue = '') => {
 
 const buildMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 
+const isConfiguredImportedLeaveCode = (code = '', customLeaveCodes = []) => {
+  const mergedLeaveCodes = Array.from(new Set([...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).filter(Boolean);
+  const prefix = getCodePrefix(code);
+  return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
+};
+
 
 const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
   const value = String(rawValue ?? '').trim();
