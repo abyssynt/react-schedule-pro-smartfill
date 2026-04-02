@@ -1757,14 +1757,42 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       if (event.key === 'Escape') {
         event.preventDefault();
-        resetKeyInputBuffer();
+        if (keyInputBuffer) {
+          resetKeyInputBuffer();
+          clearInputAssist();
+          return;
+        }
+        clearInputAssist();
         setRangeSelection(null);
         setSelectionAnchor(null);
         setSelectedGridCell(null);
         return;
       }
 
-      if (event.key === 'Delete' || event.key === 'Backspace') {
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        if (keyInputBuffer) {
+          const nextBuffer = keyInputBuffer.slice(0, -1);
+          if (!nextBuffer) {
+            resetKeyInputBuffer();
+            clearInputAssist();
+            return;
+          }
+          setKeyInputBuffer(nextBuffer);
+          keepKeyInputBufferAlive();
+          if (!isPotentialManualShiftPrefix(nextBuffer, mergedLeaveCodes)) {
+            flashInvalidSelection(selectedRangeCells);
+            showInputAssist(`「${nextBuffer}」不是可用代碼`, 'error');
+          } else {
+            clearInputAssist();
+          }
+          return;
+        }
+        clearSelectionContents();
+        return;
+      }
+
+      if (event.key === 'Delete') {
         event.preventDefault();
         clearSelectionContents();
         return;
