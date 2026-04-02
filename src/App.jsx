@@ -1138,7 +1138,7 @@ const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => 
 };
 
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, importedPreSchedulePayload, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -1363,18 +1363,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     const targetMonthKey = pendingOpenMonthKey || importedPreSchedulePayload.firstMonthKey || buildMonthKey(year, month);
     const [targetYear, targetMonth] = String(targetMonthKey).split('-').map(Number);
+    if (!Number.isFinite(targetYear) || !Number.isFinite(targetMonth)) return;
 
-    if (Number.isFinite(targetYear) && Number.isFinite(targetMonth)) {
-      monthSwitchSeedRef.current = targetMonthKey;
-      if (year !== targetYear) setYear(targetYear);
-      if (month !== targetMonth) setMonth(targetMonth);
-    }
+    monthSwitchSeedRef.current = targetMonthKey;
+    if (year !== targetYear) setYear(targetYear);
+    if (month !== targetMonth) setMonth(targetMonth);
 
     const importedMonths = Object.keys(importedPreSchedulePayload.monthlySchedules || {}).length;
     if (importedMonths > 0) {
       setRuleFillFeedback(`✅ 預班資料已載入 ${targetYear}年${targetMonth}月，共 ${importedMonths} 個月份；第 1 刀目前先切換到對應月份，畫面顯示會在下一刀接上。`);
     }
-  }, [importedPreSchedulePayload, pendingOpenMonthKey, year, month]);
+
+    onImportedPreScheduleApplied?.();
+  }, [importedPreSchedulePayload, pendingOpenMonthKey]);
 
   useEffect(() => {
     const currentKey = buildMonthKey(year, month);
@@ -5499,6 +5500,7 @@ export default function App() {
         setMonthlySchedules={setMonthlySchedules}
         preScheduleMonthlySchedules={preScheduleMonthlySchedules}
         importedPreSchedulePayload={importedPreSchedulePayload}
+        onImportedPreScheduleApplied={() => setImportedPreSchedulePayload(null)}
         pendingOpenMonthKey={pendingOpenMonthKey}
         onPendingOpenHandled={() => setPendingOpenMonthKey('')}
         year={year}
