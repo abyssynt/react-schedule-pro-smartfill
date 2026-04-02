@@ -1543,6 +1543,57 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return true;
   };
 
+
+  const buildEntriesFromSnapshotDiff = (snapshot = {}, options = {}) => {
+    const entries = [];
+    const onlyCells = Array.isArray(options.onlyCells) ? new Set(options.onlyCells.map((cell) => makeCellKey(cell.staffId, cell.dateStr))) : null;
+
+    staffs.forEach((staff) => {
+      daysInMonth.forEach((day) => {
+        const cellKey = makeCellKey(staff.id, day.date);
+        if (onlyCells && !onlyCells.has(cellKey)) return;
+
+        const currentCell = schedule[staff.id]?.[day.date];
+        const nextCell = snapshot[staff.id]?.[day.date];
+        const currentValue = typeof currentCell === 'object' && currentCell !== null ? (currentCell.value || '') : (currentCell || '');
+        const currentSource = typeof currentCell === 'object' && currentCell !== null ? (currentCell.source || 'manual') : (currentValue ? 'manual' : '');
+        const nextValue = typeof nextCell === 'object' && nextCell !== null ? (nextCell.value || '') : (nextCell || '');
+        const nextSource = typeof nextCell === 'object' && nextCell !== null ? (nextCell.source || 'manual') : (nextValue ? 'manual' : '');
+
+        if (currentValue === nextValue && currentSource === nextSource) return;
+        entries.push({ staffId: staff.id, dateStr: day.date, value: nextValue, source: nextSource || 'manual' });
+      });
+    });
+
+    return entries;
+  };
+
+  const applyRuleFillSnapshot = (snapshot = {}, options = {}) => {
+    const entries = buildEntriesFromSnapshotDiff(snapshot, { onlyCells: options.onlyCells });
+    if (entries.length === 0) return false;
+    return applyScheduleEntries(entries, {
+      preserveSelection: options.preserveSelection === true,
+      selectionCells: options.selectionCells || entries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
+      activeCell: options.activeCell || (entries.length > 0 ? { staffId: entries[entries.length - 1].staffId, dateStr: entries[entries.length - 1].dateStr } : null),
+      clearAssist: options.clearAssist,
+      resetBuffer: options.resetBuffer
+    });
+  };
+
+  const applyRuleFillEntries = (entries = [], options = {}) => {
+    if (!Array.isArray(entries) || entries.length === 0) return false;
+    return applyScheduleEntries(
+      entries.map((entry) => ({ ...entry, source: entry?.source || 'auto' })),
+      {
+        preserveSelection: options.preserveSelection === true,
+        selectionCells: options.selectionCells || entries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
+        activeCell: options.activeCell || (entries.length > 0 ? { staffId: entries[entries.length - 1].staffId, dateStr: entries[entries.length - 1].dateStr } : null),
+        clearAssist: options.clearAssist,
+        resetBuffer: options.resetBuffer
+      }
+    );
+  };
+
   const applyValueToCells = (cells, normalized, options = {}) => {
     if (!cells || cells.length === 0) return false;
     const targetCells = Array.isArray(cells) ? cells : [];
@@ -2706,9 +2757,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
       }
 
-      setSchedule(mergedSchedule);
+      const ruleFillChangedEntries = buildEntriesFromSnapshotDiff(mergedSchedule);
+      if (ruleFillChangedEntries.length > 0) {
+        applyRuleFillEntries(ruleFillChangedEntries, {
+          preserveSelection: true,
+          selectionCells: ruleFillChangedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
+          activeCell: ruleFillChangedEntries.length > 0 ? { staffId: ruleFillChangedEntries[ruleFillChangedEntries.length - 1].staffId, dateStr: ruleFillChangedEntries[ruleFillChangedEntries.length - 1].dateStr } : null,
+          clearAssist: false,
+          resetBuffer: true
+        });
+      }
       saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
-      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
+      const changedCount = ruleFillChangedEntries.length;
+      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格${changedCount > 0 ? `，實際寫入 ${changedCount} 格` : '，沒有可寫入的新格'}`);
     } catch (error) {
       console.error(error);
       setRuleFillFeedback("❌ 規則補空失敗，請檢查設定。");
@@ -3012,10 +3073,7 @@ const openSelectedCellFillModal = () => {
     if (!currentCode) return;
     if (!window.confirm(`確定清除此格內容？\n${staff.name}｜${dateStr}｜${currentCode}`)) return;
 
-    setSchedule(prev => ({
-      ...prev,
-      [staff.id]: { ...prev[staff.id], [dateStr]: null }
-    }));
+    handleCellChange(staff.id, dateStr, '', { preserveSelection: true, selectionCells: [{ staffId: staff.id, dateStr }], activeCell: { staffId: staff.id, dateStr } });
     setSelectedGridCell(null);
     setRuleFillFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
   };
@@ -3026,36 +3084,44 @@ const openSelectedCellFillModal = () => {
       return;
     }
 
-    const start = Number(ruleFillConfig.dateRange.start || 1);
-    const end = Number(ruleFillConfig.dateRange.end || 31);
+    const startDay = Number(ruleFillConfig.dateRange.start || 1);
+    const endDay = Number(ruleFillConfig.dateRange.end || 31);
     const targetStaffIds = new Set(ruleFillConfig.selectedStaffs);
+    const clearEntries = [];
 
-    let cleared = 0;
-    setSchedule(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      staffs.forEach(staff => {
-        if (!targetStaffIds.has(staff.id)) return;
-        daysInMonth.forEach(day => {
-          if (day.day < start || day.day > end) return;
-          const cellData = next[staff.id]?.[day.date];
-          if (!cellData) return;
+    staffs.forEach(staff => {
+      if (!targetStaffIds.has(staff.id)) return;
+      daysInMonth.forEach(day => {
+        if (day.day < startDay || day.day > endDay) return;
+        const cellData = schedule[staff.id]?.[day.date];
+        if (!cellData) return;
 
-          const source = typeof cellData === 'object' && cellData !== null ? (cellData.source || 'manual') : 'manual';
-          if (rangeClearMode === 'autoOnly' && source !== 'auto') return;
+        const source = typeof cellData === 'object' && cellData !== null ? (cellData.source || 'manual') : 'manual';
+        if (rangeClearMode === 'autoOnly' && source !== 'auto') return;
 
-          next[staff.id][day.date] = null;
-          cleared += 1;
-        });
+        clearEntries.push({ staffId: staff.id, dateStr: day.date, value: '', source: 'auto' });
       });
-      return next;
     });
 
-    setRuleFillFeedback(cleared > 0 ? `🧹 已清除 ${cleared} 格內容` : 'ℹ️ 指定範圍內沒有可清除的內容');
+    if (clearEntries.length === 0) {
+      setRuleFillFeedback('ℹ️ 指定範圍內沒有可清除的內容');
+      return;
+    }
+
+    applyRuleFillEntries(clearEntries, {
+      preserveSelection: true,
+      selectionCells: clearEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
+      activeCell: clearEntries.length > 0 ? { staffId: clearEntries[clearEntries.length - 1].staffId, dateStr: clearEntries[clearEntries.length - 1].dateStr } : null,
+      clearAssist: false,
+      resetBuffer: true
+    });
+
+    setRuleFillFeedback(`🧹 已清除 ${clearEntries.length} 格內容`);
   };
 
   const applyFillCandidate = (candidate) => {
     if (!selectedFillCell) return;
-    handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode, { source: 'manual' });
+    handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode, { source: 'auto', preserveSelection: true, selectionCells: [{ staffId: candidate.staffId, dateStr: selectedFillCell.dateStr }], activeCell: { staffId: candidate.staffId, dateStr: selectedFillCell.dateStr } });
     setShowFillModal(false);
     setSelectedFillCell(null);
     setFillCandidates([]);
