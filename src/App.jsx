@@ -4321,7 +4321,7 @@ const openSelectedCellFillModal = () => {
                 <h3 className="font-black text-slate-800">匯入規則衝突清單</h3>
                 <p className="text-sm text-slate-500 mt-1">共 {importRuleViolations.length} 筆，僅提示，不影響匯入。</p>
               </div>
-              <button onClick={() => { setShowImportViolationList(false); setShowImportViolationSummary(false); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+              <button onClick={() => { setShowImportViolationList(false); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                 <X />
               </button>
             </div>
