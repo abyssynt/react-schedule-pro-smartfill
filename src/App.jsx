@@ -1374,11 +1374,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (year !== targetYear) setYear(targetYear);
     if (month !== targetMonth) setMonth(targetMonth);
 
-    const importedMonths = Object.keys(importedPreSchedulePayload.monthlySchedules || {}).length;
-    if (importedMonths > 0) {
-      setRuleFillFeedback(`✅ 預班資料已載入 ${targetYear}年${targetMonth}月，共 ${importedMonths} 個月份；若當月尚未匯入正式班表，系統會先用預班名單建立畫面骨架。`);
-    }
-
     onImportedPreScheduleApplied?.();
   }, [importedPreSchedulePayload, pendingOpenMonthKey]);
 
@@ -5517,8 +5512,6 @@ export default function App() {
     setPendingOpenMonthKey(imported.firstMonthKey || '');
     setLoadLatestOnEnter(false);
     setScreen('schedule');
-    const importedMonths = Object.keys(imported.monthlySchedules || {}).length;
-    window.alert(`預班表匯入完成，共載入 ${importedMonths} 個月份。若當月尚未匯入正式班表，系統會先用預班名單建立畫面骨架，方便檢視預班內容。`);
   };
 
   const goToSchedule = () => {
