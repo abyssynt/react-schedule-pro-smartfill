@@ -485,32 +485,44 @@ const isCellInSelectionRect = (selection, staffs = [], daysInMonth = [], staffId
 };
 
 const extractYearMonthCandidates = (...sources) => {
-  const patterns = [
+  const fullPatterns = [
     /(\d{4})\s*年\s*(\d{1,2})\s*月/,
-    /(\d{4})[\/_\-.](\d{1,2})/,
+    /(\d{4})[\/_\-.](\d{1,2})/
+  ];
+  const monthOnlyPatterns = [
     /(\d{1,2})\s*月/
   ];
+
+  let monthOnlyCandidate = { year: null, month: null };
 
   for (const source of sources) {
     const text = String(source || '').trim();
     if (!text) continue;
 
-    for (const pattern of patterns) {
+    for (const pattern of fullPatterns) {
       const match = text.match(pattern);
       if (!match) continue;
-      if (match.length >= 3 && pattern !== patterns[2]) {
-        const year = Number(match[1]);
-        const month = Number(match[2]);
-        if (year >= 1900 && month >= 1 && month <= 12) return { year, month };
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      if (year >= 1900 && month >= 1 && month <= 12) {
+        return { year, month };
       }
-      if (pattern === patterns[2]) {
+    }
+
+    if (!monthOnlyCandidate.month) {
+      for (const pattern of monthOnlyPatterns) {
+        const match = text.match(pattern);
+        if (!match) continue;
         const month = Number(match[1]);
-        if (month >= 1 && month <= 12) return { year: null, month };
+        if (month >= 1 && month <= 12) {
+          monthOnlyCandidate = { year: null, month };
+          break;
+        }
       }
     }
   }
 
-  return { year: null, month: null };
+  return monthOnlyCandidate;
 };
 
 const detectImportedDayNumber = (label = '') => {
