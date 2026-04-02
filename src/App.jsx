@@ -1232,6 +1232,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const infoSoftBorderColor = blendHexColors(pageBackgroundColor, infoTintColor, 0.35);
   const dangerSoftBgColor = blendHexColors(pageBackgroundColor, dangerTintColor, 0.14);
   const dangerSoftBorderColor = blendHexColors(pageBackgroundColor, dangerTintColor, 0.32);
+  const preScheduleTintColor = uiSettings?.preScheduleTintColor || infoTintColor;
+  const preScheduleTextColor = uiSettings?.preScheduleTextColor || infoTextColor;
+  const preScheduleMainBgColor = blendHexColors(pageBackgroundColor, preScheduleTintColor, 0.18);
+  const preScheduleHintBgColor = blendHexColors(pageBackgroundColor, preScheduleTintColor, 0.12);
+  const preScheduleHintBorderColor = blendHexColors(pageBackgroundColor, preScheduleTintColor, 0.32);
   const stickyGroupSummaryTop = 44;
   const stickyGroupSummaryShadow = '0 6px 12px rgba(15, 23, 42, 0.08)';
   const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
@@ -1590,6 +1595,42 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const getContextCellCode = (staffOrId, dateStr, options = {}) => {
     const cellData = getContextCellData(staffOrId, dateStr, options);
     return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+  };
+
+  const getPreScheduleMonthState = (monthKey) => {
+    if (!monthKey) return null;
+    return preScheduleMonthlySchedules?.[monthKey] || null;
+  };
+
+  const getPreScheduleCellData = (staffOrId, dateStr) => {
+    if (!dateStr) return null;
+    const monthKey = String(dateStr).slice(0, 7);
+    const monthState = getPreScheduleMonthState(monthKey);
+    if (!monthState) return null;
+
+    const targetStaff = getStaffRefFromCurrentMonth(staffOrId);
+    const matchedStaff = findComparableStaffInMonthState(targetStaff, monthState) || (typeof staffOrId === 'string'
+      ? (Array.isArray(monthState.staffs) ? monthState.staffs.find((staff) => staff.id === staffOrId) : null)
+      : null);
+    if (!matchedStaff) return null;
+
+    const monthSchedule = monthState.scheduleData || monthState.schedule || {};
+    return monthSchedule?.[matchedStaff.id]?.[dateStr] || null;
+  };
+
+  const getPreScheduleCellCode = (staffOrId, dateStr) => {
+    const cellData = getPreScheduleCellData(staffOrId, dateStr);
+    return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+  };
+
+  const getVisiblePreScheduleCode = (staffOrId, dateStr) => {
+    const code = getPreScheduleCellCode(staffOrId, dateStr);
+    return isConfiguredLeaveCode(code) ? code : '';
+  };
+
+  const getPreScheduleBackgroundColor = (baseColor = 'transparent', hasFormalValue = false) => {
+    const normalizedBaseColor = baseColor && baseColor !== 'transparent' ? baseColor : pageBackgroundColor;
+    return blendHexColors(normalizedBaseColor, preScheduleTintColor, hasFormalValue ? 0.12 : 0.2);
   };
 
   const clearRuleWarningCells = (cells = []) => {
@@ -4214,6 +4255,14 @@ const openSelectedCellFillModal = () => {
                           const cellKey = makeCellKey(staff.id, d.date);
                           const draftValue = cellDrafts[cellKey];
                           const displayValue = draftValue !== undefined ? draftValue : val;
+                          const preScheduleCode = getVisiblePreScheduleCode(staff, d.date);
+                          const hasFormalValue = Boolean(displayValue);
+                          const showPreScheduleAsMain = !hasFormalValue && Boolean(preScheduleCode);
+                          const showPreScheduleAsHint = hasFormalValue && Boolean(preScheduleCode);
+                          const baseCellBackgroundColor = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent');
+                          const cellBackgroundColor = showPreScheduleAsMain
+                            ? getPreScheduleBackgroundColor(baseCellBackgroundColor, false)
+                            : baseCellBackgroundColor;
                           const effectiveSelection = rangeSelection?.start && rangeSelection?.end ? rangeSelection : (selectedGridCell?.staff?.id && selectedGridCell?.dateStr ? {
                             start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
                             end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
@@ -4229,9 +4278,9 @@ const openSelectedCellFillModal = () => {
                               key={d.date}
                               className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
                               style={{
-                                backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
+                                backgroundColor: cellBackgroundColor,
                                 opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                                boxShadow: `${inRangeSelection ? 'inset 0 0 0 2px #a78bfa' : isPrimarySelected ? 'inset 0 0 0 2px #3b82f6' : ''}${isInvalid ? `${inRangeSelection || isPrimarySelected ? ', ' : ''}inset 0 0 0 2px ${dangerTintColor}` : ''}${isRuleWarning ? `${inRangeSelection || isPrimarySelected || isInvalid ? ', ' : ''}inset 0 0 0 2px ${warningTintColor}` : ''}` || undefined,
+                                boxShadow: `${inRangeSelection ? 'inset 0 0 0 2px #a78bfa' : isPrimarySelected ? 'inset 0 0 0 2px #3b82f6' : ''}${isInvalid ? `${inRangeSelection || isPrimarySelected ? ', ' : ''}inset 0 0 0 2px ${dangerTintColor}` : ''}${isRuleWarning ? `${inRangeSelection || isPrimarySelected || isInvalid ? ', ' : ''}inset 0 0 0 2px ${warningTintColor}` : ''}${showPreScheduleAsMain ? `${inRangeSelection || isPrimarySelected || isInvalid || isRuleWarning ? ', ' : ''}inset 0 0 0 1px ${preScheduleHintBorderColor}` : ''}` || undefined,
                                 ...getFourWeekDividerStyle(d.date),
                                 ...(rowInsertStyle || {})
                               }}
@@ -4249,10 +4298,19 @@ const openSelectedCellFillModal = () => {
                               <div className="relative">
                                 <div
                                   className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
-                                  style={{ color: tableFontColor, pointerEvents: 'none' }}
+                                  style={{ color: showPreScheduleAsMain ? preScheduleTextColor : tableFontColor, pointerEvents: 'none' }}
                                 >
-                                  {val}
+                                  {showPreScheduleAsMain ? preScheduleCode : displayValue}
                                 </div>
+                                {showPreScheduleAsHint && (
+                                  <div
+                                    className="absolute left-0.5 top-0.5 px-1 py-[1px] rounded-md text-[10px] font-black leading-none z-20 pointer-events-none"
+                                    style={{ backgroundColor: preScheduleHintBgColor, color: preScheduleTextColor, border: `1px solid ${preScheduleHintBorderColor}` }}
+                                    title={`預班：${preScheduleCode}`}
+                                  >
+                                    預{preScheduleCode}
+                                  </div>
+                                )}
                                 {isRuleWarning && (
                                   <div
                                     className="absolute top-0 right-0 w-0 h-0 border-l-[10px] border-l-transparent z-20"
@@ -4262,7 +4320,7 @@ const openSelectedCellFillModal = () => {
                                 )}
                                 <div
                                   className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
-                                  title="選擇班別/假別"
+                                  title={showPreScheduleAsHint ? `選擇班別/假別｜預班 ${preScheduleCode}` : '選擇班別/假別'}
                                 >
                                   <select
                                     value={val}
