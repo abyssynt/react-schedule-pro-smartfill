@@ -1522,8 +1522,34 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const colIndex = daysInMonth.findIndex((day) => day.date === activeDateStr);
     if (rowIndex === -1 || colIndex === -1) return false;
 
-    const nextRowIndex = Math.max(0, Math.min(scopedStaffs.length - 1, rowIndex + rowDelta));
-    const nextColIndex = Math.max(0, Math.min(daysInMonth.length - 1, colIndex + colDelta));
+    let nextRowIndex = rowIndex + rowDelta;
+    let nextColIndex = colIndex + colDelta;
+
+    if (colDelta !== 0 && daysInMonth.length > 0) {
+      while (nextColIndex >= daysInMonth.length) {
+        if (nextRowIndex >= scopedStaffs.length - 1) {
+          nextRowIndex = scopedStaffs.length - 1;
+          nextColIndex = daysInMonth.length - 1;
+          break;
+        }
+        nextRowIndex += 1;
+        nextColIndex -= daysInMonth.length;
+      }
+
+      while (nextColIndex < 0) {
+        if (nextRowIndex <= 0) {
+          nextRowIndex = 0;
+          nextColIndex = 0;
+          break;
+        }
+        nextRowIndex -= 1;
+        nextColIndex += daysInMonth.length;
+      }
+    }
+
+    nextRowIndex = Math.max(0, Math.min(scopedStaffs.length - 1, nextRowIndex));
+    nextColIndex = Math.max(0, Math.min(daysInMonth.length - 1, nextColIndex));
+
     const nextStaff = scopedStaffs[nextRowIndex];
     const nextDay = daysInMonth[nextColIndex];
     if (!nextStaff || !nextDay) return false;
