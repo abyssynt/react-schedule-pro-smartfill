@@ -1070,6 +1070,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [cellRuleWarnings, setCellRuleWarnings] = useState({});
   const [importRuleViolations, setImportRuleViolations] = useState([]);
   const [showImportViolationList, setShowImportViolationList] = useState(false);
+  const [showImportViolationSummary, setShowImportViolationSummary] = useState(false);
   const [rangeSelection, setRangeSelection] = useState(null);
   const [selectionAnchor, setSelectionAnchor] = useState(null);
   const [isRangeDragging, setIsRangeDragging] = useState(false);
@@ -1245,12 +1246,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const scannedViolations = scanScheduleRuleViolations(mergedSchedules, { targetMonthKeys: importedMonthKeys });
     setImportRuleViolations(scannedViolations);
     setShowImportViolationList(false);
+    setShowImportViolationSummary(scannedViolations.length > 0);
 
-    if (Array.isArray(importedSchedulePayload.warnings) && importedSchedulePayload.warnings.length > 0) {
-      setRuleFillFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過、修正或覆蓋`);
-    } else {
-      setRuleFillFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份`);
-    }
     onImportedScheduleApplied?.();
   }, [importedSchedulePayload, monthlySchedules, onImportedScheduleApplied, pendingOpenMonthKey, setMonthlySchedules, year, month]);
 
@@ -1908,7 +1905,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!isValid) {
       setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
       clearInvalidCellLater(cellKey);
-      showInputAssist(`「${String(rawValue || '').trim()}」不是可用代碼`, 'error');
       setCellDrafts(prev => {
         const next = { ...prev };
         delete next[cellKey];
@@ -2070,7 +2066,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (pastePlan.updates.length === 0) {
       if (pastePlan.invalidCount > 0) {
         flashInvalidSelection(selectedRangeCells);
-        showInputAssist(`貼上內容有 ${pastePlan.invalidCount} 格不是可用代碼，已略過`, 'error');
       }
       return;
     }
@@ -2172,7 +2167,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           keepKeyInputBufferAlive();
           if (!isPotentialManualShiftPrefix(nextBuffer, mergedLeaveCodes)) {
             flashInvalidSelection(selectedRangeCells);
-            showInputAssist(`「${nextBuffer}」不是可用代碼`, 'error');
           } else {
             clearInputAssist();
           }
@@ -2232,7 +2226,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
         if (!isPotentialManualShiftPrefix(nextBuffer, mergedLeaveCodes)) {
           flashInvalidSelection(selectedRangeCells);
-          showInputAssist(`「${nextBuffer}」不是可用代碼`, 'error');
           resetKeyInputBuffer();
           return;
         }
@@ -3725,7 +3718,7 @@ const openSelectedCellFillModal = () => {
         </div>
       </div>
 
-      {(ruleFillFeedback || inputAssist.message || importRuleViolations.length > 0) && (
+      {(ruleFillFeedback || inputAssist.message || (showImportViolationSummary && importRuleViolations.length > 0)) && (
         <div className="max-w-[98vw] mx-auto mb-4 space-y-2">
           {ruleFillFeedback && (
             <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xl text-indigo-900 text-sm animate-fade-in-down flex items-center gap-2">
@@ -3739,13 +3732,16 @@ const openSelectedCellFillModal = () => {
               <span>{inputAssist.message}</span>
             </div>
           )}
-          {importRuleViolations.length > 0 && (
+          {showImportViolationSummary && importRuleViolations.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-900 text-sm animate-fade-in-down flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle size={16} className="text-amber-600" />
                 <span>匯入完成，發現 {importRuleViolations.length} 筆規則衝突</span>
               </div>
-              <button type="button" onClick={() => setShowImportViolationList(true)} className="px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 font-bold hover:bg-amber-100">查看違規</button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setShowImportViolationList(true)} className="px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 font-bold hover:bg-amber-100">查看違規</button>
+                <button type="button" onClick={() => setShowImportViolationSummary(false)} className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-700 font-bold hover:bg-amber-100">關閉</button>
+              </div>
             </div>
           )}
         </div>
@@ -4325,7 +4321,7 @@ const openSelectedCellFillModal = () => {
                 <h3 className="font-black text-slate-800">匯入規則衝突清單</h3>
                 <p className="text-sm text-slate-500 mt-1">共 {importRuleViolations.length} 筆，僅提示，不影響匯入。</p>
               </div>
-              <button onClick={() => setShowImportViolationList(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+              <button onClick={() => { setShowImportViolationList(false); setShowImportViolationSummary(false); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                 <X />
               </button>
             </div>
