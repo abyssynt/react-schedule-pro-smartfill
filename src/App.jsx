@@ -611,10 +611,10 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
   const validCodes = new Set([...DICT.SHIFTS, ...DICT.LEAVES, ...(customLeaveCodes || [])]);
 
   const scanTexts = [];
-  const maxRowsToScan = Math.min(rows.length, 8);
+  const maxRowsToScan = Math.min(rows.length, 10);
   for (let r = 0; r < maxRowsToScan; r += 1) {
     const row = Array.isArray(rows[r]) ? rows[r] : [];
-    for (let c = 0; c < Math.min(row.length, 8); c += 1) {
+    for (let c = 0; c < row.length; c += 1) {
       const cellText = String(row[c] ?? '').trim();
       if (cellText) scanTexts.push(cellText);
     }
