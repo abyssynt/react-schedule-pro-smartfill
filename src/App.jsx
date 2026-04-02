@@ -2963,6 +2963,76 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
   };
 
+
+  const canAssignWithManualOverride = (staff, dateStr, shiftCode) => {
+    const reasons = [];
+    const staffGroup = staff.group || '白班';
+    const shiftGroup = getShiftGroupByCode(shiftCode);
+    if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
+      reasons.push('不可跨群組排班');
+    }
+
+    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+    const prevCode = getContextCellCode(staff, prevKey);
+    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+    if (disallowed.includes(shiftCode)) {
+      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+    }
+
+    const existingCode = getContextCellCode(staff, dateStr);
+    const existingIsShift = isShiftCode(existingCode);
+    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
+    const effectiveConsecutive = consecutiveBefore + (existingIsShift ? 0 : 1);
+    if (effectiveConsecutive > SMART_RULES.maxConsecutiveWorkDays) {
+      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+    }
+
+    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
+      reasons.push('懷孕標記人員不可排 N / 夜8-8');
+    }
+
+    return { allowed: reasons.length === 0, reasons };
+  };
+
+  const validateManualEntries = (entries = [], options = {}) => {
+    const allowedEntries = [];
+    const blockedEntries = [];
+    const showFeedback = options.showFeedback !== false;
+
+    (Array.isArray(entries) ? entries : []).forEach((entry) => {
+      const normalizedValue = String(entry?.value || '').trim();
+      const normalizedEntry = { ...entry, value: normalizedValue, source: entry?.source || 'manual' };
+      if (!normalizedEntry.staffId || !normalizedEntry.dateStr) return;
+
+      if (!normalizedValue || isConfiguredLeaveCode(normalizedValue) || !isShiftCode(normalizedValue)) {
+        allowedEntries.push(normalizedEntry);
+        return;
+      }
+
+      const staff = staffs.find((item) => item.id === normalizedEntry.staffId);
+      if (!staff) {
+        allowedEntries.push(normalizedEntry);
+        return;
+      }
+
+      const result = canAssignWithManualOverride(staff, normalizedEntry.dateStr, normalizedValue);
+      if (result.allowed) {
+        allowedEntries.push(normalizedEntry);
+        return;
+      }
+
+      blockedEntries.push({ ...normalizedEntry, reasons: result.reasons });
+    });
+
+    if (blockedEntries.length > 0 && showFeedback) {
+      const firstBlocked = blockedEntries[0];
+      flashInvalidSelection(blockedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })));
+      showInputAssist(firstBlocked.reasons?.[0] || '此輸入不符合排班規則', 'error');
+    }
+
+    return { allowedEntries, blockedEntries };
+  };
+
   const handleCellChange = (staffId, dateStr, value, options = {}) => {
     const source = options.source || 'manual';
     const rawEntries = [{ staffId, dateStr, value, source }];
