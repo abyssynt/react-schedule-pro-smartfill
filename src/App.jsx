@@ -1345,6 +1345,25 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     onImportedScheduleApplied?.();
   }, [importedSchedulePayload, monthlySchedules, onImportedScheduleApplied, pendingOpenMonthKey, setMonthlySchedules, year, month]);
 
+
+  useEffect(() => {
+    if (!importedPreSchedulePayload || !importedPreSchedulePayload.monthlySchedules) return;
+
+    const targetMonthKey = pendingOpenMonthKey || importedPreSchedulePayload.firstMonthKey || buildMonthKey(year, month);
+    const [targetYear, targetMonth] = String(targetMonthKey).split('-').map(Number);
+
+    if (Number.isFinite(targetYear) && Number.isFinite(targetMonth)) {
+      monthSwitchSeedRef.current = targetMonthKey;
+      if (year !== targetYear) setYear(targetYear);
+      if (month !== targetMonth) setMonth(targetMonth);
+    }
+
+    const importedMonths = Object.keys(importedPreSchedulePayload.monthlySchedules || {}).length;
+    if (importedMonths > 0) {
+      setRuleFillFeedback(`✅ 預班資料已載入 ${targetYear}年${targetMonth}月，共 ${importedMonths} 個月份；第 1 刀目前先切換到對應月份，畫面顯示會在下一刀接上。`);
+    }
+  }, [importedPreSchedulePayload, pendingOpenMonthKey, year, month]);
+
   useEffect(() => {
     const currentKey = buildMonthKey(year, month);
     if (!initializedMonthRef.current) {
