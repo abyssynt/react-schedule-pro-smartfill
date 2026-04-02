@@ -1484,28 +1484,38 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return moveSelectedCell(0, direction);
   };
 
-  const tryApplyBufferedCode = (buffer) => {
-    if (!buffer || selectedRangeCells.length === 0) return false;
-    const { normalized, isValid } = normalizeManualShiftCode(buffer, mergedLeaveCodes);
-    if (!isValid) return false;
-    const applied = applyValueToCells(selectedRangeCells, normalized);
-    if (!applied) return false;
+  const applySelectionValue = (cells = [], rawValue = '', options = {}) => {
+    if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
+    const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+    if (!isValid) return { applied: false, normalized: '' };
+
+    const applied = applyValueToCells(cells, normalized);
+    if (!applied) return { applied: false, normalized: '' };
+
+    if (options.clearAssist !== false) clearInputAssist();
+    resetKeyInputBuffer();
+
+    if (options.advance !== false && normalized) {
+      moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
+    }
+
+    return { applied: true, normalized };
+  };
+
+  const navigateSelection = (rowDelta = 0, colDelta = 0) => {
     clearInputAssist();
     resetKeyInputBuffer();
-    moveSelectionAfterInput(selectedRangeCells, 1);
-    return true;
+    return moveSelectedCell(rowDelta, colDelta);
+  };
+
+  const tryApplyBufferedCode = (buffer) => {
+    if (!buffer || selectedRangeCells.length === 0) return false;
+    return applySelectionValue(selectedRangeCells, buffer, { advance: true }).applied;
   };
 
   const applyShortcutCodeToSelection = (shortcutCode) => {
     if (!shortcutCode || selectedRangeCells.length === 0) return false;
-    const { normalized, isValid } = normalizeManualShiftCode(shortcutCode, mergedLeaveCodes);
-    if (!isValid) return false;
-    const applied = applyValueToCells(selectedRangeCells, normalized);
-    if (!applied) return false;
-    clearInputAssist();
-    resetKeyInputBuffer();
-    moveSelectionAfterInput(selectedRangeCells, 1);
-    return true;
+    return applySelectionValue(selectedRangeCells, shortcutCode, { advance: true }).applied;
   };
 
   const moveSelectedCell = (rowDelta = 0, colDelta = 0) => {
@@ -1578,8 +1588,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return false;
     }
 
-    clearInputAssist();
-    handleCellChange(staffId, dateStr, normalized);
+    const result = applySelectionValue([{ staffId, dateStr }], normalized, { advance: true });
+    if (!result.applied) return false;
+
     setCellDrafts(prev => {
       const next = { ...prev };
       delete next[cellKey];
@@ -1590,7 +1601,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       delete next[cellKey];
       return next;
     });
-    moveSelectionAfterInput([{ staffId, dateStr }], 1);
     return true;
   };
 
@@ -1800,37 +1810,37 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        moveSelectedCell(0, -1);
+        navigateSelection(0, -1);
         return;
       }
 
       if (event.key === 'ArrowRight') {
         event.preventDefault();
-        moveSelectedCell(0, 1);
+        navigateSelection(0, 1);
         return;
       }
 
       if (event.key === 'ArrowUp') {
         event.preventDefault();
-        moveSelectedCell(-1, 0);
+        navigateSelection(-1, 0);
         return;
       }
 
       if (event.key === 'ArrowDown') {
         event.preventDefault();
-        moveSelectedCell(1, 0);
+        navigateSelection(1, 0);
         return;
       }
 
       if (event.key === 'Enter') {
         event.preventDefault();
-        moveSelectedCell(0, event.shiftKey ? -1 : 1);
+        navigateSelection(0, event.shiftKey ? -1 : 1);
         return;
       }
 
       if (event.key === 'Tab') {
         event.preventDefault();
-        moveSelectedCell(0, event.shiftKey ? -1 : 1);
+        navigateSelection(0, event.shiftKey ? -1 : 1);
         return;
       }
 
@@ -3614,9 +3624,11 @@ const openSelectedCellFillModal = () => {
                                   <select
                                     value={val}
                                     onChange={(e) => {
-                                      clearInputAssist();
-                                      handleCellChange(staff.id, d.date, e.target.value);
                                       startRangeSelection(staff, d.date);
+                                      applySelectionValue([{ staffId: staff.id, dateStr: d.date }], e.target.value, {
+                                        advance: Boolean(e.target.value),
+                                        direction: 1
+                                      });
                                       e.currentTarget.blur();
                                     }}
                                     onClick={(e) => {
