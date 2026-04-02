@@ -2966,11 +2966,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const canAssignWithManualOverride = (staff, dateStr, shiftCode) => {
     const reasons = [];
-    const staffGroup = staff.group || '白班';
-    const shiftGroup = getShiftGroupByCode(shiftCode);
-    if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) {
-      reasons.push('不可跨群組排班');
-    }
 
     const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
     const prevCode = getContextCellCode(staff, prevKey);
