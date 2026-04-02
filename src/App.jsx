@@ -1379,6 +1379,43 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return true;
   };
 
+  const applyShortcutCodeToSelection = (shortcutCode) => {
+    if (!shortcutCode || selectedRangeCells.length === 0) return false;
+    const { normalized, isValid } = normalizeManualShiftCode(shortcutCode, mergedLeaveCodes);
+    if (!isValid) return false;
+    applyValueToCells(selectedRangeCells, normalized);
+    resetKeyInputBuffer();
+    return true;
+  };
+
+  const moveSelectedCell = (rowDelta = 0, colDelta = 0) => {
+    const selection = getEffectiveSelection();
+    if (!selection?.start) return false;
+
+    const activeStaffId = selectedGridCell?.staff?.id || selection.end?.staffId || selection.start.staffId;
+    const activeDateStr = selectedGridCell?.dateStr || selection.end?.dateStr || selection.start.dateStr;
+    const activeStaff = staffs.find((staff) => staff.id === activeStaffId);
+    if (!activeStaff || !activeDateStr) return false;
+
+    const scopedStaffs = staffs.filter((staff) => (staff.group || '白班') === (activeStaff.group || '白班'));
+    const rowIndex = scopedStaffs.findIndex((staff) => staff.id === activeStaff.id);
+    const colIndex = daysInMonth.findIndex((day) => day.date === activeDateStr);
+    if (rowIndex === -1 || colIndex === -1) return false;
+
+    const nextRowIndex = Math.max(0, Math.min(scopedStaffs.length - 1, rowIndex + rowDelta));
+    const nextColIndex = Math.max(0, Math.min(daysInMonth.length - 1, colIndex + colDelta));
+    const nextStaff = scopedStaffs[nextRowIndex];
+    const nextDay = daysInMonth[nextColIndex];
+    if (!nextStaff || !nextDay) return false;
+
+    const nextPoint = { staffId: nextStaff.id, dateStr: nextDay.date, group: nextStaff.group || '白班' };
+    setSelectionAnchor(nextPoint);
+    setRangeSelection({ start: nextPoint, end: nextPoint });
+    setSelectedGridCell({ staff: nextStaff, dateStr: nextDay.date });
+    resetKeyInputBuffer();
+    return true;
+  };
+
   const commitCellValue = (staffId, dateStr, rawValue) => {
     const cellKey = makeCellKey(staffId, dateStr);
     const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
@@ -1550,6 +1587,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       if (!hasSelection) return;
       if (isTypingTarget) return;
 
+      const shortcutCodeMap = {
+        F1: 'D',
+        F2: 'E',
+        F3: 'N',
+        F4: defaultAutoLeaveCode || 'off'
+      };
+      if (shortcutCodeMap[event.key]) {
+        event.preventDefault();
+        applyShortcutCodeToSelection(shortcutCodeMap[event.key]);
+        return;
+      }
+
       if (event.key === 'Escape') {
         event.preventDefault();
         resetKeyInputBuffer();
@@ -1565,6 +1614,42 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return;
       }
 
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        moveSelectedCell(0, -1);
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        moveSelectedCell(0, 1);
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveSelectedCell(-1, 0);
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveSelectedCell(1, 0);
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        moveSelectedCell(0, event.shiftKey ? -1 : 1);
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        moveSelectedCell(0, event.shiftKey ? -1 : 1);
+        return;
+      }
+
       if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         const nextBuffer = `${keyInputBuffer}${event.key}`;
@@ -1576,7 +1661,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedRangeCells, keyInputBuffer, clipboardGrid, rangeSelection, selectedGridCell, staffs, daysInMonth, mergedLeaveCodes]);
+  }, [selectedRangeCells, keyInputBuffer, clipboardGrid, rangeSelection, selectedGridCell, staffs, daysInMonth, mergedLeaveCodes, defaultAutoLeaveCode]);
 
   // ==========================================
   // 4. Excel 匯出 (ExcelJS 實現)
