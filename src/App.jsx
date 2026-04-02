@@ -1452,18 +1452,55 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (selectedRangeCells.length > 0) clearInputAssist();
   }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr]);
 
+  const setSelectionRangeFromCells = (cells = [], options = {}) => {
+    if (!Array.isArray(cells) || cells.length === 0) return false;
+
+    const cellMap = new Map(cells.map((cell) => [makeCellKey(cell.staffId, cell.dateStr), cell]));
+    const orderedCells = expandSelectionCells(getEffectiveSelection(), staffs, daysInMonth);
+    const orderedMatchedCells = orderedCells.filter((cell) => cellMap.has(makeCellKey(cell.staffId, cell.dateStr)));
+    const targetCells = orderedMatchedCells.length > 0 ? orderedMatchedCells : cells;
+    const firstCell = targetCells[0];
+    const lastCell = targetCells[targetCells.length - 1];
+    if (!firstCell || !lastCell) return false;
+
+    const startStaff = staffs.find((staff) => staff.id === firstCell.staffId);
+    const endStaff = staffs.find((staff) => staff.id === lastCell.staffId);
+    if (!startStaff || !endStaff) return false;
+
+    const anchorPoint = {
+      staffId: firstCell.staffId,
+      dateStr: firstCell.dateStr,
+      group: startStaff.group || '白班'
+    };
+    const endPoint = {
+      staffId: lastCell.staffId,
+      dateStr: lastCell.dateStr,
+      group: endStaff.group || '白班'
+    };
+    const activeCell = options.activeCell || lastCell;
+    const activeStaff = staffs.find((staff) => staff.id === activeCell.staffId) || endStaff;
+
+    setSelectionAnchor(anchorPoint);
+    setRangeSelection({ start: anchorPoint, end: endPoint });
+    setSelectedGridCell({ staff: activeStaff, dateStr: activeCell.dateStr });
+    return true;
+  };
+
   const clearSelectionContents = () => {
     if (selectedRangeCells.length === 0) return false;
-    setSchedule(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      selectedRangeCells.forEach(({ staffId, dateStr }) => {
-        if (!next[staffId]) next[staffId] = {};
-        next[staffId][dateStr] = null;
-      });
-      return next;
-    });
-    resetKeyInputBuffer();
-    return true;
+    return applyScheduleEntries(
+      selectedRangeCells.map(({ staffId, dateStr }) => ({
+        staffId,
+        dateStr,
+        value: '',
+        source: 'manual'
+      })),
+      {
+        preserveSelection: true,
+        selectionCells: selectedRangeCells,
+        activeCell: selectedRangeCells[selectedRangeCells.length - 1]
+      }
+    );
   };
 
   const applyScheduleEntries = (entries = [], options = {}) => {
@@ -1480,14 +1517,25 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     if (normalizedEntries.length === 0) return false;
 
+    const dedupedEntries = Array.from(
+      new Map(normalizedEntries.map((entry) => [makeCellKey(entry.staffId, entry.dateStr), entry])).values()
+    );
+
     setSchedule(prev => {
       const next = JSON.parse(JSON.stringify(prev));
-      normalizedEntries.forEach(({ staffId, dateStr, value, source }) => {
+      dedupedEntries.forEach(({ staffId, dateStr, value, source }) => {
         if (!next[staffId]) next[staffId] = {};
         next[staffId][dateStr] = value ? { value, source } : null;
       });
       return next;
     });
+
+    if (options.preserveSelection) {
+      const selectionCells = Array.isArray(options.selectionCells) && options.selectionCells.length > 0
+        ? options.selectionCells
+        : dedupedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr }));
+      setSelectionRangeFromCells(selectionCells, { activeCell: options.activeCell });
+    }
 
     if (options.clearAssist !== false) clearInputAssist();
     if (options.resetBuffer !== false) resetKeyInputBuffer();
@@ -1497,14 +1545,20 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const applyValueToCells = (cells, normalized, options = {}) => {
     if (!cells || cells.length === 0) return false;
+    const targetCells = Array.isArray(cells) ? cells : [];
     return applyScheduleEntries(
-      cells.map(({ staffId, dateStr }) => ({
+      targetCells.map(({ staffId, dateStr }) => ({
         staffId,
         dateStr,
         value: normalized,
         source: options.source || 'manual'
       })),
-      options
+      {
+        ...options,
+        preserveSelection: options.preserveSelection === true,
+        selectionCells: options.selectionCells || targetCells,
+        activeCell: options.activeCell || targetCells[targetCells.length - 1]
+      }
     );
   };
 
@@ -1518,13 +1572,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
     if (!isValid) return { applied: false, normalized: '' };
 
-    const applied = applyValueToCells(cells, normalized);
+    const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
+    const applied = applyValueToCells(cells, normalized, {
+      source: options.source || 'manual',
+      preserveSelection: !shouldAdvance,
+      selectionCells: cells,
+      activeCell: cells[cells.length - 1],
+      clearAssist: options.clearAssist,
+      resetBuffer: options.resetBuffer
+    });
     if (!applied) return { applied: false, normalized: '' };
 
     if (options.clearAssist !== false) clearInputAssist();
     resetKeyInputBuffer();
 
-    if (options.advance !== false && normalized) {
+    if (shouldAdvance) {
       moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
     }
 
@@ -1681,12 +1743,78 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
   };
 
+  const buildPastePlan = (grid = [], rect = null) => {
+    if (!rect || !Array.isArray(grid) || grid.length === 0) {
+      return { updates: [], affectedCells: [], invalidCount: 0, clearCount: 0, writeCount: 0, clipped: false };
+    }
+
+    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
+    const selectionColCount = rect.colEnd - rect.colStart + 1;
+    const sourceRowCount = grid.length;
+    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
+    const isSingleCellPaste = sourceRowCount === 1 && sourceColCount === 1;
+
+    let targetRowCount = sourceRowCount;
+    let targetColCount = sourceColCount;
+    let clipped = false;
+
+    if (selectionRowCount > 1 || selectionColCount > 1) {
+      if (isSingleCellPaste) {
+        targetRowCount = selectionRowCount;
+        targetColCount = selectionColCount;
+      } else {
+        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
+        targetColCount = Math.min(sourceColCount, selectionColCount);
+        clipped = sourceRowCount > selectionRowCount || sourceColCount > selectionColCount;
+      }
+    }
+
+    const updates = [];
+    const affectedCells = [];
+    let invalidCount = 0;
+    let clearCount = 0;
+    let writeCount = 0;
+
+    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
+        const sourceRow = isSingleCellPaste ? 0 : rowOffset;
+        const sourceCol = isSingleCellPaste ? 0 : colOffset;
+        const targetRow = rect.rowStart + rowOffset;
+        const targetCol = rect.colStart + colOffset;
+        const staff = rect.scopedStaffs[targetRow];
+        const day = daysInMonth[targetCol];
+        if (!staff || !day) continue;
+
+        const targetCell = { staffId: staff.id, dateStr: day.date };
+        affectedCells.push(targetCell);
+
+        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
+        const rawText = String(rawValue ?? '').trim();
+        if (!rawText) {
+          updates.push({ ...targetCell, value: '', source: 'manual' });
+          clearCount += 1;
+          continue;
+        }
+
+        const { normalized, isValid } = normalizeManualShiftCode(rawText, mergedLeaveCodes);
+        if (!isValid) {
+          invalidCount += 1;
+          continue;
+        }
+
+        updates.push({ ...targetCell, value: normalized, source: 'manual' });
+        writeCount += 1;
+      }
+    }
+
+    return { updates, affectedCells, invalidCount, clearCount, writeCount, clipped };
+  };
+
   const pasteGridToSelection = async () => {
     const selection = getEffectiveSelection();
     const rect = getRectFromSelection(selection, staffs, daysInMonth);
     if (!rect) return;
 
-    let invalidCount = 0;
     let grid = clipboardGrid;
     if (!grid || grid.length === 0) {
       try {
@@ -1700,56 +1828,35 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
     if (!grid || grid.length === 0) return;
 
-    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
-    const selectionColCount = rect.colEnd - rect.colStart + 1;
-    const sourceRowCount = grid.length;
-    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
-
-    let targetRowCount = sourceRowCount;
-    let targetColCount = sourceColCount;
-
-    if (selectionRowCount > 1 || selectionColCount > 1) {
-      if (sourceRowCount === 1 && sourceColCount === 1) {
-        targetRowCount = selectionRowCount;
-        targetColCount = selectionColCount;
-      } else {
-        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
-        targetColCount = Math.min(sourceColCount, selectionColCount);
-      }
-    }
-
-    const updates = [];
-    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
-        const sourceRow = sourceRowCount === 1 && sourceColCount === 1 ? 0 : rowOffset;
-        const sourceCol = sourceRowCount === 1 && sourceColCount === 1 ? 0 : colOffset;
-        const targetRow = rect.rowStart + rowOffset;
-        const targetCol = rect.colStart + colOffset;
-        const staff = rect.scopedStaffs[targetRow];
-        const day = daysInMonth[targetCol];
-        if (!staff || !day) continue;
-        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
-        const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
-        if (!isValid) {
-          invalidCount += 1;
-          continue;
-        }
-        updates.push({ staffId: staff.id, dateStr: day.date, value: normalized, source: 'manual' });
-      }
-    }
-
-    if (updates.length === 0) {
-      if (invalidCount > 0) {
+    const pastePlan = buildPastePlan(grid, rect);
+    if (pastePlan.updates.length === 0) {
+      if (pastePlan.invalidCount > 0) {
         flashInvalidSelection(selectedRangeCells);
-        showInputAssist(`貼上內容有 ${invalidCount} 格不是可用代碼，已略過`, 'error');
+        showInputAssist(`貼上內容有 ${pastePlan.invalidCount} 格不是可用代碼，已略過`, 'error');
       }
       return;
     }
 
-    applyScheduleEntries(updates, { clearAssist: invalidCount === 0, resetBuffer: true });
-    if (invalidCount > 0) {
-      flashInvalidSelection(selectedRangeCells);
-      showInputAssist(`已貼上 ${updates.length} 格，另有 ${invalidCount} 格不是可用代碼，已略過`, 'error');
+    applyScheduleEntries(pastePlan.updates, {
+      preserveSelection: true,
+      selectionCells: pastePlan.affectedCells,
+      activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1],
+      clearAssist: pastePlan.invalidCount === 0,
+      resetBuffer: true
+    });
+
+    if (pastePlan.invalidCount > 0) {
+      flashInvalidSelection(pastePlan.affectedCells);
+    }
+
+    const messageParts = [];
+    if (pastePlan.writeCount > 0) messageParts.push(`寫入 ${pastePlan.writeCount} 格`);
+    if (pastePlan.clearCount > 0) messageParts.push(`清空 ${pastePlan.clearCount} 格`);
+    if (pastePlan.invalidCount > 0) messageParts.push(`略過 ${pastePlan.invalidCount} 格錯誤代碼`);
+    if (pastePlan.clipped) messageParts.push('超出選取範圍的內容已截斷');
+
+    if (messageParts.length > 0) {
+      showInputAssist(`貼上完成：${messageParts.join('、')}`, pastePlan.invalidCount > 0 ? 'error' : 'info');
     }
   };
 
@@ -2723,7 +2830,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const handleCellChange = (staffId, dateStr, value, options = {}) => {
     return applyScheduleEntries(
       [{ staffId, dateStr, value, source: options.source || 'manual' }],
-      { clearAssist: options.clearAssist !== false, resetBuffer: options.resetBuffer !== false }
+      {
+        clearAssist: options.clearAssist !== false,
+        resetBuffer: options.resetBuffer !== false,
+        preserveSelection: options.preserveSelection === true,
+        selectionCells: options.selectionCells || [{ staffId, dateStr }],
+        activeCell: options.activeCell || { staffId, dateStr }
+      }
     );
   };
 
@@ -3662,7 +3775,8 @@ const openSelectedCellFillModal = () => {
                                       startRangeSelection(staff, d.date);
                                       applySelectionValue([{ staffId: staff.id, dateStr: d.date }], e.target.value, {
                                         advance: Boolean(e.target.value),
-                                        direction: 1
+                                        direction: 1,
+                                        source: 'manual'
                                       });
                                       e.currentTarget.blur();
                                     }}
