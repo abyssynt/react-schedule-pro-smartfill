@@ -1370,12 +1370,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return true;
   };
 
+  const moveSelectionAfterInput = (cells = [], direction = 1) => {
+    if (!Array.isArray(cells) || cells.length !== 1) return false;
+    return moveSelectedCell(0, direction);
+  };
+
   const tryApplyBufferedCode = (buffer) => {
     if (!buffer || selectedRangeCells.length === 0) return false;
     const { normalized, isValid } = normalizeManualShiftCode(buffer, mergedLeaveCodes);
     if (!isValid) return false;
-    applyValueToCells(selectedRangeCells, normalized);
+    const applied = applyValueToCells(selectedRangeCells, normalized);
+    if (!applied) return false;
     resetKeyInputBuffer();
+    moveSelectionAfterInput(selectedRangeCells, 1);
     return true;
   };
 
@@ -1383,8 +1390,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!shortcutCode || selectedRangeCells.length === 0) return false;
     const { normalized, isValid } = normalizeManualShiftCode(shortcutCode, mergedLeaveCodes);
     if (!isValid) return false;
-    applyValueToCells(selectedRangeCells, normalized);
+    const applied = applyValueToCells(selectedRangeCells, normalized);
+    if (!applied) return false;
     resetKeyInputBuffer();
+    moveSelectionAfterInput(selectedRangeCells, 1);
     return true;
   };
 
@@ -1442,6 +1451,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       delete next[cellKey];
       return next;
     });
+    moveSelectionAfterInput([{ staffId, dateStr }], 1);
     return true;
   };
 
