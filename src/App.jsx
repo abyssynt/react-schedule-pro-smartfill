@@ -1376,7 +1376,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     const importedMonths = Object.keys(importedPreSchedulePayload.monthlySchedules || {}).length;
     if (importedMonths > 0) {
-      setRuleFillFeedback(`✅ 預班資料已載入 ${targetYear}年${targetMonth}月，共 ${importedMonths} 個月份；第 1 刀目前先切換到對應月份，畫面顯示會在下一刀接上。`);
+      setRuleFillFeedback(`✅ 預班資料已載入 ${targetYear}年${targetMonth}月，共 ${importedMonths} 個月份；若當月尚未匯入正式班表，系統會先用預班名單建立畫面骨架。`);
     }
 
     onImportedPreScheduleApplied?.();
@@ -1491,6 +1491,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const loadMonthState = (targetYear, targetMonth, schedulesSource = monthlySchedules) => {
     const monthKey = buildMonthKey(targetYear, targetMonth);
     const monthData = schedulesSource?.[monthKey];
+    const preMonthData = preScheduleMonthlySchedules?.[monthKey];
     monthLoadSkipRef.current = true;
 
     if (monthData) {
@@ -1512,6 +1513,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setSchedule(rebuiltScheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
       setCustomColumnValues(monthData.customColumnValues || {});
       setSchedulingRulesText(typeof monthData.schedulingRulesText === 'string' ? monthData.schedulingRulesText : '');
+    } else if (preMonthData) {
+      const normalizedPreMonthStaffs = normalizeStaffGroup(preMonthData.staffs || []);
+      setStaffs(normalizedPreMonthStaffs);
+      setSchedule(createBlankScheduleForStaffs(normalizedPreMonthStaffs));
+      setCustomColumnValues(preMonthData.customColumnValues || {});
+      setSchedulingRulesText(typeof preMonthData.schedulingRulesText === 'string' ? preMonthData.schedulingRulesText : '');
     } else {
       const blankMonthState = createBlankMonthState(targetYear, targetMonth);
       setStaffs(blankMonthState.staffs);
@@ -5511,7 +5518,7 @@ export default function App() {
     setLoadLatestOnEnter(false);
     setScreen('schedule');
     const importedMonths = Object.keys(imported.monthlySchedules || {}).length;
-    window.alert(`預班表匯入完成，共載入 ${importedMonths} 個月份。第 1 刀目前只建立資料層，畫面顯示會在下一刀接上。`);
+    window.alert(`預班表匯入完成，共載入 ${importedMonths} 個月份。若當月尚未匯入正式班表，系統會先用預班名單建立畫面骨架，方便檢視預班內容。`);
   };
 
   const goToSchedule = () => {
