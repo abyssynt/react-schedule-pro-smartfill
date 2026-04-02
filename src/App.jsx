@@ -367,6 +367,58 @@ const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
   return { normalized: normalizedBase, isValid: false };
 };
 
+const getNormalizedManualCodeCandidates = (rawValue = '', allowedLeaveCodes = []) => {
+  const value = String(rawValue ?? '').trim();
+  if (!value) return [];
+
+  const toHalfWidth = (input = '') => String(input).replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
+  const normalizedBase = toHalfWidth(value).trim();
+  const collapsed = normalizedBase.replace(/\s+/g, '');
+  const lower = collapsed.toLowerCase();
+  const compact = lower.replace(/[－—–~～_]/g, '-');
+  const compactNoHyphen = compact.replace(/-/g, '');
+  const aliases = new Set([lower, compact, compactNoHyphen]);
+  const allowedCodes = Array.from(new Set([...(DICT.SHIFTS || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
+
+  const expandedAliases = new Set(aliases);
+  if (aliases.has('o')) {
+    expandedAliases.add('of');
+    expandedAliases.add('off');
+  }
+  if (aliases.has('of')) expandedAliases.add('off');
+  if (aliases.has('a')) expandedAliases.add('am');
+  if (aliases.has('p')) expandedAliases.add('pm');
+  if (aliases.has('8')) {
+    expandedAliases.add('8-12');
+    expandedAliases.add('812');
+  }
+  if (aliases.has('12')) {
+    expandedAliases.add('12-16');
+    expandedAliases.add('1216');
+  }
+  if (aliases.has('白8')) {
+    expandedAliases.add('白8-8');
+    expandedAliases.add('白88');
+  }
+  if (aliases.has('夜8')) {
+    expandedAliases.add('夜8-8');
+    expandedAliases.add('夜88');
+  }
+
+  return allowedCodes.filter((code) => {
+    const codeString = String(code);
+    const codeLower = toHalfWidth(codeString).trim().replace(/\s+/g, '').toLowerCase();
+    const codeCompact = codeLower.replace(/[－—–~～_]/g, '-');
+    const codeCompactNoHyphen = codeCompact.replace(/-/g, '');
+    return Array.from(expandedAliases).some((alias) => codeLower.startsWith(alias) || codeCompact.startsWith(alias) || codeCompactNoHyphen.startsWith(alias));
+  });
+};
+
+const isPotentialManualShiftPrefix = (rawValue = '', allowedLeaveCodes = []) => {
+  if (!String(rawValue ?? '').trim()) return true;
+  return getNormalizedManualCodeCandidates(rawValue, allowedLeaveCodes).length > 0;
+};
+
 const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
 
 const parseClipboardGrid = (text = '') => {
@@ -1025,6 +1077,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [dragOverGroup, setDragOverGroup] = useState('');
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [editingNameDraft, setEditingNameDraft] = useState('');
+  const [inputAssist, setInputAssist] = useState({ type: '', message: '' });
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -1057,6 +1110,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
   const keyInputTimerRef = useRef(null);
+  const inputAssistTimerRef = useRef(null);
   const tableScrollContainerRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
@@ -1316,6 +1370,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setCellDrafts({});
     setInvalidCellKeys({});
     setKeyInputBuffer('');
+    clearInputAssist();
     setEditingStaffId(null);
     setEditingNameDraft('');
     setDraggingStaffId(null);
@@ -1333,6 +1388,32 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return next;
       });
     }, 1200);
+  };
+
+  const flashInvalidSelection = (cells = []) => {
+    cells.forEach(({ staffId, dateStr }) => {
+      const cellKey = makeCellKey(staffId, dateStr);
+      setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
+      clearInvalidCellLater(cellKey);
+    });
+  };
+
+  const showInputAssist = (message, type = 'error', duration = 1600) => {
+    if (!message) return;
+    setInputAssist({ type, message });
+    if (inputAssistTimerRef.current) window.clearTimeout(inputAssistTimerRef.current);
+    inputAssistTimerRef.current = window.setTimeout(() => {
+      setInputAssist({ type: '', message: '' });
+      inputAssistTimerRef.current = null;
+    }, duration);
+  };
+
+  const clearInputAssist = () => {
+    setInputAssist({ type: '', message: '' });
+    if (inputAssistTimerRef.current) {
+      window.clearTimeout(inputAssistTimerRef.current);
+      inputAssistTimerRef.current = null;
+    }
   };
 
   const resetKeyInputBuffer = () => {
@@ -1366,6 +1447,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     () => expandSelectionCells(getEffectiveSelection(), staffs, daysInMonth),
     [rangeSelection, selectedGridCell, staffs, daysInMonth]
   );
+
+  useEffect(() => {
+    if (selectedRangeCells.length > 0) clearInputAssist();
+  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr]);
 
   const clearSelectionContents = () => {
     if (selectedRangeCells.length === 0) return false;
@@ -1405,6 +1490,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!isValid) return false;
     const applied = applyValueToCells(selectedRangeCells, normalized);
     if (!applied) return false;
+    clearInputAssist();
     resetKeyInputBuffer();
     moveSelectionAfterInput(selectedRangeCells, 1);
     return true;
@@ -1416,6 +1502,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!isValid) return false;
     const applied = applyValueToCells(selectedRangeCells, normalized);
     if (!applied) return false;
+    clearInputAssist();
     resetKeyInputBuffer();
     moveSelectionAfterInput(selectedRangeCells, 1);
     return true;
@@ -1456,6 +1543,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!isValid) {
       setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
       clearInvalidCellLater(cellKey);
+      showInputAssist(`「${String(rawValue || '').trim()}」不是可用代碼`, 'error');
       setCellDrafts(prev => {
         const next = { ...prev };
         delete next[cellKey];
@@ -1464,6 +1552,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return false;
     }
 
+    clearInputAssist();
     handleCellChange(staffId, dateStr, normalized);
     setCellDrafts(prev => {
       const next = { ...prev };
@@ -1600,6 +1689,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (inputAssistTimerRef.current) window.clearTimeout(inputAssistTimerRef.current);
+      if (keyInputTimerRef.current) window.clearTimeout(keyInputTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleGlobalKeyDown = (event) => {
       const target = event.target;
       const tagName = String(target?.tagName || '').toLowerCase();
@@ -1687,9 +1783,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         const nextBuffer = `${keyInputBuffer}${event.key}`;
+        const applied = tryApplyBufferedCode(nextBuffer);
+        if (applied) return;
+
+        if (!isPotentialManualShiftPrefix(nextBuffer, mergedLeaveCodes)) {
+          flashInvalidSelection(selectedRangeCells);
+          showInputAssist(`「${nextBuffer}」不是可用代碼`, 'error');
+          resetKeyInputBuffer();
+          return;
+        }
+
+        clearInputAssist();
         setKeyInputBuffer(nextBuffer);
         keepKeyInputBufferAlive();
-        tryApplyBufferedCode(nextBuffer);
       }
     };
 
@@ -3454,6 +3560,7 @@ const openSelectedCellFillModal = () => {
                                   <select
                                     value={val}
                                     onChange={(e) => {
+                                      clearInputAssist();
                                       handleCellChange(staff.id, d.date, e.target.value);
                                       startRangeSelection(staff, d.date);
                                       e.currentTarget.blur();
