@@ -5,7 +5,7 @@ import {
   Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
-  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2, GripVertical
+  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2, GripVertical, AlertTriangle
 } from 'lucide-react';
 
 // ==========================================
@@ -1067,6 +1067,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
   const [cellDrafts, setCellDrafts] = useState({});
   const [invalidCellKeys, setInvalidCellKeys] = useState({});
+  const [cellRuleWarnings, setCellRuleWarnings] = useState({});
+  const [importRuleViolations, setImportRuleViolations] = useState([]);
+  const [showImportViolationList, setShowImportViolationList] = useState(false);
   const [rangeSelection, setRangeSelection] = useState(null);
   const [selectionAnchor, setSelectionAnchor] = useState(null);
   const [isRangeDragging, setIsRangeDragging] = useState(false);
@@ -1238,6 +1241,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       initializedMonthRef.current = true;
     }
 
+    const importedMonthKeys = Object.keys(importedSchedulePayload.monthlySchedules || {});
+    const scannedViolations = scanScheduleRuleViolations(mergedSchedules, { targetMonthKeys: importedMonthKeys });
+    setImportRuleViolations(scannedViolations);
+    setShowImportViolationList(false);
+
     if (Array.isArray(importedSchedulePayload.warnings) && importedSchedulePayload.warnings.length > 0) {
       setRuleFillFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過、修正或覆蓋`);
     } else {
@@ -1285,6 +1293,25 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       }
     }));
   }, [year, month, staffs, schedule, customColumnValues, schedulingRulesText, setMonthlySchedules]);
+
+  useEffect(() => {
+    const currentMonthPrefix = buildMonthKey(year, month);
+    setCellRuleWarnings(prev => {
+      const preservedManualWarnings = { ...prev };
+      Object.keys(preservedManualWarnings).forEach((cellKey) => {
+        if (String(cellKey).includes('__') && String(cellKey).split('__')[1]?.startsWith(currentMonthPrefix)) {
+          delete preservedManualWarnings[cellKey];
+        }
+      });
+      importRuleViolations
+        .filter((item) => String(item.dateStr || '').startsWith(currentMonthPrefix))
+        .forEach((item) => {
+          const matchedStaff = staffs.find((staff) => String(staff.name || '').trim() === String(item.staffName || '').trim());
+          if (matchedStaff) preservedManualWarnings[makeCellKey(matchedStaff.id, item.dateStr)] = item.reason;
+        });
+      return preservedManualWarnings;
+    });
+  }, [importRuleViolations, year, month, staffs]);
 
   const holidayCalendar = useMemo(() => {
     return getSystemHolidayCalendar(year, {
@@ -1370,6 +1397,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setSelectionAnchor(null);
     setCellDrafts({});
     setInvalidCellKeys({});
+    setCellRuleWarnings({});
     setKeyInputBuffer('');
     clearInputAssist();
     setEditingStaffId(null);
@@ -1439,6 +1467,95 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const getContextCellCode = (staffOrId, dateStr, options = {}) => {
     const cellData = getContextCellData(staffOrId, dateStr, options);
     return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+  };
+
+  const clearRuleWarningCells = (cells = []) => {
+    if (!Array.isArray(cells) || cells.length === 0) return;
+    setCellRuleWarnings(prev => {
+      const next = { ...prev };
+      cells.forEach(({ staffId, dateStr }) => {
+        delete next[makeCellKey(staffId, dateStr)];
+      });
+      return next;
+    });
+  };
+
+  const setRuleWarningsForEntries = (warningEntries = []) => {
+    const normalizedWarnings = Array.isArray(warningEntries) ? warningEntries : [];
+    if (normalizedWarnings.length === 0) return;
+    setCellRuleWarnings(prev => {
+      const next = { ...prev };
+      normalizedWarnings.forEach(({ staffId, dateStr, reasons = [] }) => {
+        next[makeCellKey(staffId, dateStr)] = reasons?.[0] || '此格違反排班規則';
+      });
+      return next;
+    });
+  };
+
+  const scanScheduleRuleViolations = (schedulesSource = {}, options = {}) => {
+    const monthKeys = Object.keys(schedulesSource || {}).sort();
+    const targetMonthKeys = new Set(Array.isArray(options.targetMonthKeys) ? options.targetMonthKeys : monthKeys);
+    const byName = new Map();
+
+    monthKeys.forEach((monthKey) => {
+      const monthState = schedulesSource?.[monthKey];
+      const monthStaffs = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
+      const monthSchedule = monthState?.scheduleData || monthState?.schedule || {};
+      monthStaffs.forEach((staff) => {
+        const nameKey = String(staff?.name || '').trim();
+        if (!nameKey) return;
+        const staffSchedule = monthSchedule?.[staff.id] || {};
+        if (!byName.has(nameKey)) byName.set(nameKey, { staff, cells: {} });
+        const ref = byName.get(nameKey);
+        Object.entries(staffSchedule).forEach(([dateStr, cell]) => {
+          ref.cells[dateStr] = cell;
+        });
+      });
+    });
+
+    const violations = [];
+    byName.forEach((ref, nameKey) => {
+      const dateKeys = Object.keys(ref.cells || {}).sort();
+      const getCode = (dateStr) => {
+        const cell = ref.cells?.[dateStr];
+        return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
+      };
+      dateKeys.forEach((dateStr) => {
+        if (!targetMonthKeys.has(String(dateStr).slice(0, 7))) return;
+        const code = getCode(dateStr);
+        if (!isShiftCode(code)) return;
+        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+        const prevCode = getCode(prevKey);
+        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+        if (disallowed.includes(code)) {
+          violations.push({
+            staffName: nameKey,
+            dateStr,
+            code,
+            reason: `${prevCode} 後不可接 ${code}`
+          });
+        }
+        let consecutiveBefore = 0;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        while (true) {
+          const cursorKey = formatDateKey(cursor);
+          const cursorCode = getCode(cursorKey);
+          if (!isShiftCode(cursorCode)) break;
+          consecutiveBefore += 1;
+          cursor = addDays(cursor, -1);
+        }
+        if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
+          violations.push({
+            staffName: nameKey,
+            dateStr,
+            code,
+            reason: `連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`
+          });
+        }
+      });
+    });
+
+    return violations;
   };
 
   const clearInvalidCellLater = (cellKey) => {
@@ -1665,15 +1782,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       value: normalized,
       source
     }));
-    const { allowedEntries, blockedEntries } = source === 'manual'
+    const { allowedEntries, warningEntries } = source === 'manual'
       ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
-      : { allowedEntries: rawEntries, blockedEntries: [] };
+      : { allowedEntries: rawEntries, warningEntries: [] };
     if (allowedEntries.length === 0) return false;
+    const nonWarningCells = targetCells.filter(({ staffId, dateStr }) => !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr));
+    if (source === 'manual') clearRuleWarningCells(nonWarningCells);
     return applyScheduleEntries(
       allowedEntries,
       {
         ...options,
-        preserveSelection: options.preserveSelection === true || blockedEntries.length > 0,
+        clearAssist: options.clearAssist !== false && warningEntries.length === 0,
+        preserveSelection: options.preserveSelection === true || warningEntries.length > 0,
         selectionCells: options.selectionCells || targetCells,
         activeCell: options.activeCell || targetCells[targetCells.length - 1]
       }
@@ -2991,7 +3111,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const validateManualEntries = (entries = [], options = {}) => {
     const allowedEntries = [];
-    const blockedEntries = [];
+    const warningEntries = [];
     const showFeedback = options.showFeedback !== false;
 
     (Array.isArray(entries) ? entries : []).forEach((entry) => {
@@ -3011,36 +3131,36 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       }
 
       const result = canAssignWithManualOverride(staff, normalizedEntry.dateStr, normalizedValue);
-      if (result.allowed) {
-        allowedEntries.push(normalizedEntry);
-        return;
+      allowedEntries.push(normalizedEntry);
+      if (!result.allowed) {
+        warningEntries.push({ ...normalizedEntry, reasons: result.reasons });
       }
-
-      blockedEntries.push({ ...normalizedEntry, reasons: result.reasons });
     });
 
-    if (blockedEntries.length > 0 && showFeedback) {
-      const firstBlocked = blockedEntries[0];
-      flashInvalidSelection(blockedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })));
-      showInputAssist(firstBlocked.reasons?.[0] || '此輸入不符合排班規則', 'error');
+    if (warningEntries.length > 0 && showFeedback) {
+      setRuleWarningsForEntries(warningEntries);
+      showInputAssist(`已寫入，但有 ${warningEntries.length} 格違反規則`, 'warning', 2200);
     }
 
-    return { allowedEntries, blockedEntries };
+    return { allowedEntries, warningEntries };
   };
 
   const handleCellChange = (staffId, dateStr, value, options = {}) => {
     const source = options.source || 'manual';
     const rawEntries = [{ staffId, dateStr, value, source }];
-    const { allowedEntries, blockedEntries } = source === 'manual'
+    const { allowedEntries, warningEntries } = source === 'manual'
       ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
-      : { allowedEntries: rawEntries, blockedEntries: [] };
+      : { allowedEntries: rawEntries, warningEntries: [] };
     if (allowedEntries.length === 0) return false;
+    const nonWarningCells = rawEntries.filter(({ staffId, dateStr }) => !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr));
+    if (source === 'manual') clearRuleWarningCells(nonWarningCells);
+    if (!options.allowWarningAssistClear && warningEntries.length > 0) options = { ...options, clearAssist: false };
     return applyScheduleEntries(
       allowedEntries,
       {
         clearAssist: options.clearAssist !== false,
         resetBuffer: options.resetBuffer !== false,
-        preserveSelection: options.preserveSelection === true || blockedEntries.length > 0,
+        preserveSelection: options.preserveSelection === true || warningEntries.length > 0,
         selectionCells: options.selectionCells || [{ staffId, dateStr }],
         activeCell: options.activeCell || { staffId, dateStr }
       }
@@ -3605,6 +3725,31 @@ const openSelectedCellFillModal = () => {
         </div>
       </div>
 
+      {(ruleFillFeedback || inputAssist.message || importRuleViolations.length > 0) && (
+        <div className="max-w-[98vw] mx-auto mb-4 space-y-2">
+          {ruleFillFeedback && (
+            <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xl text-indigo-900 text-sm animate-fade-in-down flex items-center gap-2">
+              <Check size={16} className="text-green-600" />
+              <span>{ruleFillFeedback}</span>
+            </div>
+          )}
+          {inputAssist.message && (
+            <div className={`p-3 rounded-xl text-sm animate-fade-in-down flex items-center gap-2 border ${inputAssist.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-900' : inputAssist.type === 'info' ? 'bg-sky-50 border-sky-200 text-sky-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
+              <AlertTriangle size={16} className={inputAssist.type === 'warning' ? 'text-amber-600' : inputAssist.type === 'info' ? 'text-sky-600' : 'text-rose-600'} />
+              <span>{inputAssist.message}</span>
+            </div>
+          )}
+          {importRuleViolations.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-900 text-sm animate-fade-in-down flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-600" />
+                <span>匯入完成，發現 {importRuleViolations.length} 筆規則衝突</span>
+              </div>
+              <button type="button" onClick={() => setShowImportViolationList(true)} className="px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 font-bold hover:bg-amber-100">查看違規</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {showRuleFillControl && (
         <div className="max-w-[98vw] mx-auto mb-4 rounded-3xl border border-slate-200 bg-slate-100/90 px-4 py-4 shadow-sm animate-fade-in-down lg:px-5">
@@ -3947,11 +4092,13 @@ const openSelectedCellFillModal = () => {
                           const inRangeSelection = isCellInSelectionRect(effectiveSelection, staffs, daysInMonth, staff.id, d.date);
                           const isPrimarySelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date;
                           const isInvalid = Boolean(invalidCellKeys[cellKey]);
+                          const ruleWarningMessage = cellRuleWarnings[cellKey] || '';
+                          const isRuleWarning = Boolean(ruleWarningMessage) && !isInvalid;
 
                           return (
                             <td
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''}`}
+                              className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''} ${isInvalid ? 'ring-2 ring-red-400 ring-inset' : ''} ${isRuleWarning ? 'ring-2 ring-amber-400 ring-inset' : ''}`}
                               style={{
                                 backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
                                 opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
@@ -3976,6 +4123,12 @@ const openSelectedCellFillModal = () => {
                                 >
                                   {val}
                                 </div>
+                                {isRuleWarning && (
+                                  <div
+                                    className="absolute top-0 right-0 w-0 h-0 border-l-[10px] border-l-transparent border-t-[10px] border-t-amber-500 z-20"
+                                    title={ruleWarningMessage}
+                                  ></div>
+                                )}
                                 <div
                                   className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
                                   title="選擇班別/假別"
@@ -4163,6 +4316,44 @@ const openSelectedCellFillModal = () => {
         </div>
       </div>
 
+
+      {showImportViolationList && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[115] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl animate-pulse-once">
+            <div className="p-5 border-b flex justify-between items-center bg-slate-50">
+              <div>
+                <h3 className="font-black text-slate-800">匯入規則衝突清單</h3>
+                <p className="text-sm text-slate-500 mt-1">共 {importRuleViolations.length} 筆，僅提示，不影響匯入。</p>
+              </div>
+              <button onClick={() => setShowImportViolationList(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X />
+              </button>
+            </div>
+            <div className="max-h-[65vh] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-100 text-slate-700">
+                  <tr>
+                    <th className="text-left px-4 py-3">人員</th>
+                    <th className="text-left px-4 py-3">日期</th>
+                    <th className="text-left px-4 py-3">代碼</th>
+                    <th className="text-left px-4 py-3">原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importRuleViolations.map((item, index) => (
+                    <tr key={`${item.staffName}-${item.dateStr}-${item.code}-${index}`} className="border-t border-slate-200">
+                      <td className="px-4 py-3">{item.staffName}</td>
+                      <td className="px-4 py-3">{item.dateStr}</td>
+                      <td className="px-4 py-3 font-bold">{item.code}</td>
+                      <td className="px-4 py-3 text-amber-700">{item.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showFillModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
