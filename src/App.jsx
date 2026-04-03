@@ -2330,9 +2330,84 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const normalizePreScheduleInput = (rawValue = '') => {
     const raw = String(rawValue ?? '').trim();
     if (!raw) return { normalized: '', isValid: true };
+
+    const normalizedNumberedLeave = getImportedRawNumberedLeaveValue(raw);
+    if (normalizedNumberedLeave) {
+      return {
+        normalized: normalizedNumberedLeave.startsWith('例') ? '例' : '休',
+        isValid: true
+      };
+    }
+
     const { normalized, isValid } = normalizeManualShiftCode(raw, mergedLeaveCodes);
     if (!isValid) return { normalized: '', isValid: false };
     return { normalized, isValid: !normalized || isConfiguredLeaveCode(normalized) };
+  };
+
+  const buildPreSchedulePastePlan = (grid = [], rect = null) => {
+    if (!rect || !Array.isArray(grid) || grid.length === 0) {
+      return { entries: [], affectedCells: [], invalidCount: 0, clearCount: 0, writeCount: 0, clipped: false };
+    }
+
+    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
+    const selectionColCount = rect.colEnd - rect.colStart + 1;
+    const sourceRowCount = grid.length;
+    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
+    const isSingleCellPaste = sourceRowCount === 1 && sourceColCount === 1;
+
+    let targetRowCount = sourceRowCount;
+    let targetColCount = sourceColCount;
+    let clipped = false;
+
+    if (selectionRowCount > 1 || selectionColCount > 1) {
+      if (isSingleCellPaste) {
+        targetRowCount = selectionRowCount;
+        targetColCount = selectionColCount;
+      } else {
+        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
+        targetColCount = Math.min(sourceColCount, selectionColCount);
+        clipped = sourceRowCount > selectionRowCount || sourceColCount > selectionColCount;
+      }
+    }
+
+    const entries = [];
+    const affectedCells = [];
+    let invalidCount = 0;
+    let clearCount = 0;
+    let writeCount = 0;
+
+    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
+        const sourceRow = isSingleCellPaste ? 0 : rowOffset;
+        const sourceCol = isSingleCellPaste ? 0 : colOffset;
+        const targetRow = rect.rowStart + rowOffset;
+        const targetCol = rect.colStart + colOffset;
+        const staff = rect.scopedStaffs[targetRow];
+        const day = daysInMonth[targetCol];
+        if (!staff || !day) continue;
+
+        const targetCell = { staffId: staff.id, dateStr: day.date };
+        affectedCells.push(targetCell);
+
+        const rawValue = String(grid[sourceRow]?.[sourceCol] ?? '').trim();
+        if (!rawValue) {
+          entries.push({ ...targetCell, value: '' });
+          clearCount += 1;
+          continue;
+        }
+
+        const result = normalizePreScheduleInput(rawValue);
+        if (!result.isValid) {
+          invalidCount += 1;
+          continue;
+        }
+
+        entries.push({ ...targetCell, value: result.normalized });
+        writeCount += 1;
+      }
+    }
+
+    return { entries, affectedCells, invalidCount, clearCount, writeCount, clipped };
   };
 
   const isPotentialPreSchedulePrefix = (rawValue = '') => {
@@ -2656,47 +2731,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!grid || grid.length === 0) return;
 
     if (preScheduleEditMode) {
-      const pastePlan = buildPastePlan(grid, rect);
+      const pastePlan = buildPreSchedulePastePlan(grid, rect);
       if (pastePlan.affectedCells.length === 0) return;
 
-      const entries = [];
-      let invalidCount = 0;
-      const seen = new Set();
-
-      for (let rowOffset = 0; rowOffset <= rect.rowEnd - rect.rowStart; rowOffset += 1) {
-        for (let colOffset = 0; colOffset <= rect.colEnd - rect.colStart; colOffset += 1) {
-          const staff = rect.scopedStaffs[rect.rowStart + rowOffset];
-          const day = daysInMonth[rect.colStart + colOffset];
-          if (!staff || !day) continue;
-          const cellKey = makeCellKey(staff.id, day.date);
-          if (seen.has(cellKey)) continue;
-          seen.add(cellKey);
-
-          const rawValue = (grid[rowOffset]?.[colOffset] ?? '').toString().trim();
-          if (!rawValue) {
-            entries.push({ staffId: staff.id, dateStr: day.date, value: '' });
-            continue;
-          }
-
-          const result = normalizePreScheduleInput(rawValue);
-          if (!result.isValid) {
-            invalidCount += 1;
-            continue;
-          }
-          entries.push({ staffId: staff.id, dateStr: day.date, value: result.normalized });
-        }
-      }
-
-      if (entries.length === 0) {
-        if (invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
+      if (pastePlan.entries.length === 0) {
+        if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
         return;
       }
 
-      updatePreScheduleEntries(entries);
+      updatePreScheduleEntries(pastePlan.entries);
       setSelectionRangeFromCells(pastePlan.affectedCells, { activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1] });
       resetKeyInputBuffer();
       clearInputAssist();
-      if (invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
+      if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
       return;
     }
 
