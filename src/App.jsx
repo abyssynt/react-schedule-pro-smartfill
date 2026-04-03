@@ -1259,6 +1259,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [dragOverGroup, setDragOverGroup] = useState('');
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [editingNameDraft, setEditingNameDraft] = useState('');
+  const [preScheduleEditMode, setPreScheduleEditMode] = useState(false);
   const [inputAssist, setInputAssist] = useState({ type: '', message: '' });
 
   // 規則補空指定設定
@@ -2005,6 +2006,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (selectedRangeCells.length > 0) clearInputAssist();
   }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr]);
 
+  useEffect(() => {
+    resetKeyInputBuffer();
+    clearInputAssist();
+  }, [preScheduleEditMode]);
+
   const setSelectionRangeFromCells = (cells = [], options = {}) => {
     if (!Array.isArray(cells) || cells.length === 0) return false;
 
@@ -2175,6 +2181,44 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     );
   };
 
+  const normalizePreScheduleInput = (rawValue = '') => {
+    const raw = String(rawValue ?? '').trim();
+    if (!raw) return { normalized: '', isValid: true };
+    const { normalized, isValid } = normalizeManualShiftCode(raw, mergedLeaveCodes);
+    if (!isValid) return { normalized: '', isValid: false };
+    return { normalized, isValid: !normalized || isConfiguredLeaveCode(normalized) };
+  };
+
+  const applyPreScheduleValueToCells = (cells = [], rawValue = '', options = {}) => {
+    if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
+    const { normalized, isValid } = normalizePreScheduleInput(rawValue);
+    if (!isValid) {
+      flashInvalidSelection(cells);
+      if (options.showFeedback !== false) showInputAssist('預班只能輸入預假代號', 'error');
+      return { applied: false, normalized: '' };
+    }
+
+    const changedCount = updatePreScheduleEntries(cells.map(({ staffId, dateStr }) => ({
+      staffId,
+      dateStr,
+      value: normalized
+    })));
+
+    if (changedCount <= 0 && normalized) return { applied: false, normalized: '' };
+
+    const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
+    if (options.preserveSelection || !shouldAdvance) {
+      setSelectionRangeFromCells(cells, { activeCell: options.activeCell || cells[cells.length - 1] });
+    }
+
+    if (options.clearAssist !== false) clearInputAssist();
+    resetKeyInputBuffer();
+
+    if (shouldAdvance) moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
+
+    return { applied: true, normalized };
+  };
+
   const moveSelectionAfterInput = (cells = [], direction = 1) => {
     if (!Array.isArray(cells) || cells.length !== 1) return false;
     return moveSelectedCell(0, direction);
@@ -2214,12 +2258,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const tryApplyBufferedCode = (buffer) => {
     if (!buffer || selectedRangeCells.length === 0) return false;
-    return applySelectionValue(selectedRangeCells, buffer, { advance: true }).applied;
+    return (preScheduleEditMode
+      ? applyPreScheduleValueToCells(selectedRangeCells, buffer, { advance: true, showFeedback: true })
+      : applySelectionValue(selectedRangeCells, buffer, { advance: true })
+    ).applied;
   };
 
   const applyShortcutCodeToSelection = (shortcutCode) => {
     if (!shortcutCode || selectedRangeCells.length === 0) return false;
-    return applySelectionValue(selectedRangeCells, shortcutCode, { advance: true }).applied;
+    return (preScheduleEditMode
+      ? applyPreScheduleValueToCells(selectedRangeCells, shortcutCode, { advance: true, showFeedback: true })
+      : applySelectionValue(selectedRangeCells, shortcutCode, { advance: true })
+    ).applied;
   };
 
   const moveSelectedCell = (rowDelta = 0, colDelta = 0) => {
@@ -4120,6 +4170,14 @@ const openSelectedCellFillModal = () => {
               </button>
               <button
                 type="button"
+                onClick={() => setPreScheduleEditMode(prev => !prev)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${preScheduleEditMode ? 'bg-cyan-600 text-white shadow-inner' : 'text-cyan-700 hover:bg-cyan-50'}`}
+                title="開啟後，點格或鍵盤輸入只會寫入預班，不會改正式班表"
+              >
+                <CalendarDays size={14} /> 預班模式
+              </button>
+              <button
+                type="button"
                 onClick={openSelectedCellFillModal}
                 disabled={!selectedGridCell}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
@@ -4146,6 +4204,13 @@ const openSelectedCellFillModal = () => {
           </div>
         </div>
       </div>
+
+      {preScheduleEditMode && (
+        <div className="max-w-[98vw] mx-auto mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-cyan-800 text-sm flex items-center gap-2">
+          <CalendarDays size={15} className="text-cyan-600" />
+          預班模式已開啟：目前點格、下拉選取或鍵盤輸入，只會寫入預班，不會改動正式班表。
+        </div>
+      )}
 
       {(ruleFillFeedback || inputAssist.message || (showImportViolationSummary && importRuleViolations.length > 0)) && (
         <div className="max-w-[98vw] mx-auto mb-4 space-y-2">
@@ -4588,11 +4653,22 @@ const openSelectedCellFillModal = () => {
                                     value={val}
                                     onChange={(e) => {
                                       startRangeSelection(staff, d.date);
-                                      applySelectionValue([{ staffId: staff.id, dateStr: d.date }], e.target.value, {
-                                        advance: Boolean(e.target.value),
-                                        direction: 1,
-                                        source: 'manual'
-                                      });
+                                      const targetCells = [{ staffId: staff.id, dateStr: d.date }];
+                                      if (preScheduleEditMode) {
+                                        applyPreScheduleValueToCells(targetCells, e.target.value, {
+                                          advance: Boolean(e.target.value),
+                                          direction: 1,
+                                          preserveSelection: false,
+                                          activeCell: targetCells[targetCells.length - 1],
+                                          showFeedback: true
+                                        });
+                                      } else {
+                                        applySelectionValue(targetCells, e.target.value, {
+                                          advance: Boolean(e.target.value),
+                                          direction: 1,
+                                          source: 'manual'
+                                        });
+                                      }
                                       e.currentTarget.blur();
                                     }}
                                     onClick={(e) => {
@@ -4609,10 +4685,12 @@ const openSelectedCellFillModal = () => {
                                     aria-label={`選擇 ${staff.name} ${d.date} 班別/假別`}
                                   >
                                     <option value=""></option>
-                                    <optgroup label="上班">
-                                      {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </optgroup>
-                                    <optgroup label="休假">
+                                    {!preScheduleEditMode && (
+                                      <optgroup label="上班">
+                                        {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                      </optgroup>
+                                    )}
+                                    <optgroup label={preScheduleEditMode ? "預班／預假" : "休假"}>
                                       {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
                                     </optgroup>
                                   </select>
