@@ -1163,6 +1163,96 @@ const UI_THEME_PRESETS = {
     infoTextColor: '#e0f2fe',
     dangerTintColor: '#fb7185',
     dangerTextColor: '#ffe4e6'
+  },
+  sky: {
+    pageBackgroundColor: '#f4faff',
+    weekendColor: '#dbeafe',
+    holidayColor: '#fecaca',
+    tableFontColor: '#1e3a8a',
+    shiftColumnBgColor: '#ffffff',
+    nameDateColumnBgColor: '#f8fbff',
+    shiftColumnFontColor: '#1d4ed8',
+    nameDateColumnFontColor: '#1e3a8a',
+    demandOverColor: '#bfdbfe',
+    groupSummaryRowBgColor: '#dbeafe',
+    warningTintColor: '#60a5fa',
+    warningTextColor: '#1d4ed8',
+    infoTintColor: '#38bdf8',
+    infoTextColor: '#075985',
+    dangerTintColor: '#f87171',
+    dangerTextColor: '#991b1b'
+  },
+  lavender: {
+    pageBackgroundColor: '#faf7ff',
+    weekendColor: '#ede9fe',
+    holidayColor: '#fbcfe8',
+    tableFontColor: '#5b21b6',
+    shiftColumnBgColor: '#ffffff',
+    nameDateColumnBgColor: '#fcfaff',
+    shiftColumnFontColor: '#7c3aed',
+    nameDateColumnFontColor: '#5b21b6',
+    demandOverColor: '#ddd6fe',
+    groupSummaryRowBgColor: '#ede9fe',
+    warningTintColor: '#a78bfa',
+    warningTextColor: '#6d28d9',
+    infoTintColor: '#c4b5fd',
+    infoTextColor: '#6d28d9',
+    dangerTintColor: '#fb7185',
+    dangerTextColor: '#9f1239'
+  },
+  forest: {
+    pageBackgroundColor: '#f5fbf7',
+    weekendColor: '#dcfce7',
+    holidayColor: '#fecaca',
+    tableFontColor: '#14532d',
+    shiftColumnBgColor: '#ffffff',
+    nameDateColumnBgColor: '#f7fcf8',
+    shiftColumnFontColor: '#166534',
+    nameDateColumnFontColor: '#14532d',
+    demandOverColor: '#bbf7d0',
+    groupSummaryRowBgColor: '#dcfce7',
+    warningTintColor: '#4ade80',
+    warningTextColor: '#166534',
+    infoTintColor: '#2dd4bf',
+    infoTextColor: '#115e59',
+    dangerTintColor: '#f87171',
+    dangerTextColor: '#991b1b'
+  },
+  sakura: {
+    pageBackgroundColor: '#fff8fb',
+    weekendColor: '#fce7f3',
+    holidayColor: '#fda4af',
+    tableFontColor: '#9d174d',
+    shiftColumnBgColor: '#ffffff',
+    nameDateColumnBgColor: '#fffafd',
+    shiftColumnFontColor: '#be185d',
+    nameDateColumnFontColor: '#9d174d',
+    demandOverColor: '#fbcfe8',
+    groupSummaryRowBgColor: '#fce7f3',
+    warningTintColor: '#fb7185',
+    warningTextColor: '#be123c',
+    infoTintColor: '#f9a8d4',
+    infoTextColor: '#9d174d',
+    dangerTintColor: '#ef4444',
+    dangerTextColor: '#991b1b'
+  },
+  sand: {
+    pageBackgroundColor: '#fffaf2',
+    weekendColor: '#fef3c7',
+    holidayColor: '#fdba74',
+    tableFontColor: '#78350f',
+    shiftColumnBgColor: '#fffdf8',
+    nameDateColumnBgColor: '#fffbf3',
+    shiftColumnFontColor: '#92400e',
+    nameDateColumnFontColor: '#78350f',
+    demandOverColor: '#fde68a',
+    groupSummaryRowBgColor: '#fef3c7',
+    warningTintColor: '#f59e0b',
+    warningTextColor: '#92400e',
+    infoTintColor: '#fbbf24',
+    infoTextColor: '#92400e',
+    dangerTintColor: '#f87171',
+    dangerTextColor: '#991b1b'
   }
 };
 
@@ -5452,6 +5542,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                             return;
                           }
                           const preset = UI_THEME_PRESETS[key];
+                          if (!preset) return;
                           setColors(prev => ({ ...prev, weekend: preset.weekendColor, holiday: preset.holidayColor }));
                           setUiSettings(prev => ({
                             ...prev,
@@ -5484,7 +5575,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">欄位顯示</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
                     {[
-                      ['showRightStats','右側統計'],
+                      ['showRightStats','上班休假統計'],
                       ['showLeaveStats','休假別統計'],
                       ['showBottomStats','下方每日統計'],
                       ['showBlueDots','藍點提示']
