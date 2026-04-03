@@ -3185,28 +3185,33 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           }
           .month-title-cell {
             height: 22pt;
-            padding: 0 6pt;
-            text-align: center;
+            padding: 0 8pt;
+            text-align: left;
             border-left: none !important;
             border-right: none !important;
           }
-          .month-title {
-            display: block;
+          .month-title-layout {
+            position: relative;
             width: 100%;
-            text-align: center;
-            font-size: 14pt;
-            font-weight: 700;
+            height: 22pt;
             line-height: 22pt;
           }
-          .leave-title-cell {
-            height: 22pt;
-            padding: 0 6pt;
-            text-align: right;
+          .month-title {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            font-size: 14pt;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+          .month-title-right {
+            position: absolute;
+            right: 0;
+            top: 0;
             font-size: 10.5pt;
             font-weight: 700;
             white-space: nowrap;
-            border-left: none !important;
-            border-right: none !important;
           }
           .name-col {
             width: 54pt;
@@ -3255,10 +3260,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             <thead>
               <tr class="month-row">
                 <td class="name-col month-spacer-cell"></td>
-                <td class="month-title-cell" colspan="${titleColSpan}">
-                  <span class="month-title">${month}月班表</span>
+                <td class="month-title-cell" colspan="${daysInMonth.length + statHeaders.length}">
+                  <div class="month-title-layout">
+                    <span class="month-title">${month}月班表</span>
+                    <span class="month-title-right">應休${requiredLeaves}天</span>
+                  </div>
                 </td>
-                <td class="leave-title-cell" colspan="${leaveColSpan}">應休${requiredLeaves}天</td>
               </tr>
               <tr>
                 <th class="name-col header-cell" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">姓名</th>
