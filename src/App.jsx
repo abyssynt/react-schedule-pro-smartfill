@@ -3940,7 +3940,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
 
     setSelectionRangeFromCells([{ staffId, dateStr }], { activeCell: { staffId, dateStr } });
-    showInputAssist(nextColor ? '已更新單格字體顏色' : '已清除此格字體顏色', 'info', 1500);
+    // 單格字色更新不顯示提示條
     return true;
   };
 
@@ -4123,7 +4123,7 @@ const openSelectedCellFillModal = () => {
 
     handleCellChange(staff.id, dateStr, '', { preserveSelection: true, selectionCells: [{ staffId: staff.id, dateStr }], activeCell: { staffId: staff.id, dateStr } });
     setSelectedGridCell(null);
-    setRuleFillFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
+
   };
 
   const clearSelectedPreScheduleCell = () => {
@@ -4135,7 +4135,7 @@ const openSelectedCellFillModal = () => {
 
     const changedCount = updatePreScheduleEntries([{ staffId: staff.id, dateStr, value: '' }]);
     if (changedCount > 0) {
-      setRuleFillFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的預班`);
+
     }
   };
 
@@ -4168,7 +4168,7 @@ const openSelectedCellFillModal = () => {
 
       const changedCount = updatePreScheduleEntries(clearEntries);
       if (changedCount > 0) {
-        setRuleFillFeedback(`🧹 已清除 ${changedCount} 格預班`);
+
       }
       return;
     }
@@ -4202,7 +4202,7 @@ const openSelectedCellFillModal = () => {
       resetBuffer: true
     });
 
-    setRuleFillFeedback(`🧹 已清除 ${clearEntries.length} 格內容`);
+
   };
 
   const applyFillCandidate = (candidate) => {
@@ -5404,18 +5404,16 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">色彩標示</label>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">週末顏色</span><input type="color" value={colors.weekend} onChange={(e) => setColors(prev => ({ ...prev, weekend: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">假日顏色</span><input type="color" value={colors.holiday} onChange={(e) => setColors(prev => ({ ...prev, holiday: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">國定假日</span><input type="color" value={colors.holiday} onChange={(e) => setColors(prev => ({ ...prev, holiday: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">主頁背景色</span><input type="color" value={uiSettings.pageBackgroundColor} onChange={(e) => setUiSettings(prev => ({ ...prev, pageBackgroundColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">表格字體色</span><input type="color" value={uiSettings.tableFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">表格字體色(全體)</span><input type="color" value={uiSettings.tableFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄背景顏色</span><input type="color" value={uiSettings.shiftColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnBgColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄背景顏色</span><input type="color" value={uiSettings.nameDateColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnBgColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄字體顏色</span><input type="color" value={uiSettings.shiftColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄背景顏色</span><input type="color" value={uiSettings.nameDateColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnBgColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求超編顏色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">群組統計列顏色</span><input type="color" value={uiSettings.groupSummaryRowBgColor || '#fef3c7'} onChange={(e) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">警示色</span><input type="color" value={uiSettings.warningTintColor || '#f59e0b'} onChange={(e) => setUiSettings(prev => ({ ...prev, warningTintColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">資訊提示色</span><input type="color" value={uiSettings.infoTintColor || '#38bdf8'} onChange={(e) => setUiSettings(prev => ({ ...prev, infoTintColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">錯誤色</span><input type="color" value={uiSettings.dangerTintColor || '#ef4444'} onChange={(e) => setUiSettings(prev => ({ ...prev, dangerTintColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">人力需求超標色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">各班別統計色</span><input type="color" value={uiSettings.groupSummaryRowBgColor || '#fef3c7'} onChange={(e) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">預班/假色</span><input type="color" value={uiSettings.infoTintColor || '#38bdf8'} onChange={(e) => setUiSettings(prev => ({ ...prev, infoTintColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                   </div>
                 </div>
 
