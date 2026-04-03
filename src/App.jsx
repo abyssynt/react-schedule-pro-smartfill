@@ -5429,13 +5429,18 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
             <SettingRow icon={Settings} title="使用偏好" desc="快速切換主題、欄位顯示、操作方式與預設補休代碼。" iconBg="bg-violet-50" iconColor="text-violet-600">
               <div className="space-y-6">
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">主題預設</label>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">主題預設</label>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                     {[
                       ['classic','經典藍白'],
                       ['soft','柔和綠灰'],
                       ['warm','米色護理站'],
                       ['dark','深色模式'],
+                      ['sky','晴空藍白'],
+                      ['lavender','薰衣紫霧'],
+                      ['forest','森林綠意'],
+                      ['sakura','櫻花粉霧'],
+                      ['sand','暖沙米杏'],
                       ['custom','自訂主題']
                     ].map(([key,label]) => (
                       <button
@@ -5467,7 +5472,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                             dangerTextColor: preset.dangerTextColor
                           }));
                         }}
-                        className={`px-3 py-1.5 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
+                        className={`px-2.5 py-1.5 rounded-lg border text-[13px] font-medium transition leading-5 ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
                       >
                         {label}
                       </button>
@@ -5476,21 +5481,20 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄位顯示</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">欄位顯示</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
                     {[
-                      ['showRightStats','顯示右側統計'],
-                      ['showLeaveStats','顯示休假別統計'],
-                      ['showBottomStats','顯示下方每日統計'],
-                      ['showBlueDots','顯示藍點提示'],
-                      ['showShiftLabels','顯示班別群組大字']
+                      ['showRightStats','右側統計'],
+                      ['showLeaveStats','休假別統計'],
+                      ['showBottomStats','下方每日統計'],
+                      ['showBlueDots','藍點提示']
                     ].map(([key,label]) => (
-                      <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <div key={key} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
                         <span className="text-sm font-medium">{label}</span>
                         <button
                           type="button"
                           onClick={() => setUiSettings(prev => ({ ...prev, [key]: !prev[key] }))}
-                          className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings[key] ? 'bg-violet-600' : 'bg-gray-300'}`}
+                          className={`w-9 h-5 rounded-full relative transition-colors ${uiSettings[key] ? 'bg-violet-600' : 'bg-gray-300'}`}
                         >
                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings[key] ? 'right-1' : 'left-1'}`}></div>
                         </button>
@@ -5500,18 +5504,15 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄寬與高度</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄寬</span><select value={uiSettings.shiftColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, shiftColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄寬</span><select value={uiSettings.nameDateColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, nameDateColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">日期欄寬</span><select value={uiSettings.dayColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, dayColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">儲存格高度</span><select value={uiSettings.cellHeightMode} onChange={(e)=>setUiSettings(prev=>({...prev, cellHeightMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="compact">緊湊</option><option value="standard">標準</option><option value="roomy">寬鬆</option></select></div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">寬與高度</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">班別欄寬</span><select value={uiSettings.shiftColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, shiftColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">姓名/日期欄寬</span><select value={uiSettings.nameDateColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, nameDateColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">日期欄寬</span><select value={uiSettings.dayColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, dayColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">儲存格高度</span><select value={uiSettings.cellHeightMode} onChange={(e)=>setUiSettings(prev=>({...prev, cellHeightMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="compact">緊湊</option><option value="standard">標準</option><option value="roomy">寬鬆</option></select></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">預設補休代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5">{mergedLeaveCodes.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">選取方式</span><select value={uiSettings.selectionMode} onChange={(e)=>setUiSettings(prev=>({...prev, selectionMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="dot">點藍點選格</option><option value="cell">點格選取</option></select></div>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">系統補休預設代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2">{mergedLeaveCodes.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">選格操作模式</span><select value={uiSettings.selectionMode} onChange={(e)=>setUiSettings(prev=>({...prev, selectionMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="dot">點藍點選格</option><option value="cell">點格選取</option></select></div>
                 </div>
               </div>
             </SettingRow>
