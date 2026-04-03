@@ -3859,11 +3859,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
 
-      if (['D', '白8-8', '8-12', '12-16'].includes(code)) {
+      const shiftGroup = getShiftGroupByCode(code);
+      if (shiftGroup === '白班') {
         stats.D += 1;
-      } else if (['E', '夜8-8'].includes(code)) {
+      } else if (shiftGroup === '小夜') {
         stats.E += 1;
-      } else if (code === 'N') {
+      } else if (shiftGroup === '大夜') {
         stats.N += 1;
       } else if (isConfiguredLeaveCode(code)) {
         stats.totalLeave += 1;
@@ -3896,7 +3897,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText }
+      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customWorkShifts, customColumns, customColumnValues, schedulingRulesText }
     };
 
     setHistoryList(prev => {
@@ -3916,6 +3917,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (state.staffingConfig) setStaffingConfig(state.staffingConfig);
     if (state.uiSettings) setUiSettings(state.uiSettings);
     if (Array.isArray(state.customLeaveCodes)) setCustomLeaveCodes(state.customLeaveCodes);
+    if (Array.isArray(state.customWorkShifts)) setCustomWorkShifts(state.customWorkShifts);
     if (Array.isArray(state.customColumns)) setCustomColumns(state.customColumns);
     if (state.customColumnValues) setCustomColumnValues(state.customColumnValues);
     if (typeof state.schedulingRulesText === 'string') setSchedulingRulesText(state.schedulingRulesText);
@@ -5167,9 +5169,11 @@ const openSelectedCellFillModal = () => {
                                   >
                                     <option value=""></option>
                                     {!preScheduleEditMode && (
-                                      <optgroup label="上班">
-                                        {DICT.SHIFTS.map(s => <option key={s} value={s}>{s}</option>)}
-                                      </optgroup>
+                                      <>
+                                        <optgroup label="上班">
+                                          {mergedShiftCodes.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </optgroup>
+                                      </>
                                     )}
                                     <optgroup label={preScheduleEditMode ? "預班／預假" : "休假"}>
                                       {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
