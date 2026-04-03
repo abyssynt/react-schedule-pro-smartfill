@@ -269,6 +269,7 @@ const getSystemHolidayCalendar = (year, options = {}) => {
 };
 const STORAGE_KEY = 'schedule_app_history';
 const ACTIVE_DRAFT_KEY = 'schedule_app_active_draft';
+const LOCAL_SETTINGS_KEY = 'schedule_app_local_settings';
 
 // 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
 const loadExcelJS = () => {
@@ -5448,7 +5449,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
+function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const systemToday = useMemo(() => new Date(), []);
   const systemYear = String(systemToday.getFullYear());
@@ -5533,7 +5534,7 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
         <div className="flex items-center gap-3">
           <button onClick={() => changeScreen('entry')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="w-4 h-4" />返回入口頁</button>
           <button onClick={() => changeScreen('schedule')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><Calendar className="w-4 h-4" />返回排班頁</button>
-          <button onClick={() => changeScreen('schedule')} className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md shadow-blue-100"><Save className="w-4 h-4" />儲存設定</button>
+          <button onClick={onSaveSettings} className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md shadow-blue-100"><Save className="w-4 h-4" />儲存設定</button>
         </div>
       </header>
       <main className="max-w-7xl mx-auto p-8 space-y-10">
@@ -6140,6 +6141,11 @@ export default function App() {
     setCustomShiftDefsRegistry(customWorkShifts);
   }, [customWorkShifts]);
 
+  useEffect(() => {
+    const initialWorkspace = createInitialWorkspaceState();
+    applyWorkspaceState(initialWorkspace);
+  }, []);
+
   const formatDraftSavedAt = (isoString) => {
     if (!isoString) return '';
     const date = new Date(isoString);
@@ -6147,53 +6153,138 @@ export default function App() {
     return date.toLocaleString();
   };
 
+  const createDefaultSettingsState = () => ({
+    colors: { weekend: '#dcfce7', holiday: '#fca5a5' },
+    customHolidays: [],
+    specialWorkdays: [],
+    medicalCalendarAdjustments: { holidays: [], workdays: [] },
+    uiSettings: {
+      pageBackgroundColor: '#f8fafc',
+      tableFontSize: 'medium',
+      tableFontColor: '#1f2937',
+      shiftColumnFontSize: 'medium',
+      shiftColumnFontColor: '#1e293b',
+      nameDateColumnFontSize: 'medium',
+      nameDateColumnFontColor: '#1e293b',
+      shiftColumnBgColor: '#ffffff',
+      nameDateColumnBgColor: '#ffffff',
+      tableDensity: 'standard',
+      showStats: true,
+      themePreset: 'custom',
+      showRightStats: true,
+      showLeaveStats: true,
+      showBottomStats: true,
+      showBlueDots: true,
+      showShiftLabels: true,
+      defaultAutoLeaveCode: 'off',
+      selectionMode: 'dot',
+      shiftColumnWidthMode: 'standard',
+      nameDateColumnWidthMode: 'standard',
+      dayColumnWidthMode: 'standard',
+      cellHeightMode: 'standard',
+      demandOverColor: '#fde68a',
+      groupSummaryRowBgColor: '#fef3c7',
+      warningTintColor: '#f59e0b',
+      warningTextColor: '#92400e',
+      infoTintColor: '#38bdf8',
+      infoTextColor: '#075985',
+      dangerTintColor: '#ef4444',
+      dangerTextColor: '#9f1239'
+    },
+    staffingConfig: {
+      hospitalLevel: 'regional',
+      totalBeds: 60,
+      totalNurses: 20,
+      requiredStaffing: normalizeRequiredStaffingConfig()
+    },
+    customLeaveCodes: [],
+    customWorkShifts: [],
+    customColumns: [],
+    schedulingRulesText: ''
+  });
+
+  const buildLocalSettingsPayload = () => ({
+    colors,
+    customHolidays,
+    specialWorkdays,
+    medicalCalendarAdjustments,
+    uiSettings,
+    staffingConfig,
+    customLeaveCodes,
+    customWorkShifts,
+    customColumns,
+    schedulingRulesText
+  });
+
+  const readLocalSettingsPayload = () => {
+    const defaults = createDefaultSettingsState();
+    try {
+      const stored = localStorage.getItem(LOCAL_SETTINGS_KEY);
+      if (!stored) return defaults;
+      const parsed = JSON.parse(stored);
+      return {
+        colors: parsed?.colors || defaults.colors,
+        customHolidays: Array.isArray(parsed?.customHolidays) ? parsed.customHolidays : defaults.customHolidays,
+        specialWorkdays: Array.isArray(parsed?.specialWorkdays) ? parsed.specialWorkdays : defaults.specialWorkdays,
+        medicalCalendarAdjustments: parsed?.medicalCalendarAdjustments || defaults.medicalCalendarAdjustments,
+        uiSettings: { ...defaults.uiSettings, ...(parsed?.uiSettings || {}) },
+        staffingConfig: {
+          hospitalLevel: parsed?.staffingConfig?.hospitalLevel || defaults.staffingConfig.hospitalLevel,
+          totalBeds: Number(parsed?.staffingConfig?.totalBeds) || defaults.staffingConfig.totalBeds,
+          totalNurses: Number(parsed?.staffingConfig?.totalNurses) || defaults.staffingConfig.totalNurses,
+          requiredStaffing: normalizeRequiredStaffingConfig(parsed?.staffingConfig?.requiredStaffing)
+        },
+        customLeaveCodes: Array.isArray(parsed?.customLeaveCodes) ? parsed.customLeaveCodes : defaults.customLeaveCodes,
+        customWorkShifts: Array.isArray(parsed?.customWorkShifts) ? parsed.customWorkShifts : defaults.customWorkShifts,
+        customColumns: Array.isArray(parsed?.customColumns) ? parsed.customColumns : defaults.customColumns,
+        schedulingRulesText: typeof parsed?.schedulingRulesText === 'string' ? parsed.schedulingRulesText : defaults.schedulingRulesText
+      };
+    } catch (error) {
+      console.error('讀取本機預設設定失敗', error);
+      return defaults;
+    }
+  };
+
+  const applyLocalSettingsPayload = (payload = {}) => {
+    const normalized = { ...createDefaultSettingsState(), ...readLocalSettingsPayload(), ...payload };
+    setColors(normalized.colors || createDefaultSettingsState().colors);
+    setCustomHolidays(Array.isArray(normalized.customHolidays) ? normalized.customHolidays : []);
+    setSpecialWorkdays(Array.isArray(normalized.specialWorkdays) ? normalized.specialWorkdays : []);
+    setMedicalCalendarAdjustments(normalized.medicalCalendarAdjustments || { holidays: [], workdays: [] });
+    setUiSettings(prev => ({ ...createDefaultSettingsState().uiSettings, ...(normalized.uiSettings || {}) }));
+    setStaffingConfig({
+      hospitalLevel: normalized.staffingConfig?.hospitalLevel || 'regional',
+      totalBeds: Number(normalized.staffingConfig?.totalBeds) || 60,
+      totalNurses: Number(normalized.staffingConfig?.totalNurses) || 20,
+      requiredStaffing: normalizeRequiredStaffingConfig(normalized.staffingConfig?.requiredStaffing)
+    });
+    setCustomLeaveCodes(Array.isArray(normalized.customLeaveCodes) ? normalized.customLeaveCodes : []);
+    setCustomWorkShifts(Array.isArray(normalized.customWorkShifts) ? normalized.customWorkShifts : []);
+    setCustomColumns(Array.isArray(normalized.customColumns) ? normalized.customColumns : []);
+    setSchedulingRulesText(typeof normalized.schedulingRulesText === 'string' ? normalized.schedulingRulesText : '');
+  };
+
+  const saveLocalSettingsPayload = () => {
+    try {
+      localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify({
+        savedAt: new Date().toISOString(),
+        ...buildLocalSettingsPayload()
+      }));
+      return true;
+    } catch (error) {
+      console.error('儲存本機預設設定失敗', error);
+      return false;
+    }
+  };
+
   const createInitialWorkspaceState = () => {
     const blankYear = 2025;
     const blankMonth = 3;
     const blankMonthState = createBlankMonthState(blankYear, blankMonth);
+    const savedSettings = readLocalSettingsPayload();
     return {
-      colors: { weekend: '#dcfce7', holiday: '#fca5a5' },
-      customHolidays: [],
-      specialWorkdays: [],
-      medicalCalendarAdjustments: { holidays: [], workdays: [] },
-      uiSettings: {
-        pageBackgroundColor: '#f8fafc',
-        tableFontSize: 'medium',
-        tableFontColor: '#1f2937',
-        shiftColumnFontSize: 'medium',
-        shiftColumnFontColor: '#1e293b',
-        nameDateColumnFontSize: 'medium',
-        nameDateColumnFontColor: '#1e293b',
-        shiftColumnBgColor: '#ffffff',
-        nameDateColumnBgColor: '#ffffff',
-        tableDensity: 'standard',
-        showStats: true,
-        themePreset: 'custom',
-        showRightStats: true,
-        showLeaveStats: true,
-        showBottomStats: true,
-        showBlueDots: true,
-        showShiftLabels: true,
-        defaultAutoLeaveCode: 'off',
-        selectionMode: 'dot',
-        shiftColumnWidthMode: 'standard',
-        nameDateColumnWidthMode: 'standard',
-        dayColumnWidthMode: 'standard',
-        cellHeightMode: 'standard',
-        demandOverColor: '#fde68a',
-        groupSummaryRowBgColor: '#fef3c7'
-      },
-      staffingConfig: {
-        hospitalLevel: 'regional',
-        totalBeds: 60,
-        totalNurses: 20,
-        requiredStaffing: normalizeRequiredStaffingConfig()
-      },
-      customLeaveCodes: [],
-      customWorkShifts: [],
-      customColumns: [],
+      ...savedSettings,
       customColumnValues: {},
-      schedulingRulesText: '',
       monthlySchedules: {},
       preScheduleMonthlySchedules: {},
       year: blankYear,
@@ -6228,39 +6319,7 @@ export default function App() {
     setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
     setSpecialWorkdays(Array.isArray(state.specialWorkdays) ? state.specialWorkdays : []);
     setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
-    setUiSettings(state.uiSettings || {
-      pageBackgroundColor: '#f8fafc',
-      tableFontSize: 'medium',
-      tableFontColor: '#1f2937',
-      shiftColumnFontSize: 'medium',
-      shiftColumnFontColor: '#1e293b',
-      nameDateColumnFontSize: 'medium',
-      nameDateColumnFontColor: '#1e293b',
-      shiftColumnBgColor: '#ffffff',
-      nameDateColumnBgColor: '#ffffff',
-      tableDensity: 'standard',
-      showStats: true,
-      themePreset: 'custom',
-      showRightStats: true,
-      showLeaveStats: true,
-      showBottomStats: true,
-      showBlueDots: true,
-      showShiftLabels: true,
-      defaultAutoLeaveCode: 'off',
-      selectionMode: 'dot',
-      shiftColumnWidthMode: 'standard',
-      nameDateColumnWidthMode: 'standard',
-      dayColumnWidthMode: 'standard',
-      cellHeightMode: 'standard',
-      demandOverColor: '#fde68a',
-      groupSummaryRowBgColor: '#fef3c7',
-      warningTintColor: '#f59e0b',
-      warningTextColor: '#92400e',
-      infoTintColor: '#38bdf8',
-      infoTextColor: '#075985',
-      dangerTintColor: '#ef4444',
-      dangerTextColor: '#9f1239'
-    });
+    setUiSettings({ ...createDefaultSettingsState().uiSettings, ...(state.uiSettings || {}) });
     setStaffingConfig({
       hospitalLevel: state.staffingConfig?.hospitalLevel || 'regional',
       totalBeds: Number(state.staffingConfig?.totalBeds) || 60,
@@ -6375,6 +6434,15 @@ export default function App() {
     localStorage.removeItem(ACTIVE_DRAFT_KEY);
     setHasActiveDraft(false);
     setActiveDraftMeta(null);
+  };
+
+  const handleSaveSettings = () => {
+    const saved = saveLocalSettingsPayload();
+    if (!saved) {
+      window.alert('儲存設定失敗，請稍後再試。');
+      return;
+    }
+    setScreen('schedule');
   };
 
   const handleDownloadDraftFile = () => {
@@ -6572,6 +6640,7 @@ export default function App() {
         setCustomColumns={setCustomColumns}
         schedulingRulesText={schedulingRulesText}
         setSchedulingRulesText={setSchedulingRulesText}
+        onSaveSettings={handleSaveSettings}
       />
     );
   }
