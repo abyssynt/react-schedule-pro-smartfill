@@ -4390,12 +4390,13 @@ const openSelectedCellFillModal = () => {
                                 </div>
                                 {showPreScheduleAsHint && (
                                   <div
-                                    className="absolute left-0.5 top-0.5 px-1 py-[1px] rounded-md text-[10px] font-black leading-none z-20 pointer-events-none"
-                                    style={{ backgroundColor: preScheduleHintBgColor, color: preScheduleTextColor, border: `1px solid ${preScheduleHintBorderColor}` }}
+                                    className="absolute left-0 top-0 w-0 h-0 z-20 pointer-events-none"
+                                    style={{
+                                      borderTop: `9px solid ${preScheduleHintBorderColor}`,
+                                      borderRight: '9px solid transparent'
+                                    }}
                                     title={`預班：${preScheduleCode}`}
-                                  >
-                                    預{preScheduleCode}
-                                  </div>
+                                  />
                                 )}
                                 {isRuleWarning && (
                                   <div
