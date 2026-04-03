@@ -2189,6 +2189,25 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return { normalized, isValid: !normalized || isConfiguredLeaveCode(normalized) };
   };
 
+  const isPotentialPreSchedulePrefix = (rawValue = '') => {
+    const candidates = getNormalizedManualCodeCandidates(rawValue, mergedLeaveCodes);
+    return candidates.some((code) => isConfiguredLeaveCode(code));
+  };
+
+  const clearSelectedPreScheduleRangeByKeyboard = () => {
+    if (!Array.isArray(selectedRangeCells) || selectedRangeCells.length === 0) return false;
+    const changedCount = updatePreScheduleEntries(selectedRangeCells.map(({ staffId, dateStr }) => ({
+      staffId,
+      dateStr,
+      value: ''
+    })));
+    if (changedCount <= 0) return false;
+    setSelectionRangeFromCells(selectedRangeCells, { activeCell: selectedRangeCells[selectedRangeCells.length - 1] });
+    clearInputAssist();
+    resetKeyInputBuffer();
+    return true;
+  };
+
   const applyPreScheduleValueToCells = (cells = [], rawValue = '', options = {}) => {
     if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
     const { normalized, isValid } = normalizePreScheduleInput(rawValue);
@@ -2600,7 +2619,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           }
           return;
         }
-        clearSelectionContents();
+        if (preScheduleEditMode) {
+          clearSelectedPreScheduleRangeByKeyboard();
+        } else {
+          if (preScheduleEditMode) {
+          clearSelectedPreScheduleRangeByKeyboard();
+        } else {
+          clearSelectionContents();
+        }
+        }
         return;
       }
 
@@ -2652,9 +2679,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const applied = tryApplyBufferedCode(nextBuffer);
         if (applied) return;
 
-        if (!isPotentialManualShiftPrefix(nextBuffer, mergedLeaveCodes)) {
+        const prefixValid = preScheduleEditMode
+          ? isPotentialPreSchedulePrefix(nextBuffer)
+          : isPotentialManualShiftPrefix(nextBuffer, mergedLeaveCodes);
+
+        if (!prefixValid) {
           flashInvalidSelection(selectedRangeCells);
           resetKeyInputBuffer();
+          if (preScheduleEditMode) showInputAssist('預班只能輸入預假代號', 'error');
           return;
         }
 
@@ -4650,7 +4682,7 @@ const openSelectedCellFillModal = () => {
                                   title={showPreScheduleAsHint ? `選擇班別/假別｜預班 ${preScheduleCode}` : '選擇班別/假別'}
                                 >
                                   <select
-                                    value={val}
+                                    value={preScheduleEditMode ? preScheduleCode : val}
                                     onChange={(e) => {
                                       startRangeSelection(staff, d.date);
                                       const targetCells = [{ staffId: staff.id, dateStr: d.date }];
