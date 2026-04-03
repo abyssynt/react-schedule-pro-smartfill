@@ -1895,10 +1895,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const buildExportNumberedValueMap = (staffOrId) => {
     const valueMap = {};
     let leaveCounters = {
+      例: 0,
+      休: 0
+    };
+    let isFirstSegment = true;
+    let firstSegmentSeed = {
       例: getRawImportedLeaveSeed(staffOrId, '例'),
       休: getRawImportedLeaveSeed(staffOrId, '休')
     };
-    let isFirstSegment = true;
     let firstSegmentCarryUsed = {
       例: false,
       休: false
@@ -1910,20 +1914,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       if (displayValue === '例' || displayValue === '休') {
         const leaveType = displayValue;
-        const rawSeed = Number(leaveCounters[leaveType] || 0);
 
-        if (isFirstSegment && rawSeed > 0) {
+        if (isFirstSegment && Number(firstSegmentSeed[leaveType] || 0) > 0) {
           if (!firstSegmentCarryUsed[leaveType]) {
-            const continuedCount = rawSeed >= 4 ? 1 : rawSeed + 1;
+            const continuedCount = Math.min(Number(firstSegmentSeed[leaveType] || 0) + 1, 4);
             valueMap[dayInfo.date] = `${leaveType}${continuedCount}`;
             firstSegmentCarryUsed[leaveType] = true;
           } else {
             valueMap[dayInfo.date] = leaveType;
           }
         } else {
-          const nextCount = rawSeed >= 4 ? 1 : rawSeed + 1;
+          const nextCount = Number(leaveCounters[leaveType] || 0) + 1;
           leaveCounters[leaveType] = nextCount;
-          valueMap[dayInfo.date] = `${leaveType}${nextCount}`;
+          valueMap[dayInfo.date] = nextCount <= 4 ? `${leaveType}${nextCount}` : leaveType;
         }
       } else {
         valueMap[dayInfo.date] = displayValue;
@@ -1932,6 +1935,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       if (isFourWeekCycleEndDate(dayInfo.date) && index < daysInMonth.length - 1) {
         leaveCounters = { 例: 0, 休: 0 };
         isFirstSegment = false;
+        firstSegmentSeed = { 例: 0, 休: 0 };
         firstSegmentCarryUsed = { 例: false, 休: false };
       }
     });
