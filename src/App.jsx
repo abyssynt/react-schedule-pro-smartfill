@@ -6032,15 +6032,6 @@ function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onI
 
             <button
               type="button"
-              onClick={goToLatestHistory}
-              className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
-            >
-              <Clock className="w-4 h-4 text-slate-500" />
-              載入最近暫存
-            </button>
-
-            <button
-              type="button"
               onClick={() => handleImportButtonClick('schedule')}
               className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
             >
