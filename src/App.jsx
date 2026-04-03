@@ -3070,7 +3070,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     };
 
     const titleColSpan = daysInMonth.length;
-    const leaveColSpan = statHeaders.length;
+    const statColSpan = statHeaders.length;
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
     const schedulingRuleLines = String(schedulingRulesText || '')
       .split(/\r?\n/)
@@ -3171,53 +3171,47 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             word-break: break-all;
           }
           .month-row td {
-            height: 22pt;
+            height: 24pt;
             font-weight: 700;
             background: ${exportTheme.pageBg};
-            border: none !important;
-            border-bottom: 1px solid #000 !important;
-            padding: 0;
+            border-top: 0;
+            border-left: 0;
+            border-right: 0;
+            border-bottom: 1px solid #000;
           }
-          .month-row .month-spacer-cell {
-            border-left: none !important;
-            border-right: none !important;
-            text-align: left;
+          .month-name-spacer,
+          .month-stat-spacer {
+            color: transparent;
           }
-          .month-title-cell {
-            height: 22pt;
+          .month-title-zone {
+            height: 24pt;
             padding: 0 6pt;
-            text-align: left;
-            border-left: none !important;
-            border-right: none !important;
           }
-          .month-title-layout {
+          .month-title-wrap {
+            position: relative;
             width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
+            height: 24pt;
           }
-          .month-title-layout td {
-            border: none !important;
-            padding: 0;
-            height: 22pt;
-            line-height: 22pt;
-            vertical-align: middle;
-            background: transparent;
-          }
-          .month-title-left {
-            width: 33%;
-          }
-          .month-title-center {
-            width: 34%;
+          .month-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 0;
+            width: max-content;
+            max-width: 70%;
             text-align: center;
             font-size: 14pt;
             font-weight: 700;
+            line-height: 24pt;
             white-space: nowrap;
           }
-          .month-title-right {
-            width: 33%;
-            text-align: right;
+          .month-leave-inline {
+            position: absolute;
+            right: 0;
+            top: 0;
             font-size: 10.5pt;
             font-weight: 700;
+            line-height: 24pt;
             white-space: nowrap;
           }
           .name-col {
@@ -3266,16 +3260,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           <table>
             <thead>
               <tr class="month-row">
-                <td class="name-col month-spacer-cell"></td>
-                <td class="month-title-cell" colspan="${daysInMonth.length + statHeaders.length}">
-                  <table class="month-title-layout" role="presentation">
-                    <tr>
-                      <td class="month-title-left"></td>
-                      <td class="month-title-center">${month}月班表</td>
-                      <td class="month-title-right">應休${requiredLeaves}天</td>
-                    </tr>
-                  </table>
+                <td class="name-col month-name-spacer"></td>
+                <td class="month-title-zone" colspan="${titleColSpan}">
+                  <div class="month-title-wrap">
+                    <span class="month-title">${month}月班表</span>
+                    <span class="month-leave-inline">應休${requiredLeaves}天</span>
+                  </div>
                 </td>
+                <td class="month-stat-spacer" colspan="${statColSpan}"></td>
               </tr>
               <tr>
                 <th class="name-col header-cell" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">姓名</th>
