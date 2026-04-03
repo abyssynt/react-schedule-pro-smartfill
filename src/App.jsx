@@ -2655,11 +2655,54 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
     if (!grid || grid.length === 0) return;
 
+    if (preScheduleEditMode) {
+      const pastePlan = buildPastePlan(grid, rect);
+      if (pastePlan.affectedCells.length === 0) return;
+
+      const entries = [];
+      let invalidCount = 0;
+      const seen = new Set();
+
+      for (let rowOffset = 0; rowOffset <= rect.rowEnd - rect.rowStart; rowOffset += 1) {
+        for (let colOffset = 0; colOffset <= rect.colEnd - rect.colStart; colOffset += 1) {
+          const staff = rect.scopedStaffs[rect.rowStart + rowOffset];
+          const day = daysInMonth[rect.colStart + colOffset];
+          if (!staff || !day) continue;
+          const cellKey = makeCellKey(staff.id, day.date);
+          if (seen.has(cellKey)) continue;
+          seen.add(cellKey);
+
+          const rawValue = (grid[rowOffset]?.[colOffset] ?? '').toString().trim();
+          if (!rawValue) {
+            entries.push({ staffId: staff.id, dateStr: day.date, value: '' });
+            continue;
+          }
+
+          const result = normalizePreScheduleInput(rawValue);
+          if (!result.isValid) {
+            invalidCount += 1;
+            continue;
+          }
+          entries.push({ staffId: staff.id, dateStr: day.date, value: result.normalized });
+        }
+      }
+
+      if (entries.length === 0) {
+        if (invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
+        return;
+      }
+
+      updatePreScheduleEntries(entries);
+      setSelectionRangeFromCells(pastePlan.affectedCells, { activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1] });
+      resetKeyInputBuffer();
+      clearInputAssist();
+      if (invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
+      return;
+    }
+
     const pastePlan = buildPastePlan(grid, rect);
     if (pastePlan.updates.length === 0) {
-      if (pastePlan.invalidCount > 0) {
-        flashInvalidSelection(selectedRangeCells);
-      }
+      if (pastePlan.invalidCount > 0) flashInvalidSelection(selectedRangeCells);
       return;
     }
 
@@ -2667,23 +2710,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       preserveSelection: true,
       selectionCells: pastePlan.affectedCells,
       activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1],
-      clearAssist: pastePlan.invalidCount === 0,
+      clearAssist: false,
       resetBuffer: true
     });
 
-    if (pastePlan.invalidCount > 0) {
-      flashInvalidSelection(pastePlan.affectedCells);
-    }
-
-    const messageParts = [];
-    if (pastePlan.writeCount > 0) messageParts.push(`寫入 ${pastePlan.writeCount} 格`);
-    if (pastePlan.clearCount > 0) messageParts.push(`清空 ${pastePlan.clearCount} 格`);
-    if (pastePlan.invalidCount > 0) messageParts.push(`略過 ${pastePlan.invalidCount} 格錯誤代碼`);
-    if (pastePlan.clipped) messageParts.push('超出選取範圍的內容已截斷');
-
-    if (messageParts.length > 0) {
-      showInputAssist(`貼上完成：${messageParts.join('、')}`, pastePlan.invalidCount > 0 ? 'error' : 'info');
-    }
+    if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
+    clearInputAssist();
   };
 
   useEffect(() => {
@@ -3047,7 +3079,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     a.click();
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-    setRuleFillFeedback("✅ Excel 導出成功！");
   };
 
   const formatWordDayCellValue = (value = "") => {
@@ -3321,7 +3352,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     a.click();
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-    setRuleFillFeedback("✅ Word 導出成功！");
   };
 
   // ==========================================
@@ -4422,13 +4452,6 @@ const openSelectedCellFillModal = () => {
           </div>
         </div>
       </div>
-
-      {preScheduleEditMode && (
-        <div className="max-w-[98vw] mx-auto mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-cyan-800 text-sm flex items-center gap-2">
-          <CalendarDays size={15} className="text-cyan-600" />
-          預班模式已開啟：目前點格、下拉選取或鍵盤輸入，只會寫入預班，不會改動正式班表。
-        </div>
-      )}
 
       {(ruleFillFeedback || inputAssist.message || (showImportViolationSummary && importRuleViolations.length > 0)) && (
         <div className="max-w-[98vw] mx-auto mb-4 space-y-2">
