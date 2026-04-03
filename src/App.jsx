@@ -5458,6 +5458,36 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
 
 function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
+  const systemToday = useMemo(() => new Date(), []);
+  const systemYear = String(systemToday.getFullYear());
+  const systemMonth = String(systemToday.getMonth() + 1).padStart(2, '0');
+  const systemDay = String(systemToday.getDate()).padStart(2, '0');
+  const sanitizeHolidayPart = (field, rawValue = '') => {
+    const digits = String(rawValue || '').replace(/\D/g, '');
+    if (field === 'year') {
+      if (!digits) return '';
+      if (digits.length > 4) return systemYear;
+      const parsedYear = Number(digits);
+      if (digits.length === 4 && parsedYear > Number(systemYear)) return systemYear;
+      return digits.slice(0, 4);
+    }
+    if (!digits) return '';
+    if (digits.length > 2) return field === 'month' ? systemMonth : systemDay;
+    const numeric = Number(digits);
+    if (field === 'month' && numeric > 12) return systemMonth;
+    if (field === 'day' && numeric > 31) return systemDay;
+    return digits.slice(0, 2);
+  };
+  const updateHolidayInput = (field, rawValue) => {
+    setHolidayInput((prev) => ({ ...prev, [field]: sanitizeHolidayPart(field, rawValue) }));
+  };
+  const getHolidayInputClassName = (field) => {
+    const value = String(holidayInput?.[field] || '');
+    const expectedLength = field === 'year' ? 4 : 2;
+    const hasValue = value.length > 0;
+    const isInvalid = hasValue && value.length < expectedLength;
+    return `w-full px-2.5 py-1.5 text-sm border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 ${isInvalid ? 'border-red-400 ring-1 ring-red-100 focus:ring-red-100' : 'border-gray-200 focus:ring-blue-100'}`;
+  };
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
   const addCustomLeaveCode = () => {
     const raw = window.prompt('請輸入自訂休假代碼');
@@ -5492,8 +5522,11 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
     const y = holidayInput.year.trim();
     const m = holidayInput.month.trim();
     const d = holidayInput.day.trim();
-    if (!y || !m || !d) return;
-    const dateStr = `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    if (y.length !== 4 || m.length !== 2 || d.length !== 2) return;
+    const monthNumber = Number(m);
+    const dayNumber = Number(d);
+    if (monthNumber < 1 || monthNumber > 12 || dayNumber < 1 || dayNumber > 31) return;
+    const dateStr = `${y}-${m}-${d}`;
     if (customHolidays.includes(dateStr)) return;
     setCustomHolidays(prev => [...prev, dateStr].sort());
     setHolidayInput({ year: '', month: '', day: '' });
@@ -5763,7 +5796,30 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
               </div>
             </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
-              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
+              <div className="space-y-3.5">
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">西曆年月日</label>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5 items-start">
+                    <input type="text" inputMode="numeric" placeholder="年" value={holidayInput.year} onChange={(e) => updateHolidayInput('year', e.target.value)} className={getHolidayInputClassName('year')} />
+                    <input type="text" inputMode="numeric" placeholder="月" value={holidayInput.month} onChange={(e) => updateHolidayInput('month', e.target.value)} className={getHolidayInputClassName('month')} />
+                    <input type="text" inputMode="numeric" placeholder="日" value={holidayInput.day} onChange={(e) => updateHolidayInput('day', e.target.value)} className={getHolidayInputClassName('day')} />
+                    <button onClick={addCustomHoliday} className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button>
+                  </div>
+                </div>
+                <div className="pt-2.5 border-t border-gray-100">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">已新增假期</label>
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                    {customHolidays.length === 0 ? (
+                      <div className="text-xs text-gray-400 p-3 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center">尚未新增自訂假期</div>
+                    ) : customHolidays.map(dateStr => (
+                      <div key={dateStr} className="flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                        <span className="text-sm text-gray-700 font-medium">{dateStr}</span>
+                        <button onClick={() => removeCustomHoliday(dateStr)} className="w-7 h-7 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </SettingRow>
           </div>
         </section>
