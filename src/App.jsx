@@ -1740,19 +1740,65 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const next = { ...(prev || {}) };
 
       Object.entries(entriesByMonth).forEach(([monthKey, monthEntries]) => {
-        const monthState = next[monthKey];
-        if (!monthState) return;
+        const [targetYear, targetMonth] = String(monthKey).split('-').map(Number);
+        const baseMonthState = next[monthKey] || {
+          year: targetYear,
+          month: targetMonth,
+          staffs: normalizeStaffGroup((staffs || []).map((staff) => ({
+            id: staff.id,
+            name: staff.name,
+            group: staff.group || '白班',
+            pregnant: Boolean(staff.pregnant)
+          }))),
+          scheduleData: {},
+          customColumnValues: {},
+          schedulingRulesText: '',
+          importMeta: {
+            sourceType: 'manualPreSchedule',
+            sourceFiles: [],
+            sourceSheets: [],
+            importedAt: new Date().toISOString(),
+            lastUpdatedAt: new Date().toISOString(),
+            importMode: 'preSchedule'
+          }
+        };
+
+        const monthState = {
+          ...baseMonthState,
+          staffs: Array.isArray(baseMonthState.staffs) && baseMonthState.staffs.length > 0
+            ? baseMonthState.staffs
+            : normalizeStaffGroup((staffs || []).map((staff) => ({
+                id: staff.id,
+                name: staff.name,
+                group: staff.group || '白班',
+                pregnant: Boolean(staff.pregnant)
+              })))
+        };
 
         const monthSchedule = JSON.parse(JSON.stringify(monthState.scheduleData || monthState.schedule || {}));
         monthEntries.forEach(({ staffId, dateStr, value }) => {
-          const matchedStaff = resolvePreScheduleMatchedStaff(staffId, monthState);
+          const matchedStaff = resolvePreScheduleMatchedStaff(staffId, monthState)
+            || monthState.staffs.find((staff) => staff.id === staffId)
+            || (() => {
+              const currentStaff = staffs.find((staff) => staff.id === staffId);
+              if (!currentStaff) return null;
+              const clonedStaff = {
+                id: currentStaff.id,
+                name: currentStaff.name,
+                group: currentStaff.group || '白班',
+                pregnant: Boolean(currentStaff.pregnant)
+              };
+              monthState.staffs = [...(monthState.staffs || []), clonedStaff];
+              return clonedStaff;
+            })();
           if (!matchedStaff) return;
           if (!monthSchedule[matchedStaff.id]) monthSchedule[matchedStaff.id] = {};
-          const hadValue = Boolean(monthSchedule[matchedStaff.id]?.[dateStr]);
+          const previousCell = monthSchedule[matchedStaff.id]?.[dateStr];
+          const previousValue = typeof previousCell === 'object' && previousCell !== null ? (previousCell.value || '') : String(previousCell || '');
           if (value) {
             monthSchedule[matchedStaff.id][dateStr] = { value, source: 'manual' };
-            if (!hadValue || (monthSchedule[matchedStaff.id]?.[dateStr]?.value !== value)) changedCount += 1;
-          } else if (hadValue) {
+            if (previousValue !== value) changedCount += 1;
+          } else if (previousValue) {
             delete monthSchedule[matchedStaff.id][dateStr];
             changedCount += 1;
           }
@@ -1760,9 +1806,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
         next[monthKey] = {
           ...monthState,
+          year: targetYear,
+          month: targetMonth,
           scheduleData: monthSchedule,
           importMeta: {
             ...(monthState.importMeta || {}),
+            sourceType: monthState.importMeta?.sourceType || 'manualPreSchedule',
+            importMode: 'preSchedule',
             lastUpdatedAt: new Date().toISOString()
           }
         };
