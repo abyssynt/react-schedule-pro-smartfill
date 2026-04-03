@@ -1849,7 +1849,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
 
-  const getExportCellPresentation = (staffOrId, dayInfo) => {
+  const getBaseExportCellPresentation = (staffOrId, dayInfo) => {
     const dateStr = dayInfo?.date;
     const formalCode = getCellCode(staffOrId, dateStr) || '';
     const preScheduleCode = getVisiblePreScheduleCode(staffOrId, dateStr) || '';
@@ -1873,56 +1873,103 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     };
   };
 
+  const getPreviousMonthInfo = (targetYear, targetMonth) => {
+    const previousDate = new Date(targetYear, targetMonth - 2, 1);
+    return {
+      year: previousDate.getFullYear(),
+      month: previousDate.getMonth() + 1,
+      monthKey: buildMonthKey(previousDate.getFullYear(), previousDate.getMonth() + 1)
+    };
+  };
 
-  const getRawImportedLeaveSeed = (staffOrId, leaveType) => {
-    if (!leaveType || !['例', '休'].includes(leaveType)) return 0;
-    const monthStartDate = daysInMonth?.[0]?.date ? parseDateKey(daysInMonth[0].date) : null;
-    if (!monthStartDate) return 0;
+  const getPreviousMonthRawCarryNumber = (staff, leaveType) => {
+    if (!staff || !leaveType || !['例', '休'].includes(leaveType)) return null;
+    const previousMonth = getPreviousMonthInfo(year, month);
+    const previousState = monthlySchedules?.[previousMonth.monthKey];
+    if (!previousState) return null;
 
-    let cursor = addDays(monthStartDate, -1);
-    for (let i = 0; i < 62; i += 1) {
-      const dateKey = formatDateKey(cursor);
-      const rawCell = getContextCellData(staffOrId, dateKey);
-      const rawImportedValue = typeof rawCell === 'object' && rawCell !== null ? String(rawCell.rawImportedValue || '').trim() : '';
+    const previousStaffs = Array.isArray(previousState.staffs) ? previousState.staffs : [];
+    const matchedStaff = previousStaffs.find((item) => {
+      const sameName = String(item?.name || '').trim() === String(staff?.name || '').trim();
+      const sameGroup = String(item?.group || '白班') === String(staff?.group || '白班');
+      return sameName && sameGroup;
+    });
+    if (!matchedStaff) return null;
+
+    const previousSchedule = previousState.scheduleData || previousState.schedule || {};
+    const previousMap = previousSchedule?.[matchedStaff.id] || {};
+    const orderedDates = Object.keys(previousMap).sort().reverse();
+
+    for (const dateKey of orderedDates) {
+      const cell = previousMap?.[dateKey];
+      if (!cell || typeof cell !== 'object') continue;
+      const rawImportedValue = String(cell.rawImportedValue || '').trim();
       const match = rawImportedValue.match(/^(例|休)([1-4])$/);
-      if (match && match[1] === leaveType) return Number(match[2]) || 0;
-      cursor = addDays(cursor, -1);
+      if (!match) continue;
+      if (match[1] !== leaveType) continue;
+      return Number(match[2]);
     }
 
-    return 0;
+    return null;
   };
 
-  const buildExportNumberedValueMap = (staffOrId) => {
-    const valueMap = {};
-    let leaveCounters = {
-      例: getRawImportedLeaveSeed(staffOrId, '例'),
-      休: getRawImportedLeaveSeed(staffOrId, '休')
-    };
+  const exportDisplayValueMap = useMemo(() => {
+    const map = {};
 
-    daysInMonth.forEach((dayInfo, index) => {
-      const presentation = getExportCellPresentation(staffOrId, dayInfo);
-      const displayValue = presentation.displayValue || '';
+    staffs.forEach((staff) => {
+      const staffCarryNumbers = {
+        例: getPreviousMonthRawCarryNumber(staff, '例'),
+        休: getPreviousMonthRawCarryNumber(staff, '休')
+      };
+      const staffMap = {};
+      const segmentCounters = { 例: 0, 休: 0 };
+      const firstSegmentCarryApplied = { 例: false, 休: false };
+      let segmentIndex = 0;
 
-      if (displayValue === '例' || displayValue === '休') {
-        const nextCount = Math.min((leaveCounters[displayValue] || 0) + 1, 4);
-        leaveCounters[displayValue] = nextCount;
-        valueMap[dayInfo.date] = `${displayValue}${nextCount}`;
-      } else {
-        valueMap[dayInfo.date] = displayValue;
-      }
+      daysInMonth.forEach((dayInfo) => {
+        const basePresentation = getBaseExportCellPresentation(staff.id, dayInfo);
+        const rawDisplayValue = basePresentation.displayValue || '';
+        let displayValue = rawDisplayValue;
 
-      if (isFourWeekCycleEndDate(dayInfo.date) && index < daysInMonth.length - 1) {
-        leaveCounters = { 例: 0, 休: 0 };
-      }
+        if (rawDisplayValue === '例' || rawDisplayValue === '休') {
+          const leaveType = rawDisplayValue;
+          const carryNumber = staffCarryNumbers[leaveType];
+
+          if (segmentIndex === 0 && Number.isFinite(carryNumber) && !firstSegmentCarryApplied[leaveType]) {
+            const nextNumber = (carryNumber % 4) + 1;
+            displayValue = `${leaveType}${nextNumber}`;
+            firstSegmentCarryApplied[leaveType] = true;
+          } else if (segmentIndex === 0 && Number.isFinite(carryNumber) && firstSegmentCarryApplied[leaveType]) {
+            displayValue = leaveType;
+          } else {
+            segmentCounters[leaveType] = (segmentCounters[leaveType] % 4) + 1;
+            displayValue = `${leaveType}${segmentCounters[leaveType]}`;
+          }
+        }
+
+        staffMap[dayInfo.date] = displayValue;
+
+        if (isFourWeekCycleEndDate(dayInfo.date)) {
+          segmentIndex += 1;
+          segmentCounters['例'] = 0;
+          segmentCounters['休'] = 0;
+        }
+      });
+
+      map[staff.id] = staffMap;
     });
 
-    return valueMap;
-  };
+    return map;
+  }, [staffs, daysInMonth, schedule, preScheduleMonthlySchedules, monthlySchedules, year, month, colors.weekend, colors.holiday, pageBackgroundColor]);
 
-  const getExportNumberedValue = (staffOrId, dateStr) => {
-    if (!dateStr) return '';
-    const valueMap = buildExportNumberedValueMap(staffOrId);
-    return valueMap[dateStr] || '';
+  const getExportCellPresentation = (staffOrId, dayInfo) => {
+    const basePresentation = getBaseExportCellPresentation(staffOrId, dayInfo);
+    const staffId = typeof staffOrId === 'object' && staffOrId !== null ? staffOrId.id : staffOrId;
+    const exportedDisplayValue = exportDisplayValueMap?.[staffId]?.[dayInfo?.date];
+    return {
+      ...basePresentation,
+      displayValue: exportedDisplayValue ?? basePresentation.displayValue
+    };
   };
 
   const buildExportStaffStats = (staffId) => {
@@ -1934,13 +1981,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     };
 
     daysInMonth.forEach((dayInfo) => {
-      const displayValue = getExportNumberedValue(staffId, dayInfo.date);
+      const { displayValue } = getExportCellPresentation(staffId, dayInfo);
       if (!displayValue) return;
       if (DICT.SHIFTS.includes(displayValue)) stats.work += 1;
       if (isConfiguredLeaveCode(displayValue)) {
         stats.totalLeave += 1;
-        const leavePrefix = getCodePrefix(displayValue);
-        if (stats.leaveDetails[leavePrefix] !== undefined) stats.leaveDetails[leavePrefix] += 1;
+        const leaveCountKey = stats.leaveDetails[displayValue] !== undefined ? displayValue : getCodePrefix(displayValue);
+        if (stats.leaveDetails[leaveCountKey] !== undefined) stats.leaveDetails[leaveCountKey] += 1;
         if (dayInfo.isWeekend || dayInfo.isHoliday) stats.holidayLeave += 1;
       }
     });
@@ -1952,7 +1999,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const dayInfo = daysInMonth.find((day) => day.date === dateStr);
     const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
     staffs.forEach((staff) => {
-      const displayValue = getExportNumberedValue(staff.id, dateStr);
+      const { displayValue } = getExportCellPresentation(staff.id, dayInfo);
       if (!displayValue) return;
       if (['D', '白8-8', '8-12', '12-16'].includes(displayValue)) stats.D += 1;
       else if (['E', '夜8-8'].includes(displayValue)) stats.E += 1;
@@ -2938,7 +2985,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const stats = buildExportStaffStats(staff.id);
       const rowData = [
         staff.name,
-        ...daysInMonth.map((d) => getExportNumberedValue(staff.id, d.date) || ''),
+        ...daysInMonth.map((d) => getExportCellPresentation(staff.id, d).displayValue || ''),
         stats.work,
         stats.holidayLeave,
         stats.totalLeave,
@@ -3073,7 +3120,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                   <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
                   ${daysInMonth.map(d => {
                     const presentation = getExportCellPresentation(staff.id, d);
-                    const value = getExportNumberedValue(staff.id, d.date) || '';
+                    const value = presentation.displayValue || '';
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
                     const cellBg = presentation.hasPreSchedule
                       ? presentation.backgroundColor
