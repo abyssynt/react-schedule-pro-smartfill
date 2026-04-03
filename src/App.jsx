@@ -3185,30 +3185,37 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           }
           .month-title-cell {
             height: 22pt;
-            padding: 0 8pt;
+            padding: 0 6pt;
             text-align: left;
             border-left: none !important;
             border-right: none !important;
           }
           .month-title-layout {
-            position: relative;
             width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          .month-title-layout td {
+            border: none !important;
+            padding: 0;
             height: 22pt;
             line-height: 22pt;
+            vertical-align: middle;
+            background: transparent;
           }
-          .month-title {
-            position: absolute;
-            left: 50%;
-            top: 0;
-            transform: translateX(-50%);
+          .month-title-left {
+            width: 33%;
+          }
+          .month-title-center {
+            width: 34%;
+            text-align: center;
             font-size: 14pt;
             font-weight: 700;
             white-space: nowrap;
           }
           .month-title-right {
-            position: absolute;
-            right: 0;
-            top: 0;
+            width: 33%;
+            text-align: right;
             font-size: 10.5pt;
             font-weight: 700;
             white-space: nowrap;
@@ -3261,10 +3268,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
               <tr class="month-row">
                 <td class="name-col month-spacer-cell"></td>
                 <td class="month-title-cell" colspan="${daysInMonth.length + statHeaders.length}">
-                  <div class="month-title-layout">
-                    <span class="month-title">${month}月班表</span>
-                    <span class="month-title-right">應休${requiredLeaves}天</span>
-                  </div>
+                  <table class="month-title-layout" role="presentation">
+                    <tr>
+                      <td class="month-title-left"></td>
+                      <td class="month-title-center">${month}月班表</td>
+                      <td class="month-title-right">應休${requiredLeaves}天</td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
               <tr>
