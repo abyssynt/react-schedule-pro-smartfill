@@ -3050,6 +3050,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     setRuleFillFeedback("✅ Excel 導出成功！");
   };
 
+  const formatWordDayCellValue = (value = "") => {
+    const text = String(value || '').trim();
+    if (/^(例|休)[1-4]$/.test(text)) {
+      return `<span class="word-numbered-leave">${text}</span>`;
+    }
+    return text;
+  };
+
   const exportToWord = () => {
     const statHeaders = ['上班', '假日休', '總休'];
     const exportTheme = {
@@ -3103,7 +3111,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                     const cellBg = presentation.hasPreSchedule
                       ? presentation.backgroundColor
                       : (d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg));
-                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${value}</td>`;
+                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${formatWordDayCellValue(value)}</td>`;
                   }).join('')}
                   <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
                   <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
@@ -3221,6 +3229,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .day-col {
             width: 18pt;
             min-width: 18pt;
+          }
+          .word-numbered-leave {
+            display: inline-block;
+            white-space: nowrap;
+            word-break: keep-all;
+            font-size: 8pt;
+            line-height: 1;
+            letter-spacing: -0.1pt;
           }
           .stat-col {
             width: 28pt;
