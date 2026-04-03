@@ -4715,20 +4715,6 @@ const openSelectedCellFillModal = () => {
           </div>
         </div>
       </div>
-          {showImportViolationSummary && importRuleViolations.length > 0 && (
-            <div className="p-3 rounded-xl text-sm animate-fade-in-down flex items-center justify-between gap-3 border" style={{ backgroundColor: warningSoftBgColor, borderColor: warningSoftBorderColor, color: warningTextColor }}>
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={16} style={{ color: warningTintColor }} />
-                <span>匯入完成，發現 {importRuleViolations.length} 筆規則衝突</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setShowImportViolationList(true)} className="px-3 py-1.5 rounded-lg border bg-white font-bold" style={{ borderColor: warningSoftBorderColor, color: warningTextColor }}>查看違規</button>
-                <button type="button" onClick={() => setShowImportViolationSummary(false)} className="px-2.5 py-1.5 rounded-lg border bg-white font-bold" style={{ borderColor: warningSoftBorderColor, color: warningTextColor }}>關閉</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {showRuleFillControl && (
         <div className="max-w-[98vw] mx-auto mb-4 rounded-3xl border border-slate-200 bg-slate-100/90 px-4 py-4 shadow-sm animate-fade-in-down lg:px-5">
