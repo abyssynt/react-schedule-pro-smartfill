@@ -4694,14 +4694,8 @@ const openSelectedCellFillModal = () => {
         </div>
       </div>
 
-      {(ruleFillFeedback || inputAssist.message || (showImportViolationSummary && importRuleViolations.length > 0)) && (
+      {(inputAssist.message || (showImportViolationSummary && importRuleViolations.length > 0)) && (
         <div className="max-w-[98vw] mx-auto mb-4 space-y-2">
-          {ruleFillFeedback && (
-            <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xl text-indigo-900 text-sm animate-fade-in-down flex items-center gap-2">
-              <Check size={16} className="text-green-600" />
-              <span>{ruleFillFeedback}</span>
-            </div>
-          )}
           {inputAssist.message && (
             <div
               className="p-3 rounded-xl text-sm animate-fade-in-down flex items-center gap-2 border"
@@ -5639,38 +5633,38 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
               </div>
             </SettingRow>
             <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假、上班代碼與備註欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
-              <div className="space-y-5">
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假</label>
+              <div className="space-y-4">
+                <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={addCustomLeaveCode} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mr-2">自訂休假</label>
+                    <button type="button" onClick={addCustomLeaveCode} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <Plus className="w-3.5 h-3.5" /> 新增
                     </button>
                     {(customLeaveCodes || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂休假</div> : (customLeaveCodes || []).map(code => (
-                      <span key={code} className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}<button type="button" onClick={() => removeCustomLeaveCode(code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
+                      <span key={code} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}<button type="button" onClick={() => removeCustomLeaveCode(code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                     ))}
                   </div>
-                  <div className="mt-2 text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
+                  <div className="text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
                 </div>
-                <div className="pt-3 border-t border-gray-100 space-y-4">
+                <div className="pt-3 border-t border-gray-100 space-y-3">
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">自訂上班</label>
-                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
                     {customWorkShiftGroups.map(({ group, hint }) => {
                       const groupItems = (customWorkShifts || []).filter(item => item.group === group);
                       return (
-                        <div key={group} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 space-y-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-semibold text-gray-700">{group}</div>
-                              <div className="text-xs text-gray-400 mt-1">{hint}</div>
+                        <div key={group} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-gray-700 leading-5">{group}</div>
+                              <div className="text-[11px] text-gray-400 leading-4 mt-0.5">{hint}</div>
                             </div>
-                            <button type="button" onClick={() => addCustomWorkShift(group)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 whitespace-nowrap">
+                            <button type="button" onClick={() => addCustomWorkShift(group)} className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 whitespace-nowrap">
                               <Plus className="w-3.5 h-3.5" /> 新增
                             </button>
                           </div>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1.5">
                             {groupItems.length === 0 ? <div className="text-xs text-gray-400">尚未新增{group}自訂上班</div> : groupItems.map(item => (
-                              <span key={`${item.group}-${item.code}`} className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-md border border-indigo-200">{item.code}<button type="button" onClick={() => removeCustomWorkShift(item.group, item.code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
+                              <span key={`${item.group}-${item.code}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-md border border-indigo-200">{item.code}<button type="button" onClick={() => removeCustomWorkShift(item.group, item.code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                             ))}
                           </div>
                         </div>
@@ -5679,32 +5673,30 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   </div>
                   <div className="text-xs text-gray-500">新增後可視為上班代碼使用，並會依白班／小夜／大夜歸入各班別統計。</div>
                 </div>
-                <div className="pt-3 border-t border-gray-100 space-y-3">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">備註欄</label>
-                    <button type="button" onClick={addCustomColumn} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                <div className="pt-3 border-t border-gray-100 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mr-2">備註欄</label>
+                    <button type="button" onClick={addCustomColumn} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <Plus className="w-3.5 h-3.5" /> 新增
                     </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
                     {(customColumns || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增備註欄</div> : (customColumns || []).map(col => (
-                      <span key={col} className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 text-violet-700 text-xs font-bold rounded-md border border-violet-200">{col}<button type="button" onClick={() => removeCustomColumn(col)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
+                      <span key={col} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-violet-50 text-violet-700 text-xs font-bold rounded-md border border-violet-200">{col}<button type="button" onClick={() => removeCustomColumn(col)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                     ))}
                   </div>
                   <div className="text-xs text-gray-500">新增後會同步出現在主頁右側，作為延伸紀錄欄位。可用來記錄如門診、支援、教學、行政或其他單位自訂資訊。</div>
                 </div>
-                <div className="pt-3 border-t border-gray-100 space-y-3">
+                <div className="pt-3 border-t border-gray-100 space-y-2">
                   <div>
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">匯出用排班規則</label>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">匯出用排班規則</label>
                     <textarea
                       value={schedulingRulesText}
                       onChange={(e) => setSchedulingRulesText(e.target.value)}
-                      rows={6}
+                      rows={4}
                       placeholder={`請逐行輸入排班規則
 例如：
 白班每日至少 6 人
 小夜不跨白班支援`}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                     />
                   </div>
                   <div className="text-xs text-gray-500">這裡輸入的內容不會同步到主頁顯示，但會在匯出 Word 時顯示於最下方，格式為：排班規則：1.XXX 2.XXX。</div>
