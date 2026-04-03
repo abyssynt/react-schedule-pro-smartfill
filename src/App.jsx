@@ -6036,7 +6036,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onI
               className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
             >
               <Clock className="w-4 h-4 text-slate-500" />
-              開啟最近班表
+              載入最近暫存
             </button>
 
             <button
@@ -6156,6 +6156,62 @@ export default function App() {
     return date.toLocaleString();
   };
 
+  const createInitialWorkspaceState = () => {
+    const blankYear = 2025;
+    const blankMonth = 3;
+    const blankMonthState = createBlankMonthState(blankYear, blankMonth);
+    return {
+      colors: { weekend: '#dcfce7', holiday: '#fca5a5' },
+      customHolidays: [],
+      specialWorkdays: [],
+      medicalCalendarAdjustments: { holidays: [], workdays: [] },
+      uiSettings: {
+        pageBackgroundColor: '#f8fafc',
+        tableFontSize: 'medium',
+        tableFontColor: '#1f2937',
+        shiftColumnFontSize: 'medium',
+        shiftColumnFontColor: '#1e293b',
+        nameDateColumnFontSize: 'medium',
+        nameDateColumnFontColor: '#1e293b',
+        shiftColumnBgColor: '#ffffff',
+        nameDateColumnBgColor: '#ffffff',
+        tableDensity: 'standard',
+        showStats: true,
+        themePreset: 'custom',
+        showRightStats: true,
+        showLeaveStats: true,
+        showBottomStats: true,
+        showBlueDots: true,
+        showShiftLabels: true,
+        defaultAutoLeaveCode: 'off',
+        selectionMode: 'dot',
+        shiftColumnWidthMode: 'standard',
+        nameDateColumnWidthMode: 'standard',
+        dayColumnWidthMode: 'standard',
+        cellHeightMode: 'standard',
+        demandOverColor: '#fde68a',
+        groupSummaryRowBgColor: '#fef3c7'
+      },
+      staffingConfig: {
+        hospitalLevel: 'regional',
+        totalBeds: 60,
+        totalNurses: 20,
+        requiredStaffing: normalizeRequiredStaffingConfig()
+      },
+      customLeaveCodes: [],
+      customWorkShifts: [],
+      customColumns: [],
+      customColumnValues: {},
+      schedulingRulesText: '',
+      monthlySchedules: {},
+      preScheduleMonthlySchedules: {},
+      year: blankYear,
+      month: blankMonth,
+      staffs: blankMonthState.staffs,
+      schedule: blankMonthState.schedule
+    };
+  };
+
   const buildWorkspaceState = () => ({
     colors,
     customHolidays,
@@ -6263,6 +6319,7 @@ export default function App() {
 
   useEffect(() => {
     if (!activeDraftHydratedRef.current) return;
+    if (screen !== 'schedule') return;
     if (!activeDraftSaveReadyRef.current) {
       activeDraftSaveReadyRef.current = true;
       return;
@@ -6279,6 +6336,7 @@ export default function App() {
         uiSettings,
         staffingConfig,
         customLeaveCodes,
+        customWorkShifts,
         customColumns,
         customColumnValues,
         schedulingRulesText,
@@ -6298,7 +6356,7 @@ export default function App() {
     } catch (error) {
       console.error('寫入自動暫存失敗', error);
     }
-  }, [colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customWorkShifts, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, preScheduleMonthlySchedules, year, month, staffs, schedule]);
+  }, [screen, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customWorkShifts, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, preScheduleMonthlySchedules, year, month, staffs, schedule]);
 
   const restoreActiveDraft = () => {
     try {
@@ -6425,6 +6483,14 @@ export default function App() {
     setScreen('schedule');
   };
 
+  const returnToEntry = () => {
+    applyWorkspaceState(createInitialWorkspaceState());
+    setLoadLatestOnEnter(false);
+    setPendingOpenMonthKey('');
+    activeDraftSaveReadyRef.current = false;
+    setScreen('entry');
+  };
+
   const goToLatestHistory = () => {
     setLoadLatestOnEnter(true);
     setPendingOpenMonthKey('');
@@ -6434,7 +6500,10 @@ export default function App() {
   if (screen === 'schedule') {
     return (
       <ScheduleView
-        changeScreen={setScreen}
+        changeScreen={(target) => {
+          if (target === 'entry') returnToEntry();
+          else setScreen(target);
+        }}
         colors={colors}
         setColors={setColors}
         customHolidays={customHolidays}
@@ -6488,7 +6557,10 @@ export default function App() {
   if (screen === 'settings') {
     return (
       <SettingsView
-        changeScreen={setScreen}
+        changeScreen={(target) => {
+          if (target === 'entry') returnToEntry();
+          else setScreen(target);
+        }}
         colors={colors}
         setColors={setColors}
         customHolidays={customHolidays}
