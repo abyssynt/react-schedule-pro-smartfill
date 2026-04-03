@@ -3171,14 +3171,24 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             word-break: break-all;
           }
           .month-row td {
-            height: 24pt;
+            height: 22pt;
             font-weight: 700;
             background: ${exportTheme.pageBg};
+            border: none !important;
+            border-bottom: 1px solid #000 !important;
+            padding: 0;
+          }
+          .month-row .month-spacer-cell {
+            border-left: none !important;
+            border-right: none !important;
+            text-align: left;
           }
           .month-title-cell {
-            height: 24pt;
-            padding: 0 8pt;
+            height: 22pt;
+            padding: 0 6pt;
             text-align: center;
+            border-left: none !important;
+            border-right: none !important;
           }
           .month-title {
             display: block;
@@ -3186,15 +3196,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             text-align: center;
             font-size: 14pt;
             font-weight: 700;
-            line-height: 24pt;
+            line-height: 22pt;
           }
           .leave-title-cell {
-            height: 24pt;
-            padding: 0 8pt;
-            text-align: center;
+            height: 22pt;
+            padding: 0 6pt;
+            text-align: right;
             font-size: 10.5pt;
             font-weight: 700;
             white-space: nowrap;
+            border-left: none !important;
+            border-right: none !important;
           }
           .name-col {
             width: 54pt;
@@ -3242,7 +3254,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           <table>
             <thead>
               <tr class="month-row">
-                <td class="name-col"></td>
+                <td class="name-col month-spacer-cell"></td>
                 <td class="month-title-cell" colspan="${titleColSpan}">
                   <span class="month-title">${month}月班表</span>
                 </td>
