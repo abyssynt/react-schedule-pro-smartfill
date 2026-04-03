@@ -286,6 +286,21 @@ const loadSheetJS = () => {
   });
 };
 
+const parseIndexedLeaveCode = (rawValue = '') => {
+  const value = String(rawValue ?? '').trim();
+  if (!value) return null;
+  const normalized = value.replace(/\s+/g, '');
+  const match = normalized.match(/^(例|休)(\d+)$/);
+  if (!match) return null;
+  const index = Number(match[2]);
+  if (!Number.isFinite(index) || index < 1) return null;
+  return {
+    baseCode: match[1],
+    index,
+    rawValue: normalized
+  };
+};
+
 const normalizeImportedShiftCode = (rawValue = '') => {
   const value = String(rawValue ?? '').trim();
   if (!value) return '';
@@ -756,13 +771,18 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       const rawValue = String(row[colNumber] ?? '').trim();
       if (!rawValue) return;
 
-      const normalizedCode = normalizeImportedShiftCode(rawValue);
+      const indexedLeaveMeta = parseIndexedLeaveCode(rawValue);
+      const normalizedCode = indexedLeaveMeta ? indexedLeaveMeta.baseCode : normalizeImportedShiftCode(rawValue);
       if (!validCodes.has(normalizedCode)) {
         invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的 ${day}日 代碼「${rawValue}」無法匯入，已略過`);
         return;
       }
 
-      importedSchedule[staffId][day] = { value: normalizedCode, source: 'manual' };
+      importedSchedule[staffId][day] = {
+        value: normalizedCode,
+        source: 'manual',
+        ...(indexedLeaveMeta ? { rawImportedValue: indexedLeaveMeta.rawValue } : {})
+      };
     });
 
     const importedCodes = Object.values(importedSchedule[staffId] || {}).map((cell) => {
@@ -1830,16 +1850,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
 
-  const getExportCellPresentation = (staffOrId, dayInfo) => {
+  const getExportCellBaseInfo = (staffOrId, dayInfo) => {
     const dateStr = dayInfo?.date;
-    const formalCode = getCellCode(staffOrId, dateStr) || '';
-    const preScheduleCode = getVisiblePreScheduleCode(staffOrId, dateStr) || '';
+    const formalCellData = getContextCellData(staffOrId, dateStr);
+    const formalCode = typeof formalCellData === 'object' && formalCellData !== null ? (formalCellData.value || '') : (formalCellData || '');
+    const preScheduleCellData = getPreScheduleCellData(staffOrId, dateStr);
+    const preScheduleCode = typeof preScheduleCellData === 'object' && preScheduleCellData !== null ? (preScheduleCellData.value || '') : (preScheduleCellData || '');
     const baseBackgroundColor = dayInfo?.isHoliday
       ? colors.holiday
       : (dayInfo?.isWeekend ? colors.weekend : pageBackgroundColor);
     const hasFormalValue = Boolean(formalCode);
-    const hasPreSchedule = Boolean(preScheduleCode);
-    const displayValue = hasFormalValue ? formalCode : preScheduleCode;
+    const hasPreSchedule = Boolean(preScheduleCode) && isConfiguredLeaveCode(preScheduleCode);
+    const baseCode = hasFormalValue ? formalCode : (hasPreSchedule ? preScheduleCode : '');
+    const rawImportedValue = hasFormalValue
+      ? (typeof formalCellData === 'object' && formalCellData !== null ? (formalCellData.rawImportedValue || '') : '')
+      : (hasPreSchedule && typeof preScheduleCellData === 'object' && preScheduleCellData !== null ? (preScheduleCellData.rawImportedValue || '') : '');
     const backgroundColor = hasPreSchedule
       ? getPreScheduleBackgroundColor(baseBackgroundColor, hasFormalValue)
       : baseBackgroundColor;
@@ -1847,10 +1872,87 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return {
       formalCode,
       preScheduleCode,
-      displayValue,
+      baseCode,
+      rawImportedValue,
       backgroundColor,
       hasFormalValue,
       hasPreSchedule
+    };
+  };
+
+  const getPreviousMonthSeedByCode = (staffOrId, baseCode) => {
+    if (!['例', '休'].includes(baseCode)) return null;
+    const previousMonthDate = new Date(year, month - 2, 1);
+    const previousYear = previousMonthDate.getFullYear();
+    const previousMonth = previousMonthDate.getMonth() + 1;
+    const previousMonthKey = buildMonthKey(previousYear, previousMonth);
+    const previousMonthDaysCount = new Date(previousYear, previousMonth, 0).getDate();
+
+    for (let day = previousMonthDaysCount; day >= 1; day -= 1) {
+      const dateStr = `${previousMonthKey}-${String(day).padStart(2, '0')}`;
+      const formalCellData = getContextCellData(staffOrId, dateStr);
+      const formalCode = typeof formalCellData === 'object' && formalCellData !== null ? (formalCellData.value || '') : (formalCellData || '');
+      if (formalCode) {
+        const rawImportedValue = typeof formalCellData === 'object' && formalCellData !== null ? (formalCellData.rawImportedValue || '') : '';
+        const parsedIndexed = parseIndexedLeaveCode(rawImportedValue);
+        if (parsedIndexed && parsedIndexed.baseCode === baseCode) return parsedIndexed.index + 1;
+        continue;
+      }
+
+      const preScheduleCellData = getPreScheduleCellData(staffOrId, dateStr);
+      const preScheduleCode = typeof preScheduleCellData === 'object' && preScheduleCellData !== null ? (preScheduleCellData.value || '') : (preScheduleCellData || '');
+      if (!preScheduleCode || !isConfiguredLeaveCode(preScheduleCode)) continue;
+      const rawImportedValue = typeof preScheduleCellData === 'object' && preScheduleCellData !== null ? (preScheduleCellData.rawImportedValue || '') : '';
+      const parsedIndexed = parseIndexedLeaveCode(rawImportedValue);
+      if (parsedIndexed && parsedIndexed.baseCode === baseCode) return parsedIndexed.index + 1;
+    }
+
+    return null;
+  };
+
+  const buildIndexedExportDisplayMap = (staffOrId) => {
+    const seeds = {
+      例: getPreviousMonthSeedByCode(staffOrId, '例') || 1,
+      休: getPreviousMonthSeedByCode(staffOrId, '休') || 1
+    };
+    const counters = { ...seeds };
+    const displayMap = {};
+
+    daysInMonth.forEach((dayInfo, index) => {
+      if (index > 0 && isFourWeekCycleEndDate(daysInMonth[index - 1]?.date)) {
+        counters['例'] = 1;
+        counters['休'] = 1;
+      }
+
+      const baseInfo = getExportCellBaseInfo(staffOrId, dayInfo);
+      const baseCode = baseInfo.baseCode;
+      if (baseCode === '例' || baseCode === '休') {
+        displayMap[dayInfo.date] = `${baseCode}${counters[baseCode]}`;
+        counters[baseCode] += 1;
+      } else {
+        displayMap[dayInfo.date] = baseCode || '';
+      }
+    });
+
+    return displayMap;
+  };
+
+  const exportIndexedDisplayCacheRef = useRef({});
+
+  useEffect(() => {
+    exportIndexedDisplayCacheRef.current = {};
+  }, [year, month, schedule, preScheduleMonthlySchedules, staffs]);
+
+  const getExportCellPresentation = (staffOrId, dayInfo) => {
+    const baseInfo = getExportCellBaseInfo(staffOrId, dayInfo);
+    const cacheKey = typeof staffOrId === 'string' ? staffOrId : (staffOrId?.id || '');
+    if (!exportIndexedDisplayCacheRef.current[cacheKey]) {
+      exportIndexedDisplayCacheRef.current[cacheKey] = buildIndexedExportDisplayMap(staffOrId);
+    }
+    const indexedDisplayMap = exportIndexedDisplayCacheRef.current[cacheKey] || {};
+    return {
+      ...baseInfo,
+      displayValue: indexedDisplayMap[dayInfo?.date] || ''
     };
   };
 
@@ -1863,12 +1965,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     };
 
     daysInMonth.forEach((dayInfo) => {
-      const { displayValue } = getExportCellPresentation(staffId, dayInfo);
-      if (!displayValue) return;
-      if (DICT.SHIFTS.includes(displayValue)) stats.work += 1;
-      if (isConfiguredLeaveCode(displayValue)) {
+      const { baseCode } = getExportCellBaseInfo(staffId, dayInfo);
+      if (!baseCode) return;
+      if (DICT.SHIFTS.includes(baseCode)) stats.work += 1;
+      if (isConfiguredLeaveCode(baseCode)) {
         stats.totalLeave += 1;
-        if (stats.leaveDetails[displayValue] !== undefined) stats.leaveDetails[displayValue] += 1;
+        if (stats.leaveDetails[baseCode] !== undefined) stats.leaveDetails[baseCode] += 1;
         if (dayInfo.isWeekend || dayInfo.isHoliday) stats.holidayLeave += 1;
       }
     });
@@ -1880,12 +1982,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const dayInfo = daysInMonth.find((day) => day.date === dateStr);
     const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
     staffs.forEach((staff) => {
-      const { displayValue } = getExportCellPresentation(staff.id, dayInfo);
-      if (!displayValue) return;
-      if (['D', '白8-8', '8-12', '12-16'].includes(displayValue)) stats.D += 1;
-      else if (['E', '夜8-8'].includes(displayValue)) stats.E += 1;
-      else if (displayValue === 'N') stats.N += 1;
-      else if (isConfiguredLeaveCode(displayValue)) stats.totalLeave += 1;
+      const { baseCode } = getExportCellBaseInfo(staff.id, dayInfo);
+      if (!baseCode) return;
+      if (['D', '白8-8', '8-12', '12-16'].includes(baseCode)) stats.D += 1;
+      else if (['E', '夜8-8'].includes(baseCode)) stats.E += 1;
+      else if (baseCode === 'N') stats.N += 1;
+      else if (isConfiguredLeaveCode(baseCode)) stats.totalLeave += 1;
     });
     return stats;
   };
