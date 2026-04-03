@@ -5483,10 +5483,9 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
   };
   const getHolidayInputClassName = (field) => {
     const value = String(holidayInput?.[field] || '');
-    const expectedLength = field === 'year' ? 4 : 2;
     const hasValue = value.length > 0;
-    const isInvalid = hasValue && value.length < expectedLength;
-    return `w-full px-2.5 py-1.5 text-sm border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 ${isInvalid ? 'border-red-400 ring-1 ring-red-100 focus:ring-red-100' : 'border-gray-200 focus:ring-blue-100'}`;
+    const isYearInvalid = field === 'year' && hasValue && value.length < 4;
+    return `w-full px-2.5 py-1.5 text-sm border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 ${isYearInvalid ? 'border-red-400 ring-1 ring-red-100 focus:ring-red-100' : 'border-gray-200 focus:ring-blue-100'}`;
   };
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
   const addCustomLeaveCode = () => {
