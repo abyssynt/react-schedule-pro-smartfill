@@ -16,6 +16,19 @@ const DICT = {
   LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
 };
 
+let CUSTOM_SHIFT_DEFS = [];
+const getCustomShiftCodes = () => CUSTOM_SHIFT_DEFS.map((item) => String(item?.code || '').trim()).filter(Boolean);
+const getAllShiftCodes = () => Array.from(new Set([...(DICT.SHIFTS || []), ...getCustomShiftCodes()]));
+const setCustomShiftDefsRegistry = (defs = []) => {
+  CUSTOM_SHIFT_DEFS = Array.isArray(defs) ? defs : [];
+};
+const getCustomShiftGroup = (code = '') => {
+  const normalized = String(code || '').trim();
+  if (!normalized) return null;
+  const matched = CUSTOM_SHIFT_DEFS.find((item) => String(item?.code || '').trim() === normalized);
+  return matched?.group || null;
+};
+
 const SMART_RULES = {
   maxConsecutiveWorkDays: 5,
   allowCrossGroupAssignment: false,
@@ -322,7 +335,7 @@ const normalizeImportedShiftCode = (rawValue = '') => {
   };
 
   if (directMap[lower]) return directMap[lower];
-  if (DICT.LEAVES.includes(normalizedWhitespace) || DICT.SHIFTS.includes(normalizedWhitespace)) return normalizedWhitespace;
+  if (DICT.LEAVES.includes(normalizedWhitespace) || getAllShiftCodes().includes(normalizedWhitespace)) return normalizedWhitespace;
   return normalizeImportedHalfWidth(value);
 };
 
@@ -345,7 +358,7 @@ const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
   const lower = collapsed.toLowerCase();
   const compact = lower.replace(/[－—–~～_]/g, '-');
   const compactNoHyphen = compact.replace(/-/g, '');
-  const allowedCodes = Array.from(new Set([...(DICT.SHIFTS || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
+  const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
   const directMap = {
     d: 'D',
     e: 'E',
@@ -398,7 +411,7 @@ const getNormalizedManualCodeCandidates = (rawValue = '', allowedLeaveCodes = []
   const compact = lower.replace(/[－—–~～_]/g, '-');
   const compactNoHyphen = compact.replace(/-/g, '');
   const aliases = new Set([lower, compact, compactNoHyphen]);
-  const allowedCodes = Array.from(new Set([...(DICT.SHIFTS || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
+  const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
 
   const expandedAliases = new Set(aliases);
   if (aliases.has('o')) {
@@ -788,7 +801,7 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       if (!cell) return '';
       return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
     }).filter(Boolean);
-    const hasShiftCode = importedCodes.some(code => DICT.SHIFTS.includes(code));
+    const hasShiftCode = importedCodes.some(code => getAllShiftCodes().includes(code));
     const hasLeaveCode = importedCodes.some(code => isConfiguredImportedLeaveCode(code, customLeaveCodes));
 
     let normalizedGroup = '';
@@ -1000,11 +1013,11 @@ const getShiftGroupByCode = (code = '') => {
   if (['D', '白8-8', '8-12', '12-16'].includes(code)) return '白班';
   if (['E', '夜8-8'].includes(code)) return '小夜';
   if (['N'].includes(code)) return '大夜';
-  return null;
+  return getCustomShiftGroup(code);
 };
 
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
-const isShiftCode = (code = '') => DICT.SHIFTS.includes(code);
+const isShiftCode = (code = '') => getAllShiftCodes().includes(code);
 
 const GROUP_TO_DEMAND_KEY = {
   '白班': 'white',
@@ -1330,7 +1343,7 @@ const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => 
 };
 
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, setPreScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, setPreScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -1465,6 +1478,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const defaultAutoLeaveCode = uiSettings?.defaultAutoLeaveCode || 'off';
   const selectionMode = uiSettings?.selectionMode || 'dot';
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...DICT.LEAVES, ...(customLeaveCodes || [])])).filter(Boolean), [customLeaveCodes]);
+  const mergedShiftCodes = useMemo(() => Array.from(new Set([...(DICT.SHIFTS || []), ...((customWorkShifts || []).map(item => String(item?.code || '').trim()).filter(Boolean)])).filter(Boolean), [customWorkShifts]);
   const isConfiguredLeaveCode = (code = '') => {
     if (!code) return false;
     const prefix = getCodePrefix(code);
@@ -2055,7 +2069,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     daysInMonth.forEach((dayInfo) => {
       const displayValue = getExportNumberedValue(staffId, dayInfo.date);
       if (!displayValue) return;
-      if (DICT.SHIFTS.includes(displayValue)) stats.work += 1;
+      if (getAllShiftCodes().includes(displayValue)) stats.work += 1;
       if (isConfiguredLeaveCode(displayValue)) {
         stats.totalLeave += 1;
         const leavePrefix = getCodePrefix(displayValue);
@@ -2446,7 +2460,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       };
     }
 
-    const { normalized, isValid } = normalizeManualShiftCode(raw, mergedLeaveCodes);
+    const { normalized, isValid } = normalizeManualShiftCode(raw, [...mergedLeaveCodes, ...mergedShiftCodes]);
     if (!isValid) return { normalized: '', isValid: false };
     return { normalized, isValid: !normalized || isConfiguredLeaveCode(normalized) };
   };
@@ -2518,7 +2532,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const isPotentialPreSchedulePrefix = (rawValue = '') => {
-    const candidates = getNormalizedManualCodeCandidates(rawValue, mergedLeaveCodes);
+    const candidates = getNormalizedManualCodeCandidates(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
     return candidates.some((code) => isConfiguredLeaveCode(code));
   };
 
@@ -2573,7 +2587,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const applySelectionValue = (cells = [], rawValue = '', options = {}) => {
     if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
-    const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
     if (!isValid) return { applied: false, normalized: '' };
 
     const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
@@ -2675,7 +2689,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const commitCellValue = (staffId, dateStr, rawValue) => {
     const cellKey = makeCellKey(staffId, dateStr);
-    const { normalized, isValid } = normalizeManualShiftCode(rawValue, mergedLeaveCodes);
+    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
 
     if (!isValid) {
       setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
@@ -2808,7 +2822,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           continue;
         }
 
-        const { normalized, isValid } = normalizeManualShiftCode(rawText, mergedLeaveCodes);
+        const { normalized, isValid } = normalizeManualShiftCode(rawText, [...mergedLeaveCodes, ...mergedShiftCodes]);
         if (!isValid) {
           invalidCount += 1;
           continue;
@@ -2947,7 +2961,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           }
           setKeyInputBuffer(nextBuffer);
           keepKeyInputBufferAlive();
-          if (!isPotentialManualShiftPrefix(nextBuffer, mergedLeaveCodes)) {
+          if (!isPotentialManualShiftPrefix(nextBuffer, [...mergedLeaveCodes, ...mergedShiftCodes])) {
             flashInvalidSelection(selectedRangeCells);
           } else {
             clearInputAssist();
@@ -3020,7 +3034,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
         const prefixValid = preScheduleEditMode
           ? isPotentialPreSchedulePrefix(nextBuffer)
-          : isPotentialManualShiftPrefix(nextBuffer, mergedLeaveCodes);
+          : isPotentialManualShiftPrefix(nextBuffer, [...mergedLeaveCodes, ...mergedShiftCodes]);
 
         if (!prefixValid) {
           flashInvalidSelection(selectedRangeCells);
@@ -3827,7 +3841,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
 
-      if (DICT.SHIFTS.includes(code)) stats.work += 1;
+      if (getAllShiftCodes().includes(code)) stats.work += 1;
       if (isConfiguredLeaveCode(code)) {
         stats.totalLeave += 1;
         if (stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
@@ -5444,7 +5458,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
   const addCustomLeaveCode = () => {
@@ -5455,6 +5469,14 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
     setCustomLeaveCodes(prev => [...prev, code]);
   };
   const removeCustomLeaveCode = (code) => setCustomLeaveCodes(prev => prev.filter(item => item !== code));
+  const addCustomWorkShift = (group) => {
+    const raw = window.prompt(`請輸入${group}自訂上班代碼`);
+    const code = String(raw || "").trim();
+    if (!code) return;
+    if (getAllShiftCodes().includes(code) || (customWorkShifts || []).some(item => String(item?.code || '').trim() === code)) return;
+    setCustomWorkShifts(prev => [...(prev || []), { group, code }]);
+  };
+  const removeCustomWorkShift = (group, code) => setCustomWorkShifts(prev => (prev || []).filter(item => !(item.group === group && item.code === code)));
   const addCustomColumn = () => {
     const raw = window.prompt('請輸入自訂欄位名稱');
     const name = String(raw || "").trim();
@@ -5463,6 +5485,11 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
     setCustomColumns(prev => [...prev, name]);
   };
   const removeCustomColumn = (name) => setCustomColumns(prev => prev.filter(item => item !== name));
+  const customWorkShiftGroups = [
+    { group: '白班', hint: '例如：0800-1600、0700-1500' },
+    { group: '小夜', hint: '例如：1600-2400、0700-1600' },
+    { group: '大夜', hint: '例如：2400-0800' }
+  ];
   const addCustomHoliday = () => {
     const y = holidayInput.year.trim();
     const m = holidayInput.month.trim();
@@ -5607,28 +5634,56 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
               </div>
             </SettingRow>
-            <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
+            <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假、上班代碼與備註欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
               <div className="space-y-5">
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假</label>
                   <div className="flex flex-wrap items-center gap-2">
                     <button type="button" onClick={addCustomLeaveCode} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <Plus className="w-3.5 h-3.5" /> 新增
                     </button>
-                    {(customLeaveCodes || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂休假代碼</div> : (customLeaveCodes || []).map(code => (
+                    {(customLeaveCodes || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂休假</div> : (customLeaveCodes || []).map(code => (
                       <span key={code} className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}<button type="button" onClick={() => removeCustomLeaveCode(code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                     ))}
                   </div>
                   <div className="mt-2 text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
                 </div>
+                <div className="pt-3 border-t border-gray-100 space-y-4">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">自訂上班</label>
+                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                    {customWorkShiftGroups.map(({ group, hint }) => {
+                      const groupItems = (customWorkShifts || []).filter(item => item.group === group);
+                      return (
+                        <div key={group} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold text-gray-700">{group}</div>
+                              <div className="text-xs text-gray-400 mt-1">{hint}</div>
+                            </div>
+                            <button type="button" onClick={() => addCustomWorkShift(group)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 whitespace-nowrap">
+                              <Plus className="w-3.5 h-3.5" /> 新增
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {groupItems.length === 0 ? <div className="text-xs text-gray-400">尚未新增{group}自訂上班</div> : groupItems.map(item => (
+                              <span key={`${item.group}-${item.code}`} className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-md border border-indigo-200">{item.code}<button type="button" onClick={() => removeCustomWorkShift(item.group, item.code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="text-xs text-gray-500">新增後可視為上班代碼使用，並會依白班／小夜／大夜歸入各班別統計。</div>
+                </div>
                 <div className="pt-3 border-t border-gray-100 space-y-3">
                   <div>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">備註欄</label>
                     <button type="button" onClick={addCustomColumn} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                      <Plus className="w-3.5 h-3.5" /> 新增自訂欄位
+                      <Plus className="w-3.5 h-3.5" /> 新增
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(customColumns || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂欄位</div> : (customColumns || []).map(col => (
+                    {(customColumns || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增備註欄</div> : (customColumns || []).map(col => (
                       <span key={col} className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 text-violet-700 text-xs font-bold rounded-md border border-violet-200">{col}<button type="button" onClick={() => removeCustomColumn(col)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                     ))}
                   </div>
@@ -5641,7 +5696,10 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                       value={schedulingRulesText}
                       onChange={(e) => setSchedulingRulesText(e.target.value)}
                       rows={6}
-                      placeholder={`請逐行輸入排班規則\n例如：\n白班每日至少 6 人\n小夜不跨白班支援`}
+                      placeholder={`請逐行輸入排班規則
+例如：
+白班每日至少 6 人
+小夜不跨白班支援`}
                       className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                     />
                   </div>
@@ -6028,6 +6086,7 @@ export default function App() {
     }
   });
   const [customLeaveCodes, setCustomLeaveCodes] = useState([]);
+  const [customWorkShifts, setCustomWorkShifts] = useState([]);
   const [customColumns, setCustomColumns] = useState([]);
   const [customColumnValues, setCustomColumnValues] = useState({});
   const [schedulingRulesText, setSchedulingRulesText] = useState('');
@@ -6047,6 +6106,10 @@ export default function App() {
   const activeDraftSaveReadyRef = useRef(false);
   const draftImportInputRef = useRef(null);
 
+  useEffect(() => {
+    setCustomShiftDefsRegistry(customWorkShifts);
+  }, [customWorkShifts]);
+
   const formatDraftSavedAt = (isoString) => {
     if (!isoString) return '';
     const date = new Date(isoString);
@@ -6062,6 +6125,7 @@ export default function App() {
     uiSettings,
     staffingConfig,
     customLeaveCodes,
+    customWorkShifts,
     customColumns,
     customColumnValues,
     schedulingRulesText,
@@ -6121,6 +6185,7 @@ export default function App() {
       }
     });
     setCustomLeaveCodes(Array.isArray(state.customLeaveCodes) ? state.customLeaveCodes : []);
+    setCustomWorkShifts(Array.isArray(state.customWorkShifts) ? state.customWorkShifts : []);
     setCustomColumns(Array.isArray(state.customColumns) ? state.customColumns : []);
     setCustomColumnValues(state.customColumnValues || {});
     setSchedulingRulesText(typeof state.schedulingRulesText === 'string' ? state.schedulingRulesText : '');
@@ -6197,7 +6262,7 @@ export default function App() {
     } catch (error) {
       console.error('寫入自動暫存失敗', error);
     }
-  }, [colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, preScheduleMonthlySchedules, year, month, staffs, schedule]);
+  }, [colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customWorkShifts, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, preScheduleMonthlySchedules, year, month, staffs, schedule]);
 
   const restoreActiveDraft = () => {
     try {
@@ -6348,6 +6413,8 @@ export default function App() {
         setUiSettings={setUiSettings}
         customLeaveCodes={customLeaveCodes}
         setCustomLeaveCodes={setCustomLeaveCodes}
+        customWorkShifts={customWorkShifts}
+        setCustomWorkShifts={setCustomWorkShifts}
         customColumns={customColumns}
         setCustomColumns={setCustomColumns}
         customColumnValues={customColumnValues}
@@ -6400,6 +6467,8 @@ export default function App() {
         setUiSettings={setUiSettings}
         customLeaveCodes={customLeaveCodes}
         setCustomLeaveCodes={setCustomLeaveCodes}
+        customWorkShifts={customWorkShifts}
+        setCustomWorkShifts={setCustomWorkShifts}
         customColumns={customColumns}
         setCustomColumns={setCustomColumns}
         schedulingRulesText={schedulingRulesText}
