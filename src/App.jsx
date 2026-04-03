@@ -1478,7 +1478,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const defaultAutoLeaveCode = uiSettings?.defaultAutoLeaveCode || 'off';
   const selectionMode = uiSettings?.selectionMode || 'dot';
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...DICT.LEAVES, ...(customLeaveCodes || [])])).filter(Boolean), [customLeaveCodes]);
-  const mergedShiftCodes = useMemo(() => Array.from(new Set([...(DICT.SHIFTS || []), ...((customWorkShifts || []).map(item => String(item?.code || '').trim()).filter(Boolean)])).filter(Boolean), [customWorkShifts]);
+  const mergedShiftCodes = useMemo(() => Array.from(new Set([...(DICT.SHIFTS || []), ...((customWorkShifts || []).map(item => String(item?.code || '').trim()).filter(Boolean))])).filter(Boolean), [customWorkShifts]);
   const isConfiguredLeaveCode = (code = '') => {
     if (!code) return false;
     const prefix = getCodePrefix(code);
