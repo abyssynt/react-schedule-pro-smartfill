@@ -4342,8 +4342,9 @@ const openSelectedCellFillModal = () => {
                           const displayValue = draftValue !== undefined ? draftValue : val;
                           const preScheduleCode = getVisiblePreScheduleCode(staff, d.date);
                           const hasFormalValue = Boolean(displayValue);
+                          const hasSameVisibleCode = hasFormalValue && Boolean(preScheduleCode) && String(displayValue).trim() === String(preScheduleCode).trim();
                           const showPreScheduleAsMain = !hasFormalValue && Boolean(preScheduleCode);
-                          const showPreScheduleAsHint = hasFormalValue && Boolean(preScheduleCode);
+                          const showPreScheduleAsHint = hasFormalValue && Boolean(preScheduleCode) && !hasSameVisibleCode;
                           const baseCellBackgroundColor = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent');
                           const cellBackgroundColor = showPreScheduleAsMain
                             ? getPreScheduleBackgroundColor(baseCellBackgroundColor, false)
