@@ -5521,11 +5521,14 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
     const y = holidayInput.year.trim();
     const m = holidayInput.month.trim();
     const d = holidayInput.day.trim();
-    if (y.length !== 4 || m.length !== 2 || d.length !== 2) return;
+    if (y.length !== 4 || !m || !d) return;
     const monthNumber = Number(m);
     const dayNumber = Number(d);
+    if (!Number.isInteger(monthNumber) || !Number.isInteger(dayNumber)) return;
     if (monthNumber < 1 || monthNumber > 12 || dayNumber < 1 || dayNumber > 31) return;
-    const dateStr = `${y}-${m}-${d}`;
+    const normalizedMonth = String(monthNumber).padStart(2, '0');
+    const normalizedDay = String(dayNumber).padStart(2, '0');
+    const dateStr = `${y}-${normalizedMonth}-${normalizedDay}`;
     if (customHolidays.includes(dateStr)) return;
     setCustomHolidays(prev => [...prev, dateStr].sort());
     setHolidayInput({ year: '', month: '', day: '' });
