@@ -3069,7 +3069,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
     };
 
-    const titleColSpan = daysInMonth.length;
+    const leaveTitleColSpan = Math.min(3, Math.max(1, daysInMonth.length));
+    const titleColSpan = Math.max(1, daysInMonth.length - leaveTitleColSpan);
     const statColSpan = statHeaders.length;
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
     const schedulingRuleLines = String(schedulingRulesText || '')
@@ -3183,22 +3184,20 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .month-stat-spacer {
             color: transparent;
           }
-          .month-title-zone {
+          .month-title-zone,
+          .month-leave-zone {
             height: 24pt;
             padding: 0 6pt;
           }
-          .month-title-wrap {
+          .month-title-wrap,
+          .month-leave-wrap {
             position: relative;
             width: 100%;
             height: 24pt;
           }
           .month-title {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            top: 0;
-            width: max-content;
-            max-width: 70%;
+            display: block;
+            width: 100%;
             text-align: center;
             font-size: 14pt;
             font-weight: 700;
@@ -3206,9 +3205,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             white-space: nowrap;
           }
           .month-leave-inline {
-            position: absolute;
-            right: 0;
-            top: 0;
+            display: block;
+            width: 100%;
+            text-align: right;
             font-size: 10.5pt;
             font-weight: 700;
             line-height: 24pt;
@@ -3264,6 +3263,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 <td class="month-title-zone" colspan="${titleColSpan}">
                   <div class="month-title-wrap">
                     <span class="month-title">${month}月班表</span>
+                  </div>
+                </td>
+                <td class="month-leave-zone" colspan="${leaveTitleColSpan}">
+                  <div class="month-leave-wrap">
                     <span class="month-leave-inline">應休${requiredLeaves}天</span>
                   </div>
                 </td>
