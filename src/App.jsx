@@ -1025,6 +1025,43 @@ const GROUP_TO_DEMAND_KEY = {
   '大夜': 'night'
 };
 
+const DEFAULT_REQUIRED_STAFFING = {
+  weekday: { white: 6, evening: 3, night: 2 },
+  saturday: { white: 4, evening: 2, night: 2 },
+  sunday: { white: 4, evening: 2, night: 2 }
+};
+
+const normalizeRequiredStaffingConfig = (requiredStaffing = {}) => {
+  const holidayFallback = requiredStaffing?.holiday || {};
+  return {
+    weekday: {
+      white: Number(requiredStaffing?.weekday?.white ?? DEFAULT_REQUIRED_STAFFING.weekday.white) || 0,
+      evening: Number(requiredStaffing?.weekday?.evening ?? DEFAULT_REQUIRED_STAFFING.weekday.evening) || 0,
+      night: Number(requiredStaffing?.weekday?.night ?? DEFAULT_REQUIRED_STAFFING.weekday.night) || 0,
+    },
+    saturday: {
+      white: Number(requiredStaffing?.saturday?.white ?? holidayFallback?.white ?? DEFAULT_REQUIRED_STAFFING.saturday.white) || 0,
+      evening: Number(requiredStaffing?.saturday?.evening ?? holidayFallback?.evening ?? DEFAULT_REQUIRED_STAFFING.saturday.evening) || 0,
+      night: Number(requiredStaffing?.saturday?.night ?? holidayFallback?.night ?? DEFAULT_REQUIRED_STAFFING.saturday.night) || 0,
+    },
+    sunday: {
+      white: Number(requiredStaffing?.sunday?.white ?? holidayFallback?.white ?? DEFAULT_REQUIRED_STAFFING.sunday.white) || 0,
+      evening: Number(requiredStaffing?.sunday?.evening ?? holidayFallback?.evening ?? DEFAULT_REQUIRED_STAFFING.sunday.evening) || 0,
+      night: Number(requiredStaffing?.sunday?.night ?? holidayFallback?.night ?? DEFAULT_REQUIRED_STAFFING.sunday.night) || 0,
+    }
+  };
+};
+
+const getRequiredStaffingBucketByDay = (day) => {
+  if (!day) return 'weekday';
+  if (day.isHoliday) return 'sunday';
+  const date = typeof day.date === 'string' ? parseDateKey(day.date) : null;
+  const weekDay = date ? date.getDay() : null;
+  if (weekDay === 6) return 'saturday';
+  if (weekDay === 0) return 'sunday';
+  return 'weekday';
+};
+
 const DEFAULT_SHIFT_BY_GROUP = {
   '白班': 'D',
   '小夜': 'E',
@@ -3561,7 +3598,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         snapshot[staffId][dateStr] = value ? { value, source } : null;
       };
 
-      const getDemandType = (day) => (day.isWeekend || day.isHoliday) ? 'holiday' : 'weekday';
+      const getDemandType = (day) => getRequiredStaffingBucketByDay(day);
       const getDemandForGroup = (day, group) => {
         const bucket = getDemandType(day);
         const key = GROUP_TO_DEMAND_KEY[group];
@@ -3877,7 +3914,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const getRequiredCountForDate = (dateStr, rowKey) => {
     const dayInfo = daysInMonth.find(d => d.date === dateStr);
     if (!dayInfo) return null;
-    const bucket = (dayInfo.isWeekend || dayInfo.isHoliday) ? 'holiday' : 'weekday';
+    const bucket = getRequiredStaffingBucketByDay(dayInfo);
     if (rowKey === 'D') return Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0);
     if (rowKey === 'E') return Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0);
     if (rowKey === 'N') return Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0);
@@ -4148,7 +4185,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const group = staff.group || '白班';
     const shiftCode = DEFAULT_SHIFT_BY_GROUP[group];
     const dayInfo = daysInMonth.find(d => d.date === dateStr);
-    const demand = dayInfo ? Number(staffingConfig?.requiredStaffing?.[(dayInfo.isWeekend || dayInfo.isHoliday) ? 'holiday' : 'weekday']?.[GROUP_TO_DEMAND_KEY[group]] || 0) : 0;
+    const demand = dayInfo ? Number(staffingConfig?.requiredStaffing?.[getRequiredStaffingBucketByDay(dayInfo)]?.[GROUP_TO_DEMAND_KEY[group]] || 0) : 0;
     const alreadyAssigned = staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
       const code = getCellCode(s.id, dateStr);
       return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
@@ -5738,62 +5775,87 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                 </div>
               </div>
             </SettingRow>
-            <SettingRow icon={UserCheck} title="規則補空需求設定" desc="設定平日 / 假日各班需求，作為規則全月補空與規則指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
-                    <h4 className="font-bold text-gray-800 mb-4">平日需求</h4>
-                    <div className="grid grid-cols-3 gap-3">
+            <SettingRow icon={UserCheck} title="規則補空需求設定" desc="設定平日、週六、週日各班需求，作為規則全月補空與規則指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-gray-200 p-3 bg-gray-50/50 space-y-2.5">
+                    <h4 className="font-bold text-gray-800">平日需求</h4>
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">白班</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.white}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">小夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.evening}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">大夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.night}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
-                    <h4 className="font-bold text-gray-800 mb-4">假日需求</h4>
-                    <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-gray-200 p-3 bg-gray-50/50 space-y-2.5">
+                    <h4 className="font-bold text-gray-800">週六需求</h4>
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.white}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">白班</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.saturday.white}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, saturday: { ...prev.requiredStaffing.saturday, white: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.evening}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">小夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.saturday.evening}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, saturday: { ...prev.requiredStaffing.saturday, evening: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.night}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-2 text-sm border border-gray-200 rounded-xl bg-white" />
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">大夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.saturday.night}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, saturday: { ...prev.requiredStaffing.saturday, night: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 p-3 bg-gray-50/50 space-y-2.5">
+                    <h4 className="font-bold text-gray-800">週日需求</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">白班</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.sunday.white}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, sunday: { ...prev.requiredStaffing.sunday, white: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">小夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.sunday.evening}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, sunday: { ...prev.requiredStaffing.sunday, evening: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">大夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.sunday.night}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, sunday: { ...prev.requiredStaffing.sunday, night: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                  <div className="font-semibold text-gray-800 mb-1">目前補空依據</div>
+                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-600 space-y-1">
+                  <div className="font-semibold text-gray-800">目前補空依據</div>
                   <div>平日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.night}</span> 人</div>
-                  <div>假日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.night}</span> 人</div>
+                  <div>週六：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.saturday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.saturday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.saturday.night}</span> 人</div>
+                  <div>週日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.sunday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.sunday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.sunday.night}</span> 人</div>
                 </div>
               </div>
             </SettingRow>
@@ -6134,10 +6196,7 @@ export default function App() {
     hospitalLevel: 'regional',
     totalBeds: 60,
     totalNurses: 20,
-    requiredStaffing: {
-      weekday: { white: 6, evening: 3, night: 2 },
-      holiday: { white: 4, evening: 2, night: 2 }
-    }
+    requiredStaffing: normalizeRequiredStaffingConfig()
   });
   const [customLeaveCodes, setCustomLeaveCodes] = useState([]);
   const [customWorkShifts, setCustomWorkShifts] = useState([]);
@@ -6229,14 +6288,11 @@ export default function App() {
       dangerTintColor: '#ef4444',
       dangerTextColor: '#9f1239'
     });
-    setStaffingConfig(state.staffingConfig || {
-      hospitalLevel: 'regional',
-      totalBeds: 60,
-      totalNurses: 20,
-      requiredStaffing: {
-        weekday: { white: 6, evening: 3, night: 2 },
-        holiday: { white: 4, evening: 2, night: 2 }
-      }
+    setStaffingConfig({
+      hospitalLevel: state.staffingConfig?.hospitalLevel || 'regional',
+      totalBeds: Number(state.staffingConfig?.totalBeds) || 60,
+      totalNurses: Number(state.staffingConfig?.totalNurses) || 20,
+      requiredStaffing: normalizeRequiredStaffingConfig(state.staffingConfig?.requiredStaffing)
     });
     setCustomLeaveCodes(Array.isArray(state.customLeaveCodes) ? state.customLeaveCodes : []);
     setCustomWorkShifts(Array.isArray(state.customWorkShifts) ? state.customWorkShifts : []);
