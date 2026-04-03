@@ -2631,7 +2631,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const staff = rect.scopedStaffs[rowIndex];
       for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
         const day = daysInMonth[colIndex];
-        row.push(getCellCode(staff?.id, day?.date) || '');
+        const copiedValue = preScheduleEditMode
+          ? (getVisiblePreScheduleCode(staff?.id, day?.date) || '')
+          : (getCellCode(staff?.id, day?.date) || '');
+        row.push(copiedValue);
       }
       grid.push(row);
     }
@@ -2858,7 +2861,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       if (event.key === 'Delete') {
         event.preventDefault();
-        clearSelectionContents();
+        if (preScheduleEditMode) {
+          clearSelectedPreScheduleRangeByKeyboard();
+        } else {
+          clearSelectionContents();
+        }
         return;
       }
 
