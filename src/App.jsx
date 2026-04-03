@@ -1241,7 +1241,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [fillCandidates, setFillCandidates] = useState([]);
   const [showFillModal, setShowFillModal] = useState(false);
   const [selectedGridCell, setSelectedGridCell] = useState(null);
-  const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
+  const [rangeClearMode, setRangeClearMode] = useState('preScheduleOnly');
   const [cellDrafts, setCellDrafts] = useState({});
   const [invalidCellKeys, setInvalidCellKeys] = useState({});
   const [cellRuleWarnings, setCellRuleWarnings] = useState({});
@@ -1713,6 +1713,66 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return isConfiguredLeaveCode(code) ? code : '';
   };
 
+  const resolvePreScheduleMatchedStaff = (staffOrId, monthState) => {
+    if (!monthState) return null;
+    const targetStaff = getStaffRefFromCurrentMonth(staffOrId);
+    return findComparableStaffInMonthState(targetStaff, monthState) || (typeof staffOrId === 'string'
+      ? (Array.isArray(monthState?.staffs) ? monthState.staffs.find((staff) => staff.id === staffOrId) : null)
+      : null);
+  };
+
+  const updatePreScheduleEntries = (entries = []) => {
+    const normalizedEntries = Array.isArray(entries)
+      ? entries.filter((entry) => entry?.staffId && entry?.dateStr)
+      : [];
+    if (normalizedEntries.length === 0) return 0;
+
+    const entriesByMonth = normalizedEntries.reduce((acc, entry) => {
+      const monthKey = String(entry.dateStr).slice(0, 7);
+      if (!acc[monthKey]) acc[monthKey] = [];
+      acc[monthKey].push(entry);
+      return acc;
+    }, {});
+
+    let changedCount = 0;
+    setPreScheduleMonthlySchedules((prev) => {
+      const next = { ...(prev || {}) };
+
+      Object.entries(entriesByMonth).forEach(([monthKey, monthEntries]) => {
+        const monthState = next[monthKey];
+        if (!monthState) return;
+
+        const monthSchedule = JSON.parse(JSON.stringify(monthState.scheduleData || monthState.schedule || {}));
+        monthEntries.forEach(({ staffId, dateStr, value }) => {
+          const matchedStaff = resolvePreScheduleMatchedStaff(staffId, monthState);
+          if (!matchedStaff) return;
+          if (!monthSchedule[matchedStaff.id]) monthSchedule[matchedStaff.id] = {};
+          const hadValue = Boolean(monthSchedule[matchedStaff.id]?.[dateStr]);
+          if (value) {
+            monthSchedule[matchedStaff.id][dateStr] = { value, source: 'manual' };
+            if (!hadValue || (monthSchedule[matchedStaff.id]?.[dateStr]?.value !== value)) changedCount += 1;
+          } else if (hadValue) {
+            delete monthSchedule[matchedStaff.id][dateStr];
+            changedCount += 1;
+          }
+        });
+
+        next[monthKey] = {
+          ...monthState,
+          scheduleData: monthSchedule,
+          importMeta: {
+            ...(monthState.importMeta || {}),
+            lastUpdatedAt: new Date().toISOString()
+          }
+        };
+      });
+
+      return next;
+    });
+
+    return changedCount;
+  };
+
   const getPreScheduleBackgroundColor = (baseColor = 'transparent', hasFormalValue = false) => {
     const normalizedBaseColor = baseColor && baseColor !== 'transparent' ? baseColor : pageBackgroundColor;
     return blendHexColors(normalizedBaseColor, preScheduleTintColor, hasFormalValue ? 0.12 : 0.2);
@@ -1935,6 +1995,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     () => expandSelectionCells(getEffectiveSelection(), staffs, daysInMonth),
     [rangeSelection, selectedGridCell, staffs, daysInMonth]
   );
+
+  const selectedCellHasPreSchedule = useMemo(() => {
+    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return false;
+    return Boolean(getVisiblePreScheduleCode(selectedGridCell.staff.id, selectedGridCell.dateStr));
+  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, preScheduleMonthlySchedules, staffs, year, month]);
 
   useEffect(() => {
     if (selectedRangeCells.length > 0) clearInputAssist();
@@ -3654,6 +3719,19 @@ const openSelectedCellFillModal = () => {
     setRuleFillFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
   };
 
+  const clearSelectedPreScheduleCell = () => {
+    if (!selectedGridCell) return;
+    const { staff, dateStr } = selectedGridCell;
+    const preScheduleCode = getVisiblePreScheduleCode(staff.id, dateStr);
+    if (!preScheduleCode) return;
+    if (!window.confirm(`確定清除此格預班？\n${staff.name}｜${dateStr}｜${preScheduleCode}`)) return;
+
+    const changedCount = updatePreScheduleEntries([{ staffId: staff.id, dateStr, value: '' }]);
+    if (changedCount > 0) {
+      setRuleFillFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的預班`);
+    }
+  };
+
   const clearRangeCells = () => {
     if (ruleFillConfig.selectedStaffs.length === 0) {
       setRuleFillFeedback('⚠️ 請先選擇要清除的人員');
@@ -3663,6 +3741,31 @@ const openSelectedCellFillModal = () => {
     const startDay = Number(ruleFillConfig.dateRange.start || 1);
     const endDay = Number(ruleFillConfig.dateRange.end || 31);
     const targetStaffIds = new Set(ruleFillConfig.selectedStaffs);
+
+    if (rangeClearMode === 'preScheduleOnly') {
+      const clearEntries = [];
+      staffs.forEach((staff) => {
+        if (!targetStaffIds.has(staff.id)) return;
+        daysInMonth.forEach((day) => {
+          if (day.day < startDay || day.day > endDay) return;
+          const preScheduleCode = getVisiblePreScheduleCode(staff.id, day.date);
+          if (!preScheduleCode) return;
+          clearEntries.push({ staffId: staff.id, dateStr: day.date, value: '' });
+        });
+      });
+
+      if (clearEntries.length === 0) {
+        setRuleFillFeedback('ℹ️ 指定範圍內沒有可清除的預班');
+        return;
+      }
+
+      const changedCount = updatePreScheduleEntries(clearEntries);
+      if (changedCount > 0) {
+        setRuleFillFeedback(`🧹 已清除 ${changedCount} 格預班`);
+      }
+      return;
+    }
+
     const clearEntries = [];
 
     staffs.forEach(staff => {
@@ -4025,6 +4128,14 @@ const openSelectedCellFillModal = () => {
               </button>
               <button
                 type="button"
+                onClick={clearSelectedPreScheduleCell}
+                disabled={!selectedCellHasPreSchedule}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedCellHasPreSchedule ? 'text-amber-700 hover:bg-amber-50' : 'text-slate-400 cursor-not-allowed'}`}
+              >
+                <Trash2 size={14} /> 清預班
+              </button>
+              <button
+                type="button"
                 onClick={clearSelectedCell}
                 disabled={!selectedGridCell}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
@@ -4171,8 +4282,9 @@ const openSelectedCellFillModal = () => {
                   onChange={(e) => setRangeClearMode(e.target.value)}
                   className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-sm font-bold text-slate-800"
                 >
+                  <option value="preScheduleOnly">只清除預班</option>
                   <option value="autoOnly">只清除自動補入內容</option>
-                  <option value="all">清除範圍內全部內容</option>
+                  <option value="all">清除範圍內全部正式內容</option>
                 </select>
               </div>
 
