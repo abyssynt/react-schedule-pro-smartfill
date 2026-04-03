@@ -1221,7 +1221,7 @@ const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => 
 };
 
 
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, setPreScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -5821,6 +5821,7 @@ export default function App() {
         monthlySchedules={monthlySchedules}
         setMonthlySchedules={setMonthlySchedules}
         preScheduleMonthlySchedules={preScheduleMonthlySchedules}
+        setPreScheduleMonthlySchedules={setPreScheduleMonthlySchedules}
         importedPreSchedulePayload={importedPreSchedulePayload}
         onImportedPreScheduleApplied={() => setImportedPreSchedulePayload(null)}
         pendingOpenMonthKey={pendingOpenMonthKey}
