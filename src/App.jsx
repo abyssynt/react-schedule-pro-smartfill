@@ -1532,10 +1532,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const parsed = JSON.parse(stored);
         if (parsed && parsed.length > 0) {
           setHistoryList(parsed);
-          setShowDraftPrompt(true);
         }
       } catch (e) {
-        console.error("歷史紀錄解析失敗");
+        console.error("本機暫存紀錄解析失敗");
       }
     }
   }, []);
@@ -1556,7 +1555,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         loadHistory(parsed[0]);
       }
     } catch (e) {
-      console.error("自動載入最新歷史紀錄失敗");
+      console.error("自動載入最新本機暫存紀錄失敗");
     } finally {
       onLatestLoaded?.();
     }
@@ -3094,7 +3093,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // 4. Excel 匯出 (ExcelJS 實現)
   // ==========================================
   const exportToExcel = async () => {
-    setRuleFillFeedback("📊 正在產生高品質 Excel 報表...");
     const ExcelJS = await loadExcelJS();
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
@@ -3966,7 +3964,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const clearHistory = () => {
-    if (window.confirm("確定要清空所有歷史紀錄嗎？")) {
+    if (window.confirm("確定要清空所有本機暫存紀錄嗎？")) {
       localStorage.removeItem(STORAGE_KEY);
       setHistoryList([]);
     }
@@ -4599,19 +4597,6 @@ const openSelectedCellFillModal = () => {
         .animate-fade-in-down { animation: fade-in-down 0.3s ease-out forwards; }
       `}</style>
 
-      {showDraftPrompt && (
-        <div className="max-w-[98vw] mx-auto mb-3 bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
-          <div className="flex items-center gap-1.5">
-            <Clock size={18} className="text-amber-600" />
-            <span className="text-sm font-bold">偵測到先前暫存紀錄。</span>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => loadHistory(historyList[0])} className="text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition font-bold">載入最新</button>
-            <button onClick={() => setShowDraftPrompt(false)} className="text-sm text-amber-700 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition">忽略</button>
-          </div>
-        </div>
-      )}
-
       <div className="max-w-[98vw] mx-auto mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div>
@@ -4634,13 +4619,13 @@ const openSelectedCellFillModal = () => {
               <Save size={16} /> 暫存
             </button>
             <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Clock size={16} /> 歷史
+              <Clock size={16} /> 本機暫存紀錄
             </button>
             <button onClick={onDownloadDraftFile} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Download size={16} /> 下載工作檔
             </button>
             <button onClick={onImportDraftFileClick} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Database size={16} /> 開啟工作檔
+              <Database size={16} /> 匯入工作檔
             </button>
 
             <div className="relative">
@@ -4730,22 +4715,6 @@ const openSelectedCellFillModal = () => {
           </div>
         </div>
       </div>
-
-      {(inputAssist.message || (showImportViolationSummary && importRuleViolations.length > 0)) && (
-        <div className="max-w-[98vw] mx-auto mb-4 space-y-2">
-          {inputAssist.message && (
-            <div
-              className="p-3 rounded-xl text-sm animate-fade-in-down flex items-center gap-2 border"
-              style={{
-                backgroundColor: inputAssist.type === 'warning' ? warningSoftBgColor : inputAssist.type === 'info' ? infoSoftBgColor : dangerSoftBgColor,
-                borderColor: inputAssist.type === 'warning' ? warningSoftBorderColor : inputAssist.type === 'info' ? infoSoftBorderColor : dangerSoftBorderColor,
-                color: inputAssist.type === 'warning' ? warningTextColor : inputAssist.type === 'info' ? infoTextColor : dangerTextColor
-              }}
-            >
-              <AlertTriangle size={16} style={{ color: inputAssist.type === 'warning' ? warningTintColor : inputAssist.type === 'info' ? infoTintColor : dangerTintColor }} />
-              <span>{inputAssist.message}</span>
-            </div>
-          )}
           {showImportViolationSummary && importRuleViolations.length > 0 && (
             <div className="p-3 rounded-xl text-sm animate-fade-in-down flex items-center justify-between gap-3 border" style={{ backgroundColor: warningSoftBgColor, borderColor: warningSoftBorderColor, color: warningTextColor }}>
               <div className="flex items-center gap-2">
@@ -5438,7 +5407,7 @@ const openSelectedCellFillModal = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-pulse-once">
             <div className="p-6 border-b flex justify-between items-center bg-slate-50">
-              <h3 className="font-black text-slate-800 flex items-center gap-2"><Clock /> 歷史存檔紀錄</h3>
+              <h3 className="font-black text-slate-800 flex items-center gap-2"><Clock /> 本機暫存紀錄</h3>
               <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                 <X />
               </button>
@@ -5672,8 +5641,8 @@ function SettingsView({ changeScreen, colors, setColors, customHolidays, setCust
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">欄位顯示</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
                     {[
-                      ['showRightStats','上班休假統計'],
-                      ['showLeaveStats','休假別統計'],
+                      ['showRightStats','上班總休統計'],
+                      ['showLeaveStats','休假統計'],
                       ['showBottomStats','下方每日統計'],
                       ['showBlueDots','藍點提示']
                     ].map(([key,label]) => (
@@ -6041,35 +6010,6 @@ function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onI
 
       <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] border border-slate-200/60 overflow-hidden">
         <div className="p-10">
-          {hasActiveDraft && (
-            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <div className="flex items-start gap-2">
-                <Clock className="mt-0.5 h-4 w-4 text-amber-600" />
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-amber-800">偵測到上次未完成工作</div>
-                  <div className="mt-1 text-xs leading-relaxed text-amber-700">
-                    {activeDraftMeta?.savedAtText ? `上次自動暫存：${activeDraftMeta.savedAtText}` : '可恢復上次未完成的排班進度。'}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={restoreActiveDraft}
-                  className="flex-1 rounded-xl bg-amber-600 px-3 py-2 text-sm font-bold text-white hover:bg-amber-700"
-                >
-                  恢復未完成進度
-                </button>
-                <button
-                  type="button"
-                  onClick={discardActiveDraft}
-                  className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100"
-                >
-                  捨棄
-                </button>
-              </div>
-            </div>
-          )}
           <div className="mb-8 text-center">
             <h2 className="text-xl font-bold text-slate-900 mb-2">系統入口</h2>
             <p className="text-sm text-slate-500 leading-relaxed">
@@ -6452,10 +6392,10 @@ export default function App() {
         month: importedState.month
       });
       setScreen('schedule');
-      window.alert('開啟工作檔成功，已載入目前工作內容。');
+      window.alert('匯入工作檔成功，已載入目前工作內容。');
     } catch (error) {
-      console.error('開啟工作檔失敗', error);
-      window.alert('開啟工作檔失敗，請確認檔案格式是否正確。');
+      console.error('匯入工作檔失敗', error);
+      window.alert('匯入工作檔失敗，請確認檔案格式是否正確。');
     } finally {
       if (event.target) event.target.value = '';
     }
