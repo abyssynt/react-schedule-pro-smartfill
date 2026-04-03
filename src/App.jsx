@@ -1718,67 +1718,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return blendHexColors(normalizedBaseColor, preScheduleTintColor, hasFormalValue ? 0.12 : 0.2);
   };
 
-
-  const getExportCellPresentation = (staffOrId, dayInfo) => {
-    const dateStr = dayInfo?.date;
-    const formalCode = getCellCode(staffOrId, dateStr) || '';
-    const preScheduleCode = getVisiblePreScheduleCode(staffOrId, dateStr) || '';
-    const baseBackgroundColor = dayInfo?.isHoliday
-      ? colors.holiday
-      : (dayInfo?.isWeekend ? colors.weekend : pageBackgroundColor);
-    const hasFormalValue = Boolean(formalCode);
-    const hasPreSchedule = Boolean(preScheduleCode);
-    const displayValue = hasFormalValue ? formalCode : preScheduleCode;
-    const backgroundColor = hasPreSchedule
-      ? getPreScheduleBackgroundColor(baseBackgroundColor, hasFormalValue)
-      : baseBackgroundColor;
-
-    return {
-      formalCode,
-      preScheduleCode,
-      displayValue,
-      backgroundColor,
-      hasFormalValue,
-      hasPreSchedule
-    };
-  };
-
-  const buildExportStaffStats = (staffId) => {
-    const stats = {
-      work: 0,
-      holidayLeave: 0,
-      totalLeave: 0,
-      leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
-    };
-
-    daysInMonth.forEach((dayInfo) => {
-      const { displayValue } = getExportCellPresentation(staffId, dayInfo);
-      if (!displayValue) return;
-      if (DICT.SHIFTS.includes(displayValue)) stats.work += 1;
-      if (isConfiguredLeaveCode(displayValue)) {
-        stats.totalLeave += 1;
-        if (stats.leaveDetails[displayValue] !== undefined) stats.leaveDetails[displayValue] += 1;
-        if (dayInfo.isWeekend || dayInfo.isHoliday) stats.holidayLeave += 1;
-      }
-    });
-
-    return stats;
-  };
-
-  const buildExportDailyStats = (dateStr) => {
-    const dayInfo = daysInMonth.find((day) => day.date === dateStr);
-    const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
-    staffs.forEach((staff) => {
-      const { displayValue } = getExportCellPresentation(staff.id, dayInfo);
-      if (!displayValue) return;
-      if (['D', '白8-8', '8-12', '12-16'].includes(displayValue)) stats.D += 1;
-      else if (['E', '夜8-8'].includes(displayValue)) stats.E += 1;
-      else if (displayValue === 'N') stats.N += 1;
-      else if (isConfiguredLeaveCode(displayValue)) stats.totalLeave += 1;
-    });
-    return stats;
-  };
-
   const clearRuleWarningCells = (cells = []) => {
     if (!Array.isArray(cells) || cells.length === 0) return;
     setCellRuleWarnings(prev => {
@@ -2666,10 +2605,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     };
 
     const addStaffRow = (staff) => {
-      const stats = buildExportStaffStats(staff.id);
+      const stats = getStaffStats(staff.id);
       const rowData = [
         staff.name,
-        ...daysInMonth.map((d) => getExportCellPresentation(staff.id, d).displayValue || ''),
+        ...daysInMonth.map(d => {
+          const cellData = schedule[staff.id]?.[d.date];
+          return typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
+        }),
         stats.work,
         stats.holidayLeave,
         stats.totalLeave,
@@ -2680,12 +2622,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       row.eachCell((cell, colNumber) => {
         const dateObj = (colNumber >= 2 && colNumber <= daysInMonth.length + 1) ? daysInMonth[colNumber - 2] : null;
         applyStandardCellStyle(cell, colNumber, dateObj);
-        if (dateObj) {
-          const presentation = getExportCellPresentation(staff.id, dateObj);
-          if (presentation.hasPreSchedule) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(presentation.backgroundColor, '#DBEAFE') } };
-          }
-        }
       });
       return row;
     };
@@ -2693,7 +2629,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const addSummaryRow = (summaryKey, includeRightStats = false) => {
       const rowData = [
         '',
-        ...daysInMonth.map(d => buildExportDailyStats(d.date)[summaryKey] || ''),
+        ...daysInMonth.map(d => getDailyStats(d.date)[summaryKey] || ''),
         ...(includeRightStats ? Array(statHeaders.length).fill('') : Array(statHeaders.length).fill(''))
       ];
       const row = worksheet.addRow(rowData);
@@ -2719,7 +2655,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     const leaveRowData = [
       '',
-      ...daysInMonth.map(d => buildExportDailyStats(d.date).totalLeave || ''),
+      ...daysInMonth.map(d => getDailyStats(d.date).totalLeave || ''),
       ...Array(statHeaders.length).fill('')
     ];
     const leaveRow = worksheet.addRow(leaveRowData);
@@ -2798,17 +2734,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const groupStaffsForExport = staffs.filter((staff) => (staff.group || '白班') === group);
 
       const staffRowsHtml = groupStaffsForExport.map((staff) => {
-        const stats = buildExportStaffStats(staff.id);
+        const stats = getStaffStats(staff.id);
         return `
                 <tr>
                   <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
                   ${daysInMonth.map(d => {
-                    const presentation = getExportCellPresentation(staff.id, d);
-                    const value = presentation.displayValue || '';
+                    const cellData = schedule[staff.id]?.[d.date];
+                    const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
-                    const cellBg = presentation.hasPreSchedule
-                      ? presentation.backgroundColor
-                      : (d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg));
+                    const cellBg = d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg);
                     return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${value}</td>`;
                   }).join('')}
                   <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
@@ -2822,7 +2756,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 <tr>
                   <td class="name-col summary-label-cell" style="background:${summaryConfig.bg}; color:${exportTheme.nameFont}; mso-pattern:auto none;"></td>
                   ${daysInMonth.map(d => {
-                    const count = buildExportDailyStats(d.date)[summaryConfig.key];
+                    const count = getDailyStats(d.date)[summaryConfig.key];
                     return `<td class="day-col summary-value-cell" style="background:${summaryConfig.bg}; color:${exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${count || ''}</td>`;
                   }).join('')}
                   <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
