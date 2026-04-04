@@ -2156,6 +2156,82 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
   };
 
+  const getCellCodeFromSnapshot = (snapshot = {}, staffId, dateStr) => {
+    const cellData = snapshot?.[staffId]?.[dateStr];
+    if (!cellData) return '';
+    return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+  };
+
+  const countConsecutiveWorkDaysBeforeInSnapshot = (snapshot = {}, staffId, dateStr) => {
+    let count = 0;
+    let cursor = addDays(parseDateKey(dateStr), -1);
+    while (true) {
+      const key = formatDateKey(cursor);
+      const code = getCellCodeFromSnapshot(snapshot, staffId, key);
+      if (!isShiftCode(code)) break;
+      count += 1;
+      cursor = addDays(cursor, -1);
+    }
+    return count;
+  };
+
+  const evaluateRuleWarningForCellInSnapshot = (snapshot = {}, staff, dateStr) => {
+    if (!staff || !dateStr) return [];
+    const shiftCode = getCellCodeFromSnapshot(snapshot, staff.id, dateStr);
+    if (!shiftCode || isConfiguredLeaveCode(shiftCode) || !isShiftCode(shiftCode)) return [];
+
+    const reasons = [];
+    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+    const prevCode = getCellCodeFromSnapshot(snapshot, staff.id, prevKey);
+    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+    if (disallowed.includes(shiftCode)) {
+      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+    }
+
+    const consecutiveBefore = countConsecutiveWorkDaysBeforeInSnapshot(snapshot, staff.id, dateStr);
+    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
+      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+    }
+
+    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
+      reasons.push('懷孕標記人員不可排 N / 夜8-8');
+    }
+
+    return reasons;
+  };
+
+  const refreshRuleWarningsForCells = (cells = [], snapshot = schedule) => {
+    const normalizedCells = Array.isArray(cells)
+      ? Array.from(new Map(cells.filter((cell) => cell?.staffId && cell?.dateStr).map((cell) => [makeCellKey(cell.staffId, cell.dateStr), cell])).values())
+      : [];
+
+    if (normalizedCells.length === 0) return;
+
+    setCellRuleWarnings(prev => {
+      const next = { ...prev };
+      normalizedCells.forEach(({ staffId, dateStr }) => {
+        const staff = staffs.find((item) => item.id === staffId);
+        const reasons = evaluateRuleWarningForCellInSnapshot(snapshot, staff, dateStr);
+        const cellKey = makeCellKey(staffId, dateStr);
+        if (reasons.length > 0) next[cellKey] = reasons[0];
+        else delete next[cellKey];
+      });
+      return next;
+    });
+  };
+
+  const expandCellsForRuleRecheck = (cells = []) => {
+    const expanded = [];
+    (Array.isArray(cells) ? cells : []).forEach((cell) => {
+      if (!cell?.staffId || !cell?.dateStr) return;
+      expanded.push({ staffId: cell.staffId, dateStr: cell.dateStr });
+      const baseDate = parseDateKey(cell.dateStr);
+      expanded.push({ staffId: cell.staffId, dateStr: formatDateKey(addDays(baseDate, -1)) });
+      expanded.push({ staffId: cell.staffId, dateStr: formatDateKey(addDays(baseDate, 1)) });
+    });
+    return Array.from(new Map(expanded.map((cell) => [makeCellKey(cell.staffId, cell.dateStr), cell])).values());
+  };
+
   const scanScheduleRuleViolations = (schedulesSource = {}, options = {}) => {
     const monthKeys = Object.keys(schedulesSource || {}).sort();
     const targetMonthKeys = new Set(Array.isArray(options.targetMonthKeys) ? options.targetMonthKeys : monthKeys);
@@ -2383,16 +2459,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       new Map(normalizedEntries.map((entry) => [makeCellKey(entry.staffId, entry.dateStr), entry])).values()
     );
 
-    setSchedule(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      dedupedEntries.forEach(({ staffId, dateStr, value, source }) => {
-        if (!next[staffId]) next[staffId] = {};
-        const existingCell = next[staffId]?.[dateStr];
-        const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
-        next[staffId][dateStr] = value ? { ...existingMeta, value, source } : null;
-      });
-      return next;
+    const nextSchedule = JSON.parse(JSON.stringify(schedule || {}));
+    dedupedEntries.forEach(({ staffId, dateStr, value, source }) => {
+      if (!nextSchedule[staffId]) nextSchedule[staffId] = {};
+      const existingCell = nextSchedule[staffId]?.[dateStr];
+      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
+      nextSchedule[staffId][dateStr] = value ? { ...existingMeta, value, source } : null;
     });
+
+    setSchedule(nextSchedule);
+
+    const recheckCells = expandCellsForRuleRecheck(dedupedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })));
+    refreshRuleWarningsForCells(recheckCells, nextSchedule);
 
     if (options.preserveSelection) {
       const selectionCells = Array.isArray(options.selectionCells) && options.selectionCells.length > 0
@@ -2915,19 +2993,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return;
     }
 
-    const { allowedEntries, warningEntries } = validateManualEntries(pastePlan.updates, { showFeedback: false });
+    const { allowedEntries } = validateManualEntries(pastePlan.updates, { showFeedback: false });
     if (allowedEntries.length === 0) {
       if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-      clearInputAssist();
-      resetKeyInputBuffer();
       return;
     }
-
-    const nonWarningCells = pastePlan.affectedCells.filter(({ staffId, dateStr }) => (
-      !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr)
-    ));
-    clearRuleWarningCells(nonWarningCells);
-    if (warningEntries.length > 0) setRuleWarningsForEntries(warningEntries);
 
     applyScheduleEntries(allowedEntries, {
       preserveSelection: true,
@@ -4016,11 +4086,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const allowedEntries = [];
     const warningEntries = [];
     const showFeedback = options.showFeedback !== false;
+    const workingSnapshot = JSON.parse(JSON.stringify(schedule || {}));
 
     (Array.isArray(entries) ? entries : []).forEach((entry) => {
       const normalizedValue = String(entry?.value || '').trim();
       const normalizedEntry = { ...entry, value: normalizedValue, source: entry?.source || 'manual' };
       if (!normalizedEntry.staffId || !normalizedEntry.dateStr) return;
+
+      if (!workingSnapshot[normalizedEntry.staffId]) workingSnapshot[normalizedEntry.staffId] = {};
+      const existingCell = workingSnapshot[normalizedEntry.staffId]?.[normalizedEntry.dateStr];
+      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
+      workingSnapshot[normalizedEntry.staffId][normalizedEntry.dateStr] = normalizedValue
+        ? { ...existingMeta, value: normalizedValue, source: normalizedEntry.source }
+        : null;
 
       if (!normalizedValue || isConfiguredLeaveCode(normalizedValue) || !isShiftCode(normalizedValue)) {
         allowedEntries.push(normalizedEntry);
@@ -4033,10 +4111,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return;
       }
 
-      const result = canAssignWithManualOverride(staff, normalizedEntry.dateStr, normalizedValue);
+      const reasons = evaluateRuleWarningForCellInSnapshot(workingSnapshot, staff, normalizedEntry.dateStr);
       allowedEntries.push(normalizedEntry);
-      if (!result.allowed) {
-        warningEntries.push({ ...normalizedEntry, reasons: result.reasons });
+      if (reasons.length > 0) {
+        warningEntries.push({ ...normalizedEntry, reasons });
       }
     });
 
