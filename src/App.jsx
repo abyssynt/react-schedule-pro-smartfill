@@ -2157,9 +2157,16 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const getCellCodeFromSnapshot = (snapshot = {}, staffId, dateStr) => {
-    const cellData = snapshot?.[staffId]?.[dateStr];
-    if (!cellData) return '';
-    return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+    const staffSnapshot = snapshot?.[staffId];
+    if (staffSnapshot && Object.prototype.hasOwnProperty.call(staffSnapshot, dateStr)) {
+      const cellData = staffSnapshot?.[dateStr];
+      if (!cellData) return '';
+      return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+    }
+
+    const targetMonthKey = String(dateStr || '').slice(0, 7);
+    if (!targetMonthKey || targetMonthKey === currentMonthKey) return '';
+    return getContextCellCode(staffId, dateStr, { snapshot }) || '';
   };
 
   const countConsecutiveWorkDaysBeforeInSnapshot = (snapshot = {}, staffId, dateStr) => {
@@ -2221,15 +2228,22 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const expandCellsForRuleRecheck = (cells = []) => {
+    const staffIds = Array.from(new Set(
+      (Array.isArray(cells) ? cells : [])
+        .map((cell) => cell?.staffId)
+        .filter(Boolean)
+    ));
+
+    if (staffIds.length === 0) return [];
+
     const expanded = [];
-    (Array.isArray(cells) ? cells : []).forEach((cell) => {
-      if (!cell?.staffId || !cell?.dateStr) return;
-      expanded.push({ staffId: cell.staffId, dateStr: cell.dateStr });
-      const baseDate = parseDateKey(cell.dateStr);
-      expanded.push({ staffId: cell.staffId, dateStr: formatDateKey(addDays(baseDate, -1)) });
-      expanded.push({ staffId: cell.staffId, dateStr: formatDateKey(addDays(baseDate, 1)) });
+    staffIds.forEach((staffId) => {
+      daysInMonth.forEach((day) => {
+        expanded.push({ staffId, dateStr: day.date });
+      });
     });
-    return Array.from(new Map(expanded.map((cell) => [makeCellKey(cell.staffId, cell.dateStr), cell])).values());
+
+    return expanded;
   };
 
   const scanScheduleRuleViolations = (schedulesSource = {}, options = {}) => {
