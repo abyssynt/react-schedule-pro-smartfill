@@ -3728,8 +3728,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const reasons = [];
         const currentCode = getScheduleCode(snapshot, staff, dateStr);
         const preScheduleCode = getVisiblePreScheduleCode(staff, dateStr);
+        const hasBlockedPreScheduleCode = Boolean(preScheduleCode);
         if (currentCode) reasons.push('該格已有排班或休假代碼');
-        if (preScheduleCode) reasons.push('該格已有預班／預假，不可被規則補空覆蓋');
+        if (hasBlockedPreScheduleCode) reasons.push('該格已有預班／預假，不可被規則補空覆蓋');
         if (isConfiguredLeaveCode(currentCode)) reasons.push('該格已有休假，不可再排班');
         const staffGroup = staff.group || '白班';
         const shiftGroup = getShiftGroupByCode(shiftCode);
@@ -3896,6 +3897,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           for (let slot = 0; slot < needed; slot += 1) {
             const assignableCandidates = groupStaffs
               .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
+              .filter(staff => !getVisiblePreScheduleCode(staff.id, day.date))
               .map(staff => {
                 const result = canAssignWithSnapshot(mergedSchedule, staff, day.date, shiftCode);
                 const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesIfAssignShift(mergedSchedule, staff.id) : false;
@@ -3921,6 +3923,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           // 需求已滿後，只替休假不足者補 off；其他空白保留
           const leaveCandidates = groupStaffs
             .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
+            .filter(staff => {
+              const preScheduleCode = getVisiblePreScheduleCode(staff.id, day.date);
+              return !preScheduleCode;
+            })
             .filter(staff => getLeaveCountFromSnapshot(mergedSchedule, staff.id) < requiredLeaves)
             .map(staff => ({ staff, score: scoreLeaveCandidateWithSnapshot(mergedSchedule, staff, day.date) }))
             .sort((a, b) => b.score - a.score);
