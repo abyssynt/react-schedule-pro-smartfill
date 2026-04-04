@@ -1665,21 +1665,32 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   useEffect(() => {
     const currentMonthPrefix = buildMonthKey(year, month);
     setCellRuleWarnings(prev => {
-      const preservedManualWarnings = { ...prev };
-      Object.keys(preservedManualWarnings).forEach((cellKey) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((cellKey) => {
         if (String(cellKey).includes('__') && String(cellKey).split('__')[1]?.startsWith(currentMonthPrefix)) {
-          delete preservedManualWarnings[cellKey];
+          delete next[cellKey];
         }
       });
+
+      const monthSnapshot = schedule || {};
+      (staffs || []).forEach((staff) => {
+        daysInMonth.forEach((day) => {
+          const reasons = evaluateRuleWarningForCellInSnapshot(monthSnapshot, staff, day.date);
+          if (reasons.length > 0) {
+            next[makeCellKey(staff.id, day.date)] = reasons[0];
+          }
+        });
+      });
+
       importRuleViolations
         .filter((item) => String(item.dateStr || '').startsWith(currentMonthPrefix))
         .forEach((item) => {
           const matchedStaff = staffs.find((staff) => String(staff.name || '').trim() === String(item.staffName || '').trim());
-          if (matchedStaff) preservedManualWarnings[makeCellKey(matchedStaff.id, item.dateStr)] = item.reason;
+          if (matchedStaff) next[makeCellKey(matchedStaff.id, item.dateStr)] = item.reason;
         });
-      return preservedManualWarnings;
+      return next;
     });
-  }, [importRuleViolations, year, month, staffs]);
+  }, [importRuleViolations, year, month, staffs, schedule, daysInMonth]);
 
   const holidayCalendar = useMemo(() => {
     return getSystemHolidayCalendar(year, {
