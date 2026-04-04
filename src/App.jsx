@@ -3099,9 +3099,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         return;
       }
 
-      if (event.key === 'Backspace') {
+      if (event.key === 'Backspace' || event.key === 'Delete') {
         event.preventDefault();
-        if (keyInputBuffer) {
+
+        if (event.key === 'Backspace' && keyInputBuffer) {
           const nextBuffer = keyInputBuffer.slice(0, -1);
           if (!nextBuffer) {
             resetKeyInputBuffer();
@@ -3117,20 +3118,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           }
           return;
         }
-        if (preScheduleEditMode) {
-          clearSelectedPreScheduleRangeByKeyboard();
-        } else {
-          if (preScheduleEditMode) {
-          clearSelectedPreScheduleRangeByKeyboard();
-        } else {
-          clearSelectionContents();
-        }
-        }
-        return;
-      }
 
-      if (event.key === 'Delete') {
-        event.preventDefault();
         if (preScheduleEditMode) {
           clearSelectedPreScheduleRangeByKeyboard();
         } else {
@@ -4824,6 +4812,15 @@ const openSelectedCellFillModal = () => {
                   清除
                 </button>
               </label>
+              <button
+                type="button"
+                onClick={clearSelectionContents}
+                disabled={selectedRangeCells.length === 0}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedRangeCells.length > 0 ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
+                title={selectedRangeCells.length > 1 ? '清除目前選取範圍（等同 Del）' : '清除目前選取格（等同 Del）'}
+              >
+                <Trash2 size={14} /> Del清除
+              </button>
               <button
                 type="button"
                 onClick={clearSelectedCell}
