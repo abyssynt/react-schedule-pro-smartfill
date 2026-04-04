@@ -1662,35 +1662,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }));
   }, [year, month, staffs, schedule, customColumnValues, schedulingRulesText, setMonthlySchedules]);
 
-  useEffect(() => {
-    const currentMonthPrefix = buildMonthKey(year, month);
-    setCellRuleWarnings(prev => {
-      const next = { ...prev };
-      Object.keys(next).forEach((cellKey) => {
-        if (String(cellKey).includes('__') && String(cellKey).split('__')[1]?.startsWith(currentMonthPrefix)) {
-          delete next[cellKey];
-        }
-      });
-
-      const monthSnapshot = schedule || {};
-      (staffs || []).forEach((staff) => {
-        daysInMonth.forEach((day) => {
-          const reasons = evaluateRuleWarningForCellInSnapshot(monthSnapshot, staff, day.date);
-          if (reasons.length > 0) {
-            next[makeCellKey(staff.id, day.date)] = reasons[0];
-          }
-        });
-      });
-
-      importRuleViolations
-        .filter((item) => String(item.dateStr || '').startsWith(currentMonthPrefix))
-        .forEach((item) => {
-          const matchedStaff = staffs.find((staff) => String(staff.name || '').trim() === String(item.staffName || '').trim());
-          if (matchedStaff) next[makeCellKey(matchedStaff.id, item.dateStr)] = item.reason;
-        });
-      return next;
-    });
-  }, [importRuleViolations, year, month, staffs, schedule, daysInMonth]);
 
   const holidayCalendar = useMemo(() => {
     return getSystemHolidayCalendar(year, {
@@ -1731,6 +1702,37 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     () => daysInMonth.filter(d => d.isWeekend || d.isHoliday).length,
     [daysInMonth]
   );
+
+
+  useEffect(() => {
+    const currentMonthPrefix = buildMonthKey(year, month);
+    setCellRuleWarnings(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach((cellKey) => {
+        if (String(cellKey).includes('__') && String(cellKey).split('__')[1]?.startsWith(currentMonthPrefix)) {
+          delete next[cellKey];
+        }
+      });
+
+      const monthSnapshot = schedule || {};
+      (staffs || []).forEach((staff) => {
+        daysInMonth.forEach((day) => {
+          const reasons = evaluateRuleWarningForCellInSnapshot(monthSnapshot, staff, day.date);
+          if (reasons.length > 0) {
+            next[makeCellKey(staff.id, day.date)] = reasons[0];
+          }
+        });
+      });
+
+      importRuleViolations
+        .filter((item) => String(item.dateStr || '').startsWith(currentMonthPrefix))
+        .forEach((item) => {
+          const matchedStaff = staffs.find((staff) => String(staff.name || '').trim() === String(item.staffName || '').trim());
+          if (matchedStaff) next[makeCellKey(matchedStaff.id, item.dateStr)] = item.reason;
+        });
+      return next;
+    });
+  }, [importRuleViolations, year, month, staffs, schedule, daysInMonth]);
 
   const createBlankScheduleForStaffs = (staffList = []) => {
     return staffList.reduce((acc, staff) => {
