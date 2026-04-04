@@ -2915,7 +2915,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       return;
     }
 
-    applyScheduleEntries(pastePlan.updates, {
+    const { allowedEntries, warningEntries } = validateManualEntries(pastePlan.updates, { showFeedback: false });
+    if (allowedEntries.length === 0) {
+      if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
+      clearInputAssist();
+      resetKeyInputBuffer();
+      return;
+    }
+
+    const nonWarningCells = pastePlan.affectedCells.filter(({ staffId, dateStr }) => (
+      !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr)
+    ));
+    clearRuleWarningCells(nonWarningCells);
+    if (warningEntries.length > 0) setRuleWarningsForEntries(warningEntries);
+
+    applyScheduleEntries(allowedEntries, {
       preserveSelection: true,
       selectionCells: pastePlan.affectedCells,
       activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1],
