@@ -4029,11 +4029,52 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const saveToHistory = (label, currentSchedule = schedule) => {
+    const currentMonthKey = buildMonthKey(year, month);
+    const normalizedMonthStaffs = normalizeStaffGroup(staffs);
+    const mergedMonthlySchedules = {
+      ...(monthlySchedules || {}),
+      [currentMonthKey]: {
+        ...(monthlySchedules?.[currentMonthKey] || {}),
+        year,
+        month,
+        staffs: normalizedMonthStaffs,
+        scheduleData: currentSchedule,
+        customColumnValues: customColumnValues || {},
+        schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
+        importMeta: {
+          ...(monthlySchedules?.[currentMonthKey]?.importMeta || {}),
+          sourceType: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceType || 'manual',
+          sourceFiles: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceFiles || [],
+          sourceSheets: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceSheets || [],
+          importedAt: monthlySchedules?.[currentMonthKey]?.importMeta?.importedAt || new Date().toISOString(),
+          lastUpdatedAt: new Date().toISOString()
+        }
+      }
+    };
+
     const newRecord = {
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customWorkShifts, customColumns, customColumnValues, schedulingRulesText }
+      state: {
+        year,
+        month,
+        staffs: normalizedMonthStaffs,
+        schedule: currentSchedule,
+        monthlySchedules: mergedMonthlySchedules,
+        preScheduleMonthlySchedules: preScheduleMonthlySchedules || {},
+        colors,
+        customHolidays,
+        specialWorkdays,
+        medicalCalendarAdjustments,
+        staffingConfig,
+        uiSettings,
+        customLeaveCodes,
+        customWorkShifts,
+        customColumns,
+        customColumnValues,
+        schedulingRulesText
+      }
     };
 
     setHistoryList(prev => {
@@ -4045,6 +4086,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const loadHistory = (record) => {
     const { state } = record;
+    const nextMonthlySchedules = state.monthlySchedules || {};
+    const nextPreScheduleMonthlySchedules = state.preScheduleMonthlySchedules || {};
+    const targetMonthKey = buildMonthKey(state.year, state.month);
+    const currentMonthState = nextMonthlySchedules?.[targetMonthKey] || null;
+
+    setMonthlySchedules(nextMonthlySchedules);
+    setPreScheduleMonthlySchedules(nextPreScheduleMonthlySchedules);
     setYear(state.year);
     setMonth(state.month);
     setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
@@ -4055,10 +4103,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (Array.isArray(state.customLeaveCodes)) setCustomLeaveCodes(state.customLeaveCodes);
     if (Array.isArray(state.customWorkShifts)) setCustomWorkShifts(state.customWorkShifts);
     if (Array.isArray(state.customColumns)) setCustomColumns(state.customColumns);
-    if (state.customColumnValues) setCustomColumnValues(state.customColumnValues);
-    if (typeof state.schedulingRulesText === 'string') setSchedulingRulesText(state.schedulingRulesText);
-    setStaffs(normalizeStaffGroup(state.staffs));
-    setSchedule(state.schedule);
+    setCustomColumnValues(currentMonthState?.customColumnValues || state.customColumnValues || {});
+    if (typeof (currentMonthState?.schedulingRulesText ?? state.schedulingRulesText) === 'string') {
+      setSchedulingRulesText(currentMonthState?.schedulingRulesText ?? state.schedulingRulesText);
+    }
+    setStaffs(normalizeStaffGroup(currentMonthState?.staffs || state.staffs));
+    setSchedule(currentMonthState?.scheduleData || state.schedule);
     if (state.colors) setColors(state.colors);
     setShowHistoryModal(false);
     setShowDraftPrompt(false);
