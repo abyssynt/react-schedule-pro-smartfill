@@ -3424,6 +3424,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const titleColSpan = Math.max(1, daysInMonth.length - leaveTitleColSpan);
     const statColSpan = statHeaders.length;
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
+    const wordPageWidthPt = 841.9;
+    const wordMarginPt = 18;
+    const wordUsableWidthPt = wordPageWidthPt - (wordMarginPt * 2);
+    const wordNameColWidthPt = 54;
+    const wordStatColWidthPt = 30;
+    const rawWordDayColWidthPt = (wordUsableWidthPt - wordNameColWidthPt - (statHeaders.length * wordStatColWidthPt)) / Math.max(daysInMonth.length, 1);
+    const wordDayColWidthPt = Math.max(18, Math.min(24, rawWordDayColWidthPt));
+    const wordTableWidthPt = wordNameColWidthPt + (daysInMonth.length * wordDayColWidthPt) + (statHeaders.length * wordStatColWidthPt);
     const schedulingRuleLines = String(schedulingRulesText || '')
       .split(/\r?\n/)
       .map(line => line.trim())
@@ -3498,7 +3506,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           @page WordSection1 {
             size: 841.9pt 595.3pt;
             mso-page-orientation: landscape;
-            margin: 28.35pt 28.35pt 28.35pt 28.35pt;
+            margin: ${wordMarginPt}pt ${wordMarginPt}pt ${wordMarginPt}pt ${wordMarginPt}pt;
           }
           div.WordSection1 { page: WordSection1; }
           body {
@@ -3511,7 +3519,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           table {
             border-collapse: collapse;
             table-layout: fixed;
-            width: auto;
+            width: ${wordTableWidthPt}pt;
+            max-width: ${wordTableWidthPt}pt;
             margin: 0 auto;
             font-size: 9pt;
           }
@@ -3565,13 +3574,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             white-space: nowrap;
           }
           .name-col {
-            width: 54pt;
-            min-width: 54pt;
+            width: ${wordNameColWidthPt}pt;
+            min-width: ${wordNameColWidthPt}pt;
             font-weight: 700;
           }
           .day-col {
-            width: 18pt;
-            min-width: 18pt;
+            width: ${wordDayColWidthPt}pt;
+            min-width: ${wordDayColWidthPt}pt;
+            white-space: nowrap;
           }
           .word-numbered-leave {
             display: inline-block;
@@ -3582,8 +3592,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             letter-spacing: -0.1pt;
           }
           .stat-col {
-            width: 28pt;
-            min-width: 28pt;
+            width: ${wordStatColWidthPt}pt;
+            min-width: ${wordStatColWidthPt}pt;
           }
           .header-cell {
             font-weight: 700;
