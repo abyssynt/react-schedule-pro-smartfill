@@ -3727,8 +3727,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const canAssignWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
         const reasons = [];
         const currentCode = getScheduleCode(snapshot, staff, dateStr);
+        const preScheduleCode = getVisiblePreScheduleCode(staff, dateStr);
         if (currentCode) reasons.push('該格已有排班或休假代碼');
-        const prefix = getCodePrefix(currentCode);
+        if (preScheduleCode) reasons.push('該格已有預班／預假，不可被規則補空覆蓋');
         if (isConfiguredLeaveCode(currentCode)) reasons.push('該格已有休假，不可再排班');
         const staffGroup = staff.group || '白班';
         const shiftGroup = getShiftGroupByCode(shiftCode);
