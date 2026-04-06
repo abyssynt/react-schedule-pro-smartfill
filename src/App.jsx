@@ -1745,7 +1745,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const monthKey = buildMonthKey(targetYear, targetMonth);
     const monthData = schedulesSource?.[monthKey];
     const preMonthData = preScheduleMonthlySchedules?.[monthKey];
+    const savedLocalRulesText = readLocalSettingsPayload()?.schedulingRulesText || '';
     const currentRulesText = typeof schedulingRulesText === 'string' ? schedulingRulesText : '';
+    const resolveRulesText = (...candidates) => {
+      for (const candidate of candidates) {
+        if (typeof candidate === 'string' && candidate.trim()) return candidate;
+      }
+      for (const candidate of candidates) {
+        if (typeof candidate === 'string') return candidate;
+      }
+      return '';
+    };
     monthLoadSkipRef.current = true;
 
     if (monthData) {
@@ -1766,27 +1776,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setStaffs(normalizedMonthStaffs);
       setSchedule(rebuiltScheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
       setCustomColumnValues(monthData.customColumnValues || {});
-      setSchedulingRulesText(
-        typeof monthData.schedulingRulesText === 'string' && monthData.schedulingRulesText.trim() !== ''
-          ? monthData.schedulingRulesText
-          : currentRulesText
-      );
+      setSchedulingRulesText(resolveRulesText(monthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
     } else if (preMonthData) {
       const normalizedPreMonthStaffs = normalizeStaffGroup(preMonthData.staffs || []);
       setStaffs(normalizedPreMonthStaffs);
       setSchedule(createBlankScheduleForStaffs(normalizedPreMonthStaffs));
       setCustomColumnValues(preMonthData.customColumnValues || {});
-      setSchedulingRulesText(
-        typeof preMonthData.schedulingRulesText === 'string' && preMonthData.schedulingRulesText.trim() !== ''
-          ? preMonthData.schedulingRulesText
-          : currentRulesText
-      );
+      setSchedulingRulesText(resolveRulesText(preMonthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
     } else {
       const blankMonthState = createBlankMonthState(targetYear, targetMonth);
       setStaffs(blankMonthState.staffs);
       setSchedule(blankMonthState.schedule);
       setCustomColumnValues(blankMonthState.customColumnValues);
-      setSchedulingRulesText(currentRulesText || blankMonthState.schedulingRulesText);
+      setSchedulingRulesText(resolveRulesText(blankMonthState.schedulingRulesText, currentRulesText, savedLocalRulesText));
     }
 
     setSelectedGridCell(null);
@@ -6630,6 +6632,44 @@ export default function App() {
   };
 
   const handleSaveSettings = () => {
+    const currentMonthKey = buildMonthKey(year, month);
+
+    setMonthlySchedules(prev => ({
+      ...prev,
+      [currentMonthKey]: {
+        ...(prev?.[currentMonthKey] || {}),
+        year,
+        month,
+        staffs: normalizeStaffGroup(staffs),
+        scheduleData: schedule,
+        customColumnValues: customColumnValues || {},
+        schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
+        importMeta: {
+          ...(prev?.[currentMonthKey]?.importMeta || {}),
+          sourceType: prev?.[currentMonthKey]?.importMeta?.sourceType || 'manual',
+          sourceFiles: prev?.[currentMonthKey]?.importMeta?.sourceFiles || [],
+          sourceSheets: prev?.[currentMonthKey]?.importMeta?.sourceSheets || [],
+          importedAt: prev?.[currentMonthKey]?.importMeta?.importedAt || new Date().toISOString(),
+          lastUpdatedAt: new Date().toISOString()
+        }
+      }
+    }));
+
+    setPreScheduleMonthlySchedules(prev => {
+      if (!prev?.[currentMonthKey]) return prev;
+      return {
+        ...prev,
+        [currentMonthKey]: {
+          ...(prev[currentMonthKey] || {}),
+          schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
+          importMeta: {
+            ...(prev[currentMonthKey]?.importMeta || {}),
+            lastUpdatedAt: new Date().toISOString()
+          }
+        }
+      };
+    });
+
     const saved = saveLocalSettingsPayload();
     if (!saved) {
       window.alert('儲存設定失敗，請稍後再試。');
