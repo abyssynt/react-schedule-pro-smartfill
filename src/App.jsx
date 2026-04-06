@@ -268,6 +268,19 @@ const getSystemHolidayCalendar = (year, options = {}) => {
     workdays: workdayDates
   };
 };
+
+const readSchedulingRulesTextFromLocalSettings = () => {
+  try {
+    const stored = localStorage.getItem(LOCAL_SETTINGS_KEY);
+    if (!stored) return '';
+    const parsed = JSON.parse(stored);
+    return typeof parsed?.schedulingRulesText === 'string' ? parsed.schedulingRulesText : '';
+  } catch (error) {
+    console.error('讀取本機排班規則設定失敗', error);
+    return '';
+  }
+};
+
 const STORAGE_KEY = 'schedule_app_history';
 const ACTIVE_DRAFT_KEY = 'schedule_app_active_draft';
 const LOCAL_SETTINGS_KEY = 'schedule_app_local_settings';
@@ -1745,11 +1758,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const monthKey = buildMonthKey(targetYear, targetMonth);
     const monthData = schedulesSource?.[monthKey];
     const preMonthData = preScheduleMonthlySchedules?.[monthKey];
-    const savedLocalRulesText = readLocalSettingsPayload()?.schedulingRulesText || '';
     const currentRulesText = typeof schedulingRulesText === 'string' ? schedulingRulesText : '';
+    const savedLocalRulesText = readSchedulingRulesTextFromLocalSettings();
     const resolveRulesText = (...candidates) => {
       for (const candidate of candidates) {
-        if (typeof candidate === 'string' && candidate.trim()) return candidate;
+        if (typeof candidate === 'string' && candidate.trim() !== '') return candidate;
       }
       for (const candidate of candidates) {
         if (typeof candidate === 'string') return candidate;
@@ -1788,7 +1801,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setStaffs(blankMonthState.staffs);
       setSchedule(blankMonthState.schedule);
       setCustomColumnValues(blankMonthState.customColumnValues);
-      setSchedulingRulesText(resolveRulesText(blankMonthState.schedulingRulesText, currentRulesText, savedLocalRulesText));
+      setSchedulingRulesText(resolveRulesText(currentRulesText, savedLocalRulesText, blankMonthState.schedulingRulesText));
     }
 
     setSelectedGridCell(null);
@@ -6633,7 +6646,6 @@ export default function App() {
 
   const handleSaveSettings = () => {
     const currentMonthKey = buildMonthKey(year, month);
-
     setMonthlySchedules(prev => ({
       ...prev,
       [currentMonthKey]: {
@@ -6654,21 +6666,6 @@ export default function App() {
         }
       }
     }));
-
-    setPreScheduleMonthlySchedules(prev => {
-      if (!prev?.[currentMonthKey]) return prev;
-      return {
-        ...prev,
-        [currentMonthKey]: {
-          ...(prev[currentMonthKey] || {}),
-          schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
-          importMeta: {
-            ...(prev[currentMonthKey]?.importMeta || {}),
-            lastUpdatedAt: new Date().toISOString()
-          }
-        }
-      };
-    });
 
     const saved = saveLocalSettingsPayload();
     if (!saved) {
