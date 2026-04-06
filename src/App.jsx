@@ -1745,6 +1745,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const monthKey = buildMonthKey(targetYear, targetMonth);
     const monthData = schedulesSource?.[monthKey];
     const preMonthData = preScheduleMonthlySchedules?.[monthKey];
+    const currentRulesText = typeof schedulingRulesText === 'string' ? schedulingRulesText : '';
     monthLoadSkipRef.current = true;
 
     if (monthData) {
@@ -1765,19 +1766,27 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setStaffs(normalizedMonthStaffs);
       setSchedule(rebuiltScheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
       setCustomColumnValues(monthData.customColumnValues || {});
-      setSchedulingRulesText(typeof monthData.schedulingRulesText === 'string' ? monthData.schedulingRulesText : '');
+      setSchedulingRulesText(
+        typeof monthData.schedulingRulesText === 'string' && monthData.schedulingRulesText.trim() !== ''
+          ? monthData.schedulingRulesText
+          : currentRulesText
+      );
     } else if (preMonthData) {
       const normalizedPreMonthStaffs = normalizeStaffGroup(preMonthData.staffs || []);
       setStaffs(normalizedPreMonthStaffs);
       setSchedule(createBlankScheduleForStaffs(normalizedPreMonthStaffs));
       setCustomColumnValues(preMonthData.customColumnValues || {});
-      setSchedulingRulesText(typeof preMonthData.schedulingRulesText === 'string' ? preMonthData.schedulingRulesText : '');
+      setSchedulingRulesText(
+        typeof preMonthData.schedulingRulesText === 'string' && preMonthData.schedulingRulesText.trim() !== ''
+          ? preMonthData.schedulingRulesText
+          : currentRulesText
+      );
     } else {
       const blankMonthState = createBlankMonthState(targetYear, targetMonth);
       setStaffs(blankMonthState.staffs);
       setSchedule(blankMonthState.schedule);
       setCustomColumnValues(blankMonthState.customColumnValues);
-      setSchedulingRulesText(blankMonthState.schedulingRulesText);
+      setSchedulingRulesText(currentRulesText || blankMonthState.schedulingRulesText);
     }
 
     setSelectedGridCell(null);
