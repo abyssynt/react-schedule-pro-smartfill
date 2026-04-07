@@ -362,18 +362,32 @@ const isConfiguredImportedLeaveCode = (code = '', customLeaveCodes = []) => {
   return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
 };
 
+const normalizeCodeComparisonValue = (input = '') => normalizeImportedHalfWidth(input).trim().replace(/\s+/g, '');
+const normalizeCodeComparisonCompact = (input = '') => normalizeCodeComparisonValue(input).replace(/[－—–~～_]/g, '-');
+const normalizeCodeComparisonCompactNoHyphen = (input = '') => normalizeCodeComparisonCompact(input).replace(/-/g, '');
+const isBuiltInCode = (code = '') => DICT.SHIFTS.includes(code) || DICT.LEAVES.includes(code);
+
 
 const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
   const value = String(rawValue ?? '').trim();
   if (!value) return { normalized: '', isValid: true };
 
-  const toHalfWidth = (input = '') => String(input).replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
-  const normalizedBase = toHalfWidth(value).trim();
-  const collapsed = normalizedBase.replace(/\s+/g, '');
+  const normalizedBase = normalizeImportedHalfWidth(value).trim();
+  const collapsed = normalizeCodeComparisonValue(normalizedBase);
   const lower = collapsed.toLowerCase();
   const compact = lower.replace(/[－—–~～_]/g, '-');
   const compactNoHyphen = compact.replace(/-/g, '');
+  const exactCompact = normalizeCodeComparisonCompact(normalizedBase);
+  const exactCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(normalizedBase);
   const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
+
+  const exactAllowed = allowedCodes.find((code) => {
+    const codeCompact = normalizeCodeComparisonCompact(code);
+    const codeCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(code);
+    return codeCompact === exactCompact || codeCompactNoHyphen === exactCompactNoHyphen;
+  });
+  if (exactAllowed) return { normalized: exactAllowed, isValid: true };
+
   const directMap = {
     d: 'D',
     e: 'E',
@@ -403,9 +417,9 @@ const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
   const directCandidate = directMap[compact] || directMap[compactNoHyphen] || directMap[lower];
   if (directCandidate) return { normalized: directCandidate, isValid: allowedCodes.includes(directCandidate) };
 
-  const directAllowed = allowedCodes.find(code => {
-    const codeString = String(code);
-    const codeLower = toHalfWidth(codeString).trim().replace(/\s+/g, '').toLowerCase();
+  const directAllowed = allowedCodes.find((code) => {
+    if (!isBuiltInCode(code)) return false;
+    const codeLower = normalizeCodeComparisonValue(code).toLowerCase();
     const codeCompact = codeLower.replace(/[－—–~～_]/g, '-');
     const codeCompactNoHyphen = codeCompact.replace(/-/g, '');
     return codeLower === lower || codeCompact === compact || codeCompactNoHyphen === compactNoHyphen;
@@ -419,13 +433,14 @@ const getNormalizedManualCodeCandidates = (rawValue = '', allowedLeaveCodes = []
   const value = String(rawValue ?? '').trim();
   if (!value) return [];
 
-  const toHalfWidth = (input = '') => String(input).replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
-  const normalizedBase = toHalfWidth(value).trim();
-  const collapsed = normalizedBase.replace(/\s+/g, '');
+  const normalizedBase = normalizeImportedHalfWidth(value).trim();
+  const collapsed = normalizeCodeComparisonValue(normalizedBase);
   const lower = collapsed.toLowerCase();
   const compact = lower.replace(/[－—–~～_]/g, '-');
   const compactNoHyphen = compact.replace(/-/g, '');
   const aliases = new Set([lower, compact, compactNoHyphen]);
+  const exactCompact = normalizeCodeComparisonCompact(normalizedBase);
+  const exactCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(normalizedBase);
   const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
 
   const expandedAliases = new Set(aliases);
@@ -454,11 +469,15 @@ const getNormalizedManualCodeCandidates = (rawValue = '', allowedLeaveCodes = []
   }
 
   return allowedCodes.filter((code) => {
-    const codeString = String(code);
-    const codeLower = toHalfWidth(codeString).trim().replace(/\s+/g, '').toLowerCase();
-    const codeCompact = codeLower.replace(/[－—–~～_]/g, '-');
-    const codeCompactNoHyphen = codeCompact.replace(/-/g, '');
-    return Array.from(expandedAliases).some((alias) => codeLower.startsWith(alias) || codeCompact.startsWith(alias) || codeCompactNoHyphen.startsWith(alias));
+    const codeCompact = normalizeCodeComparisonCompact(code);
+    const codeCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(code);
+    if (!isBuiltInCode(code)) {
+      return codeCompact.startsWith(exactCompact) || codeCompactNoHyphen.startsWith(exactCompactNoHyphen);
+    }
+    const codeLower = normalizeCodeComparisonValue(code).toLowerCase();
+    const codeLowerCompact = codeLower.replace(/[－—–~～_]/g, '-');
+    const codeLowerCompactNoHyphen = codeLowerCompact.replace(/-/g, '');
+    return Array.from(expandedAliases).some((alias) => codeLower.startsWith(alias) || codeLowerCompact.startsWith(alias) || codeLowerCompactNoHyphen.startsWith(alias));
   });
 };
 
@@ -1402,6 +1421,62 @@ const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => 
   return cycleOffset === 0;
 };
 
+
+const normalizeStoredScheduleCellValue = (rawValue = '', customLeaveCodes = []) => {
+  const trimmedValue = String(rawValue ?? '').trim();
+  if (!trimmedValue) return '';
+  const exactKnownCode = Array.from(new Set([...(getAllShiftCodes() || []), ...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).find((code) => {
+    return normalizeCodeComparisonCompact(code) === normalizeCodeComparisonCompact(trimmedValue)
+      || normalizeCodeComparisonCompactNoHyphen(code) === normalizeCodeComparisonCompactNoHyphen(trimmedValue);
+  });
+  if (exactKnownCode) return exactKnownCode;
+  const { normalized, isValid } = normalizeManualShiftCode(trimmedValue, customLeaveCodes || []);
+  return isValid ? normalized : normalizeImportedHalfWidth(trimmedValue);
+};
+
+const reconcileScheduleDataMap = (scheduleData = {}, customLeaveCodes = []) => {
+  const nextScheduleData = {};
+  Object.entries(scheduleData || {}).forEach(([staffId, dateMap]) => {
+    if (!dateMap || typeof dateMap !== 'object') {
+      nextScheduleData[staffId] = {};
+      return;
+    }
+    nextScheduleData[staffId] = {};
+    Object.entries(dateMap || {}).forEach(([dateStr, cell]) => {
+      if (!cell) {
+        nextScheduleData[staffId][dateStr] = null;
+        return;
+      }
+      const rawValue = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
+      const normalizedValue = normalizeStoredScheduleCellValue(rawValue, customLeaveCodes);
+      if (!normalizedValue) {
+        nextScheduleData[staffId][dateStr] = null;
+        return;
+      }
+      const isKnownCode = getAllShiftCodes().includes(normalizedValue) || DICT.LEAVES.includes(normalizedValue) || (customLeaveCodes || []).includes(normalizedValue);
+      const existingMeta = typeof cell === 'object' && cell !== null ? { ...cell } : {};
+      delete existingMeta.value;
+      delete existingMeta.isUnknownCode;
+      nextScheduleData[staffId][dateStr] = {
+        ...existingMeta,
+        value: normalizedValue,
+        ...(isKnownCode ? {} : { isUnknownCode: true })
+      };
+    });
+  });
+  return nextScheduleData;
+};
+
+const reconcileMonthStateCollections = (collection = {}, customLeaveCodes = []) => {
+  const nextCollection = {};
+  Object.entries(collection || {}).forEach(([monthKey, monthState]) => {
+    nextCollection[monthKey] = {
+      ...(monthState || {}),
+      scheduleData: reconcileScheduleDataMap(monthState?.scheduleData || monthState?.schedule || {}, customLeaveCodes)
+    };
+  });
+  return nextCollection;
+};
 
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, setPreScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
@@ -6653,27 +6728,34 @@ export default function App() {
   };
 
   const handleSaveSettings = () => {
+    setCustomShiftDefsRegistry(customWorkShifts);
     const currentMonthKey = buildMonthKey(year, month);
-    setMonthlySchedules(prev => ({
-      ...prev,
+    const normalizedCurrentSchedule = reconcileScheduleDataMap(schedule, customLeaveCodes);
+    const normalizedMonthlySchedules = reconcileMonthStateCollections({
+      ...(monthlySchedules || {}),
       [currentMonthKey]: {
-        ...(prev?.[currentMonthKey] || {}),
+        ...(monthlySchedules?.[currentMonthKey] || {}),
         year,
         month,
         staffs: normalizeStaffGroup(staffs),
-        scheduleData: schedule,
+        scheduleData: normalizedCurrentSchedule,
         customColumnValues: customColumnValues || {},
         schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
         importMeta: {
-          ...(prev?.[currentMonthKey]?.importMeta || {}),
-          sourceType: prev?.[currentMonthKey]?.importMeta?.sourceType || 'manual',
-          sourceFiles: prev?.[currentMonthKey]?.importMeta?.sourceFiles || [],
-          sourceSheets: prev?.[currentMonthKey]?.importMeta?.sourceSheets || [],
-          importedAt: prev?.[currentMonthKey]?.importMeta?.importedAt || new Date().toISOString(),
+          ...(monthlySchedules?.[currentMonthKey]?.importMeta || {}),
+          sourceType: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceType || 'manual',
+          sourceFiles: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceFiles || [],
+          sourceSheets: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceSheets || [],
+          importedAt: monthlySchedules?.[currentMonthKey]?.importMeta?.importedAt || new Date().toISOString(),
           lastUpdatedAt: new Date().toISOString()
         }
       }
-    }));
+    }, customLeaveCodes);
+    const normalizedPreScheduleMonthlySchedules = reconcileMonthStateCollections(preScheduleMonthlySchedules, customLeaveCodes);
+
+    setSchedule(normalizedCurrentSchedule);
+    setMonthlySchedules(normalizedMonthlySchedules);
+    setPreScheduleMonthlySchedules(normalizedPreScheduleMonthlySchedules);
 
     const saved = saveLocalSettingsPayload();
     if (!saved) {
