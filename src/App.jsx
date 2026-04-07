@@ -22,7 +22,6 @@ const SMART_RULES = {
   disallowedNextShiftMap: {
     N: ['D', 'E'],
     E: ['N', 'D'],
-    D: ['N'],
     '白8-8': ['D', 'N'],
     '夜8-8': ['E', 'N']
   },
