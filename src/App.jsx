@@ -789,7 +789,6 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
 
     const rowNumber = rowIndex + 1;
     const hasAnyDayContent = dayColumnPairs.some(({ colNumber }) => String(row[colNumber] ?? '').trim() !== '');
-    if (!hasAnyDayContent && importMode !== 'preSchedule') continue;
 
     const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
     importedSchedule[staffId] = {};
@@ -837,7 +836,10 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
     }
 
     if (!normalizedGroup) {
-      if (importMode === 'preSchedule') {
+      if (!hasAnyDayContent) {
+        normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '白班';
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有排班內容，已先保留人員名單並歸入${normalizedGroup}`);
+      } else if (importMode === 'preSchedule') {
         normalizedGroup = '白班';
         if (hasLeaveCode && !hasShiftCode) {
           invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有預假代碼，且無可對照群組，已先歸入白班保留資料`);
@@ -854,8 +856,12 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       }
     }
 
-    if (!hasAnyDayContent && importMode === 'preSchedule') {
-      invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有預班內容，已先建立人員骨架供後續預班使用`);
+    if (!hasAnyDayContent) {
+      if (importMode === 'preSchedule') {
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有預班內容，已先建立人員骨架供後續預班使用`);
+      } else {
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有排班內容，已先保留人員名單`);
+      }
     }
 
     importedStaffs.push({
