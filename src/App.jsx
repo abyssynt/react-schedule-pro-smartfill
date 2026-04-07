@@ -2240,14 +2240,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const buildExportDailyStats = (dateStr) => {
-    const dayInfo = daysInMonth.find((day) => day.date === dateStr);
     const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
     staffs.forEach((staff) => {
       const displayValue = getExportNumberedValue(staff.id, dateStr);
       if (!displayValue) return;
-      if (['D', '白8-8', '8-12', '12-16'].includes(displayValue)) stats.D += 1;
-      else if (['E', '夜8-8'].includes(displayValue)) stats.E += 1;
-      else if (displayValue === 'N') stats.N += 1;
+
+      const shiftGroup = getShiftGroupByCode(displayValue);
+      if (shiftGroup === '白班') stats.D += 1;
+      else if (shiftGroup === '小夜') stats.E += 1;
+      else if (shiftGroup === '大夜') stats.N += 1;
       else if (isConfiguredLeaveCode(displayValue)) stats.totalLeave += 1;
     });
     return stats;
