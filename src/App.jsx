@@ -5484,7 +5484,7 @@ const openSelectedCellFillModal = () => {
                       {group === '白班' ? '白班上班' : group === '小夜' ? '小夜上班' : '大夜上班'}
                     </td>
                     {daysInMonth.map(d => {
-                      const count = getDailyStats(d.date)[group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N'];
+                      const count = buildExportDailyStats(d.date)[group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N'];
                       const rowKey = group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N';
                       return (
                         <td
@@ -5514,7 +5514,7 @@ const openSelectedCellFillModal = () => {
                   休假人數
                 </td>
                 {daysInMonth.map(d => {
-                  const count = getDailyStats(d.date).totalLeave;
+                  const count = buildExportDailyStats(d.date).totalLeave;
                   return (
                     <td
                       key={d.date}
