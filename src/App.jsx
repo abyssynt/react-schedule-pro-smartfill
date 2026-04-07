@@ -3208,7 +3208,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (!prefixValid) {
           flashInvalidSelection(selectedRangeCells);
           resetKeyInputBuffer();
-          if (preScheduleEditMode) showInputAssist('預班可輸入上班或休假代號', 'error');
+          if (preScheduleEditMode) showInputAssist('預班只能輸入預假代號', 'error');
           return;
         }
 
