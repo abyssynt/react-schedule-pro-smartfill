@@ -1917,7 +1917,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const getVisiblePreScheduleCode = (staffOrId, dateStr) => {
     const code = getPreScheduleCellCode(staffOrId, dateStr);
-    return isConfiguredLeaveCode(code) ? code : '';
+    return code || '';
   };
 
   const resolvePreScheduleMatchedStaff = (staffOrId, monthState) => {
@@ -2637,7 +2637,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     const { normalized, isValid } = normalizeManualShiftCode(raw, [...mergedLeaveCodes, ...mergedShiftCodes]);
     if (!isValid) return { normalized: '', isValid: false };
-    return { normalized, isValid: !normalized || isConfiguredLeaveCode(normalized) };
+    return { normalized, isValid: true };
   };
 
   const buildPreSchedulePastePlan = (grid = [], rect = null) => {
@@ -2707,8 +2707,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const isPotentialPreSchedulePrefix = (rawValue = '') => {
-    const candidates = getNormalizedManualCodeCandidates(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
-    return candidates.some((code) => isConfiguredLeaveCode(code));
+    if (!String(rawValue ?? '').trim()) return true;
+    return getNormalizedManualCodeCandidates(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]).length > 0;
   };
 
   const clearSelectedPreScheduleRangeByKeyboard = () => {
@@ -2730,7 +2730,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const { normalized, isValid } = normalizePreScheduleInput(rawValue);
     if (!isValid) {
       flashInvalidSelection(cells);
-      if (options.showFeedback !== false) showInputAssist('預班只能輸入預假代號', 'error');
+      if (options.showFeedback !== false) showInputAssist('預班可輸入上班或休假代號', 'error');
       return { applied: false, normalized: '' };
     }
 
@@ -3208,7 +3208,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         if (!prefixValid) {
           flashInvalidSelection(selectedRangeCells);
           resetKeyInputBuffer();
-          if (preScheduleEditMode) showInputAssist('預班只能輸入預假代號', 'error');
+          if (preScheduleEditMode) showInputAssist('預班可輸入上班或休假代號', 'error');
           return;
         }
 
