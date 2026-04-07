@@ -778,7 +778,7 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
   const importedStaffs = [];
   const importedSchedule = {};
   const invalidMessages = [];
-  const unknownCodes = new Set();
+  const unknownCodes = [];
 
   for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
     const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
@@ -790,7 +790,6 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
 
     const rowNumber = rowIndex + 1;
     const hasAnyDayContent = dayColumnPairs.some(({ colNumber }) => String(row[colNumber] ?? '').trim() !== '');
-    if (!hasAnyDayContent && importMode !== 'preSchedule') continue;
 
     const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
     importedSchedule[staffId] = {};
@@ -802,9 +801,6 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       const normalizedCode = normalizeImportedShiftCode(rawValue);
       const rawImportedValue = getImportedRawNumberedLeaveValue(rawValue);
       const isKnownCode = knownCodes.has(normalizedCode);
-      if (!isKnownCode) {
-        unknownCodes.add(normalizedCode);
-      }
 
       importedSchedule[staffId][day] = {
         value: normalizedCode,
@@ -812,13 +808,17 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
         ...(rawImportedValue ? { rawImportedValue } : {}),
         ...(!isKnownCode ? { isUnknownCode: true } : {})
       };
+
+      if (!isKnownCode) {
+        unknownCodes.push(normalizedCode);
+      }
     });
 
     const importedCodes = Object.values(importedSchedule[staffId] || {}).map((cell) => {
       if (!cell) return '';
       return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
     }).filter(Boolean);
-    const hasShiftCode = importedCodes.some(code => getAllShiftCodes().includes(code));
+    const hasShiftCode = importedCodes.some(code => !isConfiguredImportedLeaveCode(code, customLeaveCodes));
     const hasLeaveCode = importedCodes.some(code => isConfiguredImportedLeaveCode(code, customLeaveCodes));
 
     let normalizedGroup = '';
@@ -830,7 +830,7 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       }
     }
 
-    if (!normalizedGroup && importMode === 'preSchedule') {
+    if (!normalizedGroup) {
       normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '';
     }
 
@@ -839,7 +839,10 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
     }
 
     if (!normalizedGroup) {
-      if (importMode === 'preSchedule') {
+      if (!hasAnyDayContent) {
+        normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '白班';
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有排班內容，已先保留人員名單`);
+      } else if (importMode === 'preSchedule') {
         normalizedGroup = '白班';
         if (hasLeaveCode && !hasShiftCode) {
           invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有預假代碼，且無可對照群組，已先歸入白班保留資料`);
@@ -850,9 +853,8 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
         normalizedGroup = '白班';
         invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有休假代碼，已先歸入白班保留資料`);
       } else {
-        delete importedSchedule[staffId];
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已略過`);
-        continue;
+        normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '白班';
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已先歸入${normalizedGroup}`);
       }
     }
 
@@ -890,7 +892,7 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
     customColumnValues: {},
     schedulingRulesText: '',
     warnings: invalidMessages,
-    unknownCodes: Array.from(unknownCodes),
+    unknownCodes: Array.from(new Set(unknownCodes)).sort(),
     importMeta: {
       sourceType: importMode === 'preSchedule' ? 'preScheduleExcel' : 'excel',
       sourceFiles: [fileName],
@@ -907,7 +909,7 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
   const fileList = Array.from(files || []);
   const monthlySchedules = {};
   const warnings = [];
-  const unknownCodeSet = new Set();
+  const unknownCodes = [];
   let firstMonthKey = '';
   const importMode = options.importMode || 'schedule';
   const existingStaffGroupLookup = buildExistingStaffGroupLookup(options.existingMonthlySchedules || {});
@@ -957,10 +959,7 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
         }
 
         warnings.push(...(parsed.warnings || []));
-        (parsed.unknownCodes || []).forEach((code) => {
-          const normalized = String(code || '').trim();
-          if (normalized) unknownCodeSet.add(normalized);
-        });
+        unknownCodes.push(...(parsed.unknownCodes || []));
       } catch (error) {
         warnings.push(error?.message || `檔案「${file.name}」工作表「${sheetName}」無法匯入`);
       }
@@ -976,7 +975,7 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
     monthlySchedules,
     firstMonthKey: firstMonthKey || keys[0],
     warnings,
-    unknownCodes: Array.from(unknownCodeSet),
+    unknownCodes: Array.from(new Set(unknownCodes.filter(Boolean))).sort(),
     importMode
   };
 };
@@ -6749,16 +6748,13 @@ export default function App() {
       importMode: 'schedule',
       existingMonthlySchedules: monthlySchedules
     });
+    if (Array.isArray(imported.unknownCodes) && imported.unknownCodes.length > 0) {
+      window.alert(`偵測到尚未建立的代碼：${imported.unknownCodes.join('、')}\n\n請先到系統設定補上代碼；本次匯入已先保留這些代碼。`);
+    }
     setImportedSchedulePayload(imported);
     setPendingOpenMonthKey(imported.firstMonthKey || '');
     setLoadLatestOnEnter(false);
     setScreen('schedule');
-    const unknownCodes = Array.isArray(imported?.unknownCodes) ? imported.unknownCodes.filter(Boolean) : [];
-    if (unknownCodes.length > 0) {
-      window.alert(`已匯入完成。
-以下代碼尚未建立：${unknownCodes.join('、')}
-請至系統設定補上代碼；補完後再次匯入即不會再提示。`);
-    }
   };
 
   const handleImportPreScheduleFiles = async (files) => {
@@ -6768,6 +6764,9 @@ export default function App() {
       existingMonthlySchedules: monthlySchedules,
       existingImportedMonthStates: preScheduleMonthlySchedules
     });
+    if (Array.isArray(imported.unknownCodes) && imported.unknownCodes.length > 0) {
+      window.alert(`偵測到尚未建立的代碼：${imported.unknownCodes.join('、')}\n\n請先到系統設定補上代碼；本次匯入已先保留這些代碼。`);
+    }
     setPreScheduleMonthlySchedules(prev => {
       const next = { ...(prev || {}) };
       Object.entries(imported.monthlySchedules || {}).forEach(([monthKey, monthState]) => {
@@ -6779,12 +6778,6 @@ export default function App() {
     setPendingOpenMonthKey(imported.firstMonthKey || '');
     setLoadLatestOnEnter(false);
     setScreen('schedule');
-    const unknownCodes = Array.isArray(imported?.unknownCodes) ? imported.unknownCodes.filter(Boolean) : [];
-    if (unknownCodes.length > 0) {
-      window.alert(`已匯入完成。
-以下代碼尚未建立：${unknownCodes.join('、')}
-請至系統設定補上代碼；補完後再次匯入即不會再提示。`);
-    }
   };
 
   const goToSchedule = () => {
