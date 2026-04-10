@@ -1478,6 +1478,85 @@ const reconcileMonthStateCollections = (collection = {}, customLeaveCodes = []) 
   return nextCollection;
 };
 
+const ScheduleGridCell = React.memo(function ScheduleGridCell({
+  dayInfo,
+  densityConfig,
+  tableFontSizeClass,
+  tableFontColor,
+  dangerTintColor,
+  warningTintColor,
+  preScheduleHintBorderColor,
+  preScheduleTextColor,
+  displayValue,
+  cellTextColor,
+  showPreScheduleAsMain,
+  showPreScheduleAsHint,
+  preScheduleCode,
+  cellBackgroundColor,
+  inRangeSelection,
+  isPrimarySelected,
+  isInvalid,
+  isRuleWarning,
+  ruleWarningMessage,
+  rowInsertStyle,
+  fourWeekDividerStyle,
+  showBlueDots,
+  selectionMode,
+  showShiftLabels,
+  selectorDotClass,
+  onMouseDownCell,
+  onMouseEnterCell,
+  onClickCell,
+  onDotClick
+}) {
+  return (
+    <td
+      className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
+      style={{
+        backgroundColor: cellBackgroundColor,
+        opacity: dayInfo.isHoliday || dayInfo.isWeekend ? 0.9 : 1,
+        boxShadow: `${inRangeSelection ? 'inset 0 0 0 2px #a78bfa' : isPrimarySelected ? 'inset 0 0 0 2px #3b82f6' : ''}${isInvalid ? `${inRangeSelection || isPrimarySelected ? ', ' : ''}inset 0 0 0 2px ${dangerTintColor}` : ''}${isRuleWarning ? `${inRangeSelection || isPrimarySelected || isInvalid ? ', ' : ''}inset 0 0 0 2px ${warningTintColor}` : ''}${showPreScheduleAsMain ? `${inRangeSelection || isPrimarySelected || isInvalid || isRuleWarning ? ', ' : ''}inset 0 0 0 1px ${preScheduleHintBorderColor}` : ''}` || undefined,
+        ...fourWeekDividerStyle,
+        ...(rowInsertStyle || {})
+      }}
+      onMouseDown={onMouseDownCell}
+      onMouseEnter={onMouseEnterCell}
+      onClick={onClickCell}
+    >
+      <div className="relative">
+        <div
+          className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
+          style={{ color: showPreScheduleAsMain ? preScheduleTextColor : (cellTextColor || tableFontColor), pointerEvents: 'none' }}
+        >
+          {showPreScheduleAsMain ? preScheduleCode : displayValue}
+        </div>
+        {showPreScheduleAsHint && (
+          <div
+            className="absolute left-0 top-0 w-0 h-0 z-20 pointer-events-none border-r-[9px] border-r-transparent border-b-[9px] border-b-transparent"
+            style={{ borderTop: `9px solid ${preScheduleHintBorderColor}` }}
+            title={`預班：${preScheduleCode}`}
+          />
+        )}
+        {isRuleWarning && (
+          <div
+            className="absolute top-0 right-0 w-0 h-0 border-l-[10px] border-l-transparent z-20"
+            style={{ borderTop: `10px solid ${warningTintColor}` }}
+            title={ruleWarningMessage}
+          />
+        )}
+        {showBlueDots && (selectionMode === 'dot' || !showShiftLabels) && (
+          <button
+            className={`absolute bottom-0.5 right-0.5 ${selectorDotClass} rounded-full z-10 ${isPrimarySelected ? 'bg-blue-500 scale-110' : 'bg-blue-300 hover:bg-blue-500'}`}
+            onClick={onDotClick}
+            title="選取此格"
+          />
+        )}
+      </div>
+    </td>
+  );
+});
+
+
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, setPreScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
   // 2. 核心 State 定義
@@ -5429,106 +5508,48 @@ const openSelectedCellFillModal = () => {
                           const isRuleWarning = Boolean(ruleWarningMessage) && !isInvalid;
 
                           return (
-                            <td
-                              key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
-                              style={{
-                                backgroundColor: cellBackgroundColor,
-                                opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                                boxShadow: `${inRangeSelection ? 'inset 0 0 0 2px #a78bfa' : isPrimarySelected ? 'inset 0 0 0 2px #3b82f6' : ''}${isInvalid ? `${inRangeSelection || isPrimarySelected ? ', ' : ''}inset 0 0 0 2px ${dangerTintColor}` : ''}${isRuleWarning ? `${inRangeSelection || isPrimarySelected || isInvalid ? ', ' : ''}inset 0 0 0 2px ${warningTintColor}` : ''}${showPreScheduleAsMain ? `${inRangeSelection || isPrimarySelected || isInvalid || isRuleWarning ? ', ' : ''}inset 0 0 0 1px ${preScheduleHintBorderColor}` : ''}` || undefined,
-                                ...getFourWeekDividerStyle(d.date),
-                                ...(rowInsertStyle || {})
-                              }}
-                              onMouseDown={(e) => {
+                            <ScheduleGridCell
+                              key={cellKey}
+                              dayInfo={d}
+                              densityConfig={densityConfig}
+                              tableFontSizeClass={tableFontSizeClass}
+                              tableFontColor={tableFontColor}
+                              dangerTintColor={dangerTintColor}
+                              warningTintColor={warningTintColor}
+                              preScheduleHintBorderColor={preScheduleHintBorderColor}
+                              preScheduleTextColor={preScheduleTextColor}
+                              displayValue={displayValue}
+                              cellTextColor={cellTextColor}
+                              showPreScheduleAsMain={showPreScheduleAsMain}
+                              showPreScheduleAsHint={showPreScheduleAsHint}
+                              preScheduleCode={preScheduleCode}
+                              cellBackgroundColor={cellBackgroundColor}
+                              inRangeSelection={inRangeSelection}
+                              isPrimarySelected={isPrimarySelected}
+                              isInvalid={isInvalid}
+                              isRuleWarning={isRuleWarning}
+                              ruleWarningMessage={ruleWarningMessage}
+                              rowInsertStyle={rowInsertStyle}
+                              fourWeekDividerStyle={getFourWeekDividerStyle(d.date)}
+                              showBlueDots={showBlueDots}
+                              selectionMode={selectionMode}
+                              showShiftLabels={showShiftLabels}
+                              selectorDotClass={densityConfig.selectorDotClass}
+                              onMouseDownCell={(e) => {
                                 if (e.button !== 0) return;
                                 e.preventDefault();
                                 setIsRangeDragging(true);
                                 startRangeSelection(staff, d.date, e);
                               }}
-                              onMouseEnter={() => updateRangeSelection(staff, d.date)}
-                              onClick={() => {
+                              onMouseEnterCell={() => updateRangeSelection(staff, d.date)}
+                              onClickCell={() => {
                                 startRangeSelection(staff, d.date);
                               }}
-                            >
-                              <div className="relative">
-                                <div
-                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
-                                  style={{ color: showPreScheduleAsMain ? preScheduleTextColor : (cellTextColor || tableFontColor), pointerEvents: 'none' }}
-                                >
-                                  {showPreScheduleAsMain ? preScheduleCode : displayValue}
-                                </div>
-                                {showPreScheduleAsHint && (
-                                  <div
-                                    className="absolute left-0 top-0 w-0 h-0 z-20 pointer-events-none border-r-[9px] border-r-transparent border-b-[9px] border-b-transparent"
-                                    style={{ borderTop: `9px solid ${preScheduleHintBorderColor}` }}
-                                    title={`預班：${preScheduleCode}`}
-                                  />
-                                )}
-                                {isRuleWarning && (
-                                  <div
-                                    className="absolute top-0 right-0 w-0 h-0 border-l-[10px] border-l-transparent z-20"
-                                    style={{ borderTop: `10px solid ${warningTintColor}` }}
-                                    title={ruleWarningMessage}
-                                  ></div>
-                                )}
-                                <div
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
-                                  title={showPreScheduleAsHint ? `選擇班別/假別｜預班 ${preScheduleCode}` : '選擇班別/假別'}
-                                >
-                                  <select
-                                    value={preScheduleEditMode ? preScheduleCode : val}
-                                    onChange={(e) => {
-                                      startRangeSelection(staff, d.date);
-                                      const targetCells = [{ staffId: staff.id, dateStr: d.date }];
-                                      if (preScheduleEditMode) {
-                                        applyPreScheduleValueToCells(targetCells, e.target.value, {
-                                          advance: Boolean(e.target.value),
-                                          direction: 1,
-                                          preserveSelection: false,
-                                          activeCell: targetCells[targetCells.length - 1],
-                                          showFeedback: true
-                                        });
-                                      } else {
-                                        applySelectionValue(targetCells, e.target.value, {
-                                          advance: Boolean(e.target.value),
-                                          direction: 1,
-                                          source: 'manual'
-                                        });
-                                      }
-                                      e.currentTarget.blur();
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startRangeSelection(staff, d.date);
-                                    }}
-                                    onMouseDown={(e) => {
-                                      if (e.button !== 0) return;
-                                      e.stopPropagation();
-                                      startRangeSelection(staff, d.date, e);
-                                    }}
-                                    className="absolute inset-0 w-full h-full border-none bg-transparent cursor-pointer opacity-0"
-                                    style={{ color: tableFontColor }}
-                                    aria-label={`選擇 ${staff.name} ${d.date} 班別/假別`}
-                                  >
-                                    <option value=""></option>
-                                    {!preScheduleEditMode && (
-                                      <optgroup label="上班">
-                                        {shiftOptionsNodes}
-                                      </optgroup>
-                                    )}
-                                    <optgroup label={preScheduleEditMode ? "預班／預假" : "休假"}>
-                                      {leaveOptionsNodes}
-                                    </optgroup>
-                                  </select>
-
-                                  {showBlueDots && (
-                                    <span
-                                      className={`${densityConfig.selectorDotClass} rounded-full transition-all pointer-events-none ${inRangeSelection ? 'bg-violet-600 scale-110' : isPrimarySelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90'}`}
-                                    ></span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
+                              onDotClick={(e) => {
+                                e.stopPropagation();
+                                startRangeSelection(staff, d.date);
+                              }}
+                            />
                           );
                         })}
 
