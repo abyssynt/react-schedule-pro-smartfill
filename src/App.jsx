@@ -1504,10 +1504,18 @@ const ScheduleGridCell = React.memo(function ScheduleGridCell({
   selectionMode,
   showShiftLabels,
   selectorDotClass,
+  selectValue,
+  selectTitle,
+  shiftOptionsNodes,
+  leaveOptionsNodes,
+  preScheduleEditMode,
   onMouseDownCell,
   onMouseEnterCell,
   onClickCell,
-  onDotClick
+  onDotClick,
+  onSelectChange,
+  onSelectClick,
+  onSelectMouseDown
 }) {
   return (
     <td
@@ -1544,13 +1552,36 @@ const ScheduleGridCell = React.memo(function ScheduleGridCell({
             title={ruleWarningMessage}
           />
         )}
-        {showBlueDots && (selectionMode === 'dot' || !showShiftLabels) && (
-          <button
-            className={`absolute bottom-0.5 right-0.5 ${selectorDotClass} rounded-full z-10 ${isPrimarySelected ? 'bg-blue-500 scale-110' : 'bg-blue-300 hover:bg-blue-500'}`}
-            onClick={onDotClick}
-            title="選取此格"
-          />
-        )}
+        <div
+          className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-3.5 h-3.5 flex items-center justify-center"
+          title={selectTitle}
+        >
+          <select
+            value={selectValue}
+            onChange={onSelectChange}
+            onClick={onSelectClick}
+            onMouseDown={onSelectMouseDown}
+            className="absolute inset-0 w-full h-full border-none bg-transparent cursor-pointer opacity-0"
+            style={{ color: tableFontColor }}
+            aria-label={selectTitle}
+          >
+            <option value=""></option>
+            {!preScheduleEditMode && (
+              <optgroup label="上班">
+                {shiftOptionsNodes}
+              </optgroup>
+            )}
+            <optgroup label={preScheduleEditMode ? "預班／預假" : "休假"}>
+              {leaveOptionsNodes}
+            </optgroup>
+          </select>
+
+          {showBlueDots && (
+            <span
+              className={`${selectorDotClass} rounded-full transition-all pointer-events-none ${inRangeSelection ? 'bg-violet-600 scale-110' : isPrimarySelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90'}`}
+            ></span>
+          )}
+        </div>
       </div>
     </td>
   );
@@ -5535,6 +5566,11 @@ const openSelectedCellFillModal = () => {
                               selectionMode={selectionMode}
                               showShiftLabels={showShiftLabels}
                               selectorDotClass={densityConfig.selectorDotClass}
+                              selectValue={preScheduleEditMode ? preScheduleCode : val}
+                              selectTitle={showPreScheduleAsHint ? `選擇班別/假別｜預班 ${preScheduleCode}` : '選擇班別/假別'}
+                              shiftOptionsNodes={shiftOptionsNodes}
+                              leaveOptionsNodes={leaveOptionsNodes}
+                              preScheduleEditMode={preScheduleEditMode}
                               onMouseDownCell={(e) => {
                                 if (e.button !== 0) return;
                                 e.preventDefault();
@@ -5543,11 +5579,42 @@ const openSelectedCellFillModal = () => {
                               }}
                               onMouseEnterCell={() => updateRangeSelection(staff, d.date)}
                               onClickCell={() => {
-                                startRangeSelection(staff, d.date);
+                                if (selectionMode === 'cell' || !showBlueDots) {
+                                  startRangeSelection(staff, d.date);
+                                }
                               }}
                               onDotClick={(e) => {
                                 e.stopPropagation();
                                 startRangeSelection(staff, d.date);
+                              }}
+                              onSelectChange={(e) => {
+                                startRangeSelection(staff, d.date);
+                                const targetCells = [{ staffId: staff.id, dateStr: d.date }];
+                                if (preScheduleEditMode) {
+                                  applyPreScheduleValueToCells(targetCells, e.target.value, {
+                                    advance: Boolean(e.target.value),
+                                    direction: 1,
+                                    preserveSelection: false,
+                                    activeCell: targetCells[targetCells.length - 1],
+                                    showFeedback: true
+                                  });
+                                } else {
+                                  applySelectionValue(targetCells, e.target.value, {
+                                    advance: Boolean(e.target.value),
+                                    direction: 1,
+                                    source: 'manual'
+                                  });
+                                }
+                                e.currentTarget.blur();
+                              }}
+                              onSelectClick={(e) => {
+                                e.stopPropagation();
+                                startRangeSelection(staff, d.date);
+                              }}
+                              onSelectMouseDown={(e) => {
+                                if (e.button !== 0) return;
+                                e.stopPropagation();
+                                startRangeSelection(staff, d.date, e);
                               }}
                             />
                           );
