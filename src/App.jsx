@@ -2496,6 +2496,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return null;
   };
 
+  const effectiveSelection = useMemo(() => {
+    if (rangeSelection?.start && rangeSelection?.end) return rangeSelection;
+    if (selectedGridCell?.staff?.id && selectedGridCell?.dateStr) {
+      return {
+        start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr, group: selectedGridCell.staff.group || '白班' },
+        end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr, group: selectedGridCell.staff.group || '白班' }
+      };
+    }
+    return null;
+  }, [rangeSelection, selectedGridCell]);
+
   const selectedRangeCells = useMemo(
     () => expandSelectionCells(effectiveSelection, staffs, daysInMonth),
     [effectiveSelection, staffs, daysInMonth]
@@ -2515,17 +2526,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return false;
     return Boolean(getCellCode(selectedGridCell.staff.id, selectedGridCell.dateStr));
   }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, schedule, monthlySchedules, year, month]);
-
-  const effectiveSelection = useMemo(() => {
-    if (rangeSelection?.start && rangeSelection?.end) return rangeSelection;
-    if (selectedGridCell?.staff?.id && selectedGridCell?.dateStr) {
-      return {
-        start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr, group: selectedGridCell.staff.group || '白班' },
-        end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr, group: selectedGridCell.staff.group || '白班' }
-      };
-    }
-    return null;
-  }, [rangeSelection, selectedGridCell]);
 
   const selectedRangeCellKeySet = useMemo(() => {
     return new Set(selectedRangeCells.map(({ staffId, dateStr }) => makeCellKey(staffId, dateStr)));
