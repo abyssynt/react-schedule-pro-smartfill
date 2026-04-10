@@ -2497,44 +2497,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const selectedRangeCells = useMemo(
-    () => expandSelectionCells(getEffectiveSelection(), staffs, daysInMonth),
-    [rangeSelection, selectedGridCell, staffs, daysInMonth]
+    () => expandSelectionCells(effectiveSelection, staffs, daysInMonth),
+    [effectiveSelection, staffs, daysInMonth]
   );
-
-  const selectedRangeCellKeySet = useMemo(
-    () => new Set(selectedRangeCells.map(({ staffId, dateStr }) => makeCellKey(staffId, dateStr))),
-    [selectedRangeCells]
-  );
-
-  const primarySelectedCellKey = useMemo(() => {
-    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return '';
-    return makeCellKey(selectedGridCell.staff.id, selectedGridCell.dateStr);
-  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr]);
-
-  const currentMonthPreScheduleCodeMap = useMemo(() => {
-    const monthState = preScheduleMonthlySchedules?.[currentMonthKey];
-    if (!monthState) return {};
-    const monthStaffs = Array.isArray(monthState.staffs) ? monthState.staffs : [];
-    const monthSchedule = monthState.scheduleData || monthState.schedule || {};
-    const next = {};
-
-    staffs.forEach((staff) => {
-      const targetName = String(staff?.name || '').trim();
-      const targetGroup = staff?.group || '白班';
-      const matchedStaff = monthStaffs.find((item) => item.id === staff.id)
-        || monthStaffs.find((item) => String(item?.name || '').trim() === targetName && (item?.group || '白班') === targetGroup)
-        || monthStaffs.find((item) => String(item?.name || '').trim() === targetName);
-      if (!matchedStaff) return;
-      const dayMap = monthSchedule?.[matchedStaff.id] || {};
-      Object.entries(dayMap).forEach(([dateStr, cell]) => {
-        const cellValue = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
-        if (!cellValue || !String(dateStr).startsWith(currentMonthKey)) return;
-        next[makeCellKey(staff.id, dateStr)] = cellValue;
-      });
-    });
-
-    return next;
-  }, [preScheduleMonthlySchedules, currentMonthKey, staffs]);
 
   const selectedCellHasPreSchedule = useMemo(() => {
     if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return false;
@@ -2550,6 +2515,52 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return false;
     return Boolean(getCellCode(selectedGridCell.staff.id, selectedGridCell.dateStr));
   }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, schedule, monthlySchedules, year, month]);
+
+  const effectiveSelection = useMemo(() => {
+    if (rangeSelection?.start && rangeSelection?.end) return rangeSelection;
+    if (selectedGridCell?.staff?.id && selectedGridCell?.dateStr) {
+      return {
+        start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr, group: selectedGridCell.staff.group || '白班' },
+        end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr, group: selectedGridCell.staff.group || '白班' }
+      };
+    }
+    return null;
+  }, [rangeSelection, selectedGridCell]);
+
+  const selectedRangeCellKeySet = useMemo(() => {
+    return new Set(selectedRangeCells.map(({ staffId, dateStr }) => makeCellKey(staffId, dateStr)));
+  }, [selectedRangeCells]);
+
+  const primarySelectedCellKey = useMemo(() => {
+    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return '';
+    return makeCellKey(selectedGridCell.staff.id, selectedGridCell.dateStr);
+  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr]);
+
+  const currentMonthPreScheduleCodeMap = useMemo(() => {
+    const monthState = preScheduleMonthlySchedules?.[currentMonthKey];
+    const monthSchedule = monthState?.scheduleData || monthState?.schedule || {};
+    const byName = new Map();
+    (monthState?.staffs || []).forEach((staff) => {
+      const nameKey = String(staff?.name || '').trim();
+      if (!nameKey) return;
+      byName.set(`${nameKey}__${staff.group || '白班'}`, staff.id);
+      if (!byName.has(nameKey)) byName.set(nameKey, staff.id);
+    });
+    const next = {};
+    (staffs || []).forEach((staff) => {
+      const nameKey = String(staff?.name || '').trim();
+      const matchedId = byName.get(`${nameKey}__${staff.group || '白班'}`) || byName.get(nameKey) || staff.id;
+      const dateMap = monthSchedule?.[matchedId] || {};
+      Object.entries(dateMap).forEach(([dateStr, cell]) => {
+        const code = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
+        if (code) next[makeCellKey(staff.id, dateStr)] = code;
+      });
+    });
+    return next;
+  }, [preScheduleMonthlySchedules, currentMonthKey, staffs]);
+
+  const shiftOptionsNodes = useMemo(() => mergedShiftCodes.map(s => <option key={s} value={s}>{s}</option>), [mergedShiftCodes]);
+  const leaveOptionsNodes = useMemo(() => mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>), [mergedLeaveCodes]);
 
   useEffect(() => {
     if (selectedRangeCells.length > 0) clearInputAssist();
@@ -4170,14 +4181,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return stats;
   };
 
-  const dailyStatsMap = useMemo(() => {
-    const next = {};
-    daysInMonth.forEach((day) => {
-      next[day.date] = getDailyStats(day.date);
-    });
-    return next;
-  }, [daysInMonth, staffs, schedule, mergedLeaveCodes]);
-
   const getRequiredCountForDate = (dateStr, rowKey) => {
     const dayInfo = daysInMonth.find(d => d.date === dateStr);
     if (!dayInfo) return null;
@@ -4902,9 +4905,6 @@ const openSelectedCellFillModal = () => {
     }));
   }, [staffs]);
 
-  const shiftOptions = useMemo(() => mergedShiftCodes.map((s) => <option key={s} value={s}>{s}</option>), [mergedShiftCodes]);
-  const leaveOptions = useMemo(() => mergedLeaveCodes.map((l) => <option key={l} value={l}>{l}</option>), [mergedLeaveCodes]);
-
   useEffect(() => {
     setSelectedGridCell(null);
     setRangeSelection(null);
@@ -5391,7 +5391,7 @@ const openSelectedCellFillModal = () => {
                           const cellKey = makeCellKey(staff.id, d.date);
                           const draftValue = cellDrafts[cellKey];
                           const displayValue = draftValue !== undefined ? draftValue : val;
-                          const preScheduleCode = currentMonthPreScheduleCodeMap[cellKey] || getVisiblePreScheduleCode(staff, d.date);
+                          const preScheduleCode = currentMonthPreScheduleCodeMap[cellKey] || '';
                           const hasFormalValue = Boolean(displayValue);
                           const hasSameVisibleCode = hasFormalValue && Boolean(preScheduleCode) && String(displayValue).trim() === String(preScheduleCode).trim();
                           const showPreScheduleAsMain = !hasFormalValue && Boolean(preScheduleCode);
@@ -5400,11 +5400,7 @@ const openSelectedCellFillModal = () => {
                           const cellBackgroundColor = showPreScheduleAsMain
                             ? getPreScheduleBackgroundColor(baseCellBackgroundColor, false)
                             : baseCellBackgroundColor;
-                          const effectiveSelection = rangeSelection?.start && rangeSelection?.end ? rangeSelection : (selectedGridCell?.staff?.id && selectedGridCell?.dateStr ? {
-                            start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
-                            end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
-                          } : null);
-                          const inRangeSelection = selectedRangeCellKeySet.has(cellKey) || isCellInSelectionRect(effectiveSelection, staffs, daysInMonth, staff.id, d.date);
+                          const inRangeSelection = selectedRangeCellKeySet.has(cellKey);
                           const isPrimarySelected = primarySelectedCellKey === cellKey;
                           const isInvalid = Boolean(invalidCellKeys[cellKey]);
                           const ruleWarningMessage = cellRuleWarnings[cellKey] || '';
@@ -5494,14 +5490,12 @@ const openSelectedCellFillModal = () => {
                                   >
                                     <option value=""></option>
                                     {!preScheduleEditMode && (
-                                      <>
-                                        <optgroup label="上班">
-                                          {shiftOptions}
-                                        </optgroup>
-                                      </>
+                                      <optgroup label="上班">
+                                        {shiftOptionsNodes}
+                                      </optgroup>
                                     )}
                                     <optgroup label={preScheduleEditMode ? "預班／預假" : "休假"}>
-                                      {leaveOptions}
+                                      {leaveOptionsNodes}
                                     </optgroup>
                                   </select>
 
