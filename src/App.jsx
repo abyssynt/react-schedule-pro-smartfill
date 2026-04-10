@@ -2501,6 +2501,41 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     [rangeSelection, selectedGridCell, staffs, daysInMonth]
   );
 
+  const selectedRangeCellKeySet = useMemo(
+    () => new Set(selectedRangeCells.map(({ staffId, dateStr }) => makeCellKey(staffId, dateStr))),
+    [selectedRangeCells]
+  );
+
+  const primarySelectedCellKey = useMemo(() => {
+    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return '';
+    return makeCellKey(selectedGridCell.staff.id, selectedGridCell.dateStr);
+  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr]);
+
+  const currentMonthPreScheduleCodeMap = useMemo(() => {
+    const monthState = preScheduleMonthlySchedules?.[currentMonthKey];
+    if (!monthState) return {};
+    const monthStaffs = Array.isArray(monthState.staffs) ? monthState.staffs : [];
+    const monthSchedule = monthState.scheduleData || monthState.schedule || {};
+    const next = {};
+
+    staffs.forEach((staff) => {
+      const targetName = String(staff?.name || '').trim();
+      const targetGroup = staff?.group || '白班';
+      const matchedStaff = monthStaffs.find((item) => item.id === staff.id)
+        || monthStaffs.find((item) => String(item?.name || '').trim() === targetName && (item?.group || '白班') === targetGroup)
+        || monthStaffs.find((item) => String(item?.name || '').trim() === targetName);
+      if (!matchedStaff) return;
+      const dayMap = monthSchedule?.[matchedStaff.id] || {};
+      Object.entries(dayMap).forEach(([dateStr, cell]) => {
+        const cellValue = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
+        if (!cellValue || !String(dateStr).startsWith(currentMonthKey)) return;
+        next[makeCellKey(staff.id, dateStr)] = cellValue;
+      });
+    });
+
+    return next;
+  }, [preScheduleMonthlySchedules, currentMonthKey, staffs]);
+
   const selectedCellHasPreSchedule = useMemo(() => {
     if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return false;
     return Boolean(getVisiblePreScheduleCode(selectedGridCell.staff.id, selectedGridCell.dateStr));
@@ -4088,95 +4123,69 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // ==========================================
   // 6. 輔助統計與操作
   // ==========================================
-  const shiftCodeSet = useMemo(() => new Set(mergedShiftCodes), [mergedShiftCodes]);
-  const dayInfoByDate = useMemo(() => new Map(daysInMonth.map((day) => [day.date, day])), [daysInMonth]);
-
-  const staffStatsMap = useMemo(() => {
-    const nextMap = {};
-    staffs.forEach((staff) => {
-      const stats = {
-        work: 0,
-        holidayLeave: 0,
-        totalLeave: 0,
-        leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
-      };
-
-      const mySchedule = schedule[staff.id] || {};
-      daysInMonth.forEach((day) => {
-        const cellData = mySchedule[day.date];
-        const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
-        if (!code) return;
-
-        if (shiftCodeSet.has(code)) stats.work += 1;
-        if (isConfiguredLeaveCode(code)) {
-          stats.totalLeave += 1;
-          const leavePrefix = getCodePrefix(code);
-          if (stats.leaveDetails[leavePrefix] !== undefined) stats.leaveDetails[leavePrefix] += 1;
-          if (day.isWeekend || day.isHoliday) stats.holidayLeave += 1;
-        }
-      });
-
-      nextMap[staff.id] = stats;
-    });
-    return nextMap;
-  }, [staffs, schedule, daysInMonth, mergedLeaveCodes, shiftCodeSet]);
-
-  const dailyStatsMap = useMemo(() => {
-    const nextMap = {};
-    daysInMonth.forEach((day) => {
-      nextMap[day.date] = { D: 0, E: 0, N: 0, totalLeave: 0 };
-    });
-
-    staffs.forEach((staff) => {
-      const mySchedule = schedule[staff.id] || {};
-      daysInMonth.forEach((day) => {
-        const cellData = mySchedule[day.date];
-        const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
-        if (!code) return;
-
-        const stats = nextMap[day.date];
-        if (!stats) return;
-        const shiftGroup = getShiftGroupByCode(code);
-        if (shiftGroup === '白班') stats.D += 1;
-        else if (shiftGroup === '小夜') stats.E += 1;
-        else if (shiftGroup === '大夜') stats.N += 1;
-        else if (isConfiguredLeaveCode(code)) stats.totalLeave += 1;
-      });
-    });
-
-    return nextMap;
-  }, [staffs, schedule, daysInMonth]);
-
-  const requiredCountMap = useMemo(() => {
-    const nextMap = {};
-    daysInMonth.forEach((day) => {
-      const bucket = getRequiredStaffingBucketByDay(day);
-      nextMap[day.date] = {
-        D: Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0),
-        E: Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0),
-        N: Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0)
-      };
-    });
-    return nextMap;
-  }, [daysInMonth, staffingConfig]);
-
   const getStaffStats = (staffId) => {
-    return staffStatsMap[staffId] || {
+    const stats = {
       work: 0,
       holidayLeave: 0,
       totalLeave: 0,
-      leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
+      leaveDetails: Object.fromEntries(mergedLeaveCodes.map(l => [l, 0]))
     };
+
+    const mySchedule = schedule[staffId] || {};
+    daysInMonth.forEach(d => {
+      const cellData = mySchedule[d.date];
+      const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
+      if (!code) return;
+
+      if (getAllShiftCodes().includes(code)) stats.work += 1;
+      if (isConfiguredLeaveCode(code)) {
+        stats.totalLeave += 1;
+        if (stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
+        if (d.isWeekend || d.isHoliday) stats.holidayLeave += 1;
+      }
+    });
+    return stats;
   };
 
   const getDailyStats = (dateStr) => {
-    return dailyStatsMap[dateStr] || { D: 0, E: 0, N: 0, totalLeave: 0 };
+    const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
+
+    staffs.forEach(staff => {
+      const cellData = schedule[staff.id]?.[dateStr];
+      const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
+      if (!code) return;
+
+      const shiftGroup = getShiftGroupByCode(code);
+      if (shiftGroup === '白班') {
+        stats.D += 1;
+      } else if (shiftGroup === '小夜') {
+        stats.E += 1;
+      } else if (shiftGroup === '大夜') {
+        stats.N += 1;
+      } else if (isConfiguredLeaveCode(code)) {
+        stats.totalLeave += 1;
+      }
+    });
+
+    return stats;
   };
 
+  const dailyStatsMap = useMemo(() => {
+    const next = {};
+    daysInMonth.forEach((day) => {
+      next[day.date] = getDailyStats(day.date);
+    });
+    return next;
+  }, [daysInMonth, staffs, schedule, mergedLeaveCodes]);
+
   const getRequiredCountForDate = (dateStr, rowKey) => {
-    const counts = requiredCountMap[dateStr];
-    if (!counts || !['D', 'E', 'N'].includes(rowKey)) return null;
-    return counts[rowKey];
+    const dayInfo = daysInMonth.find(d => d.date === dateStr);
+    if (!dayInfo) return null;
+    const bucket = getRequiredStaffingBucketByDay(dayInfo);
+    if (rowKey === 'D') return Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0);
+    if (rowKey === 'E') return Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0);
+    if (rowKey === 'N') return Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0);
+    return null;
   };
 
   const getDemandHighlightStyle = (dateStr, rowKey, actualCount) => {
@@ -4887,18 +4896,14 @@ const openSelectedCellFillModal = () => {
   };
 
   const groupedStaffs = useMemo(() => {
-    const groupedMap = { 白班: [], 小夜: [], 大夜: [] };
-    staffs.forEach((staff) => {
-      const group = staff.group || '白班';
-      if (!groupedMap[group]) groupedMap[group] = [];
-      groupedMap[group].push(staff);
-    });
-
-    return SHIFT_GROUPS.map((group) => ({
+    return SHIFT_GROUPS.map(group => ({
       group,
-      staffs: groupedMap[group] || []
+      staffs: staffs.filter(staff => (staff.group || '白班') === group)
     }));
   }, [staffs]);
+
+  const shiftOptions = useMemo(() => mergedShiftCodes.map((s) => <option key={s} value={s}>{s}</option>), [mergedShiftCodes]);
+  const leaveOptions = useMemo(() => mergedLeaveCodes.map((l) => <option key={l} value={l}>{l}</option>), [mergedLeaveCodes]);
 
   useEffect(() => {
     setSelectedGridCell(null);
@@ -5386,7 +5391,7 @@ const openSelectedCellFillModal = () => {
                           const cellKey = makeCellKey(staff.id, d.date);
                           const draftValue = cellDrafts[cellKey];
                           const displayValue = draftValue !== undefined ? draftValue : val;
-                          const preScheduleCode = getVisiblePreScheduleCode(staff, d.date);
+                          const preScheduleCode = currentMonthPreScheduleCodeMap[cellKey] || getVisiblePreScheduleCode(staff, d.date);
                           const hasFormalValue = Boolean(displayValue);
                           const hasSameVisibleCode = hasFormalValue && Boolean(preScheduleCode) && String(displayValue).trim() === String(preScheduleCode).trim();
                           const showPreScheduleAsMain = !hasFormalValue && Boolean(preScheduleCode);
@@ -5399,8 +5404,8 @@ const openSelectedCellFillModal = () => {
                             start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
                             end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
                           } : null);
-                          const inRangeSelection = isCellInSelectionRect(effectiveSelection, staffs, daysInMonth, staff.id, d.date);
-                          const isPrimarySelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date;
+                          const inRangeSelection = selectedRangeCellKeySet.has(cellKey) || isCellInSelectionRect(effectiveSelection, staffs, daysInMonth, staff.id, d.date);
+                          const isPrimarySelected = primarySelectedCellKey === cellKey;
                           const isInvalid = Boolean(invalidCellKeys[cellKey]);
                           const ruleWarningMessage = cellRuleWarnings[cellKey] || '';
                           const isRuleWarning = Boolean(ruleWarningMessage) && !isInvalid;
@@ -5491,12 +5496,12 @@ const openSelectedCellFillModal = () => {
                                     {!preScheduleEditMode && (
                                       <>
                                         <optgroup label="上班">
-                                          {mergedShiftCodes.map(s => <option key={s} value={s}>{s}</option>)}
+                                          {shiftOptions}
                                         </optgroup>
                                       </>
                                     )}
                                     <optgroup label={preScheduleEditMode ? "預班／預假" : "休假"}>
-                                      {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
+                                      {leaveOptions}
                                     </optgroup>
                                   </select>
 
