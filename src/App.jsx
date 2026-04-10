@@ -487,7 +487,6 @@ const isPotentialManualShiftPrefix = (rawValue = '', allowedLeaveCodes = []) => 
 };
 
 const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
-const EMPTY_OBJECT = Object.freeze({});
 
 const parseClipboardGrid = (text = '') => {
   const raw = String(text || '').replace(/\r/g, '');
@@ -1588,316 +1587,6 @@ const ScheduleGridCell = React.memo(function ScheduleGridCell({
   );
 });
 
-
-
-const areStaffStatsEqual = (prevStats = null, nextStats = null) => {
-  if (prevStats === nextStats) return true;
-  if (!prevStats || !nextStats) return false;
-  if (prevStats.work !== nextStats.work || prevStats.holidayLeave !== nextStats.holidayLeave || prevStats.totalLeave !== nextStats.totalLeave) return false;
-  const prevDetails = prevStats.leaveDetails || {};
-  const nextDetails = nextStats.leaveDetails || {};
-  const keys = new Set([...Object.keys(prevDetails), ...Object.keys(nextDetails)]);
-  for (const key of keys) {
-    if ((prevDetails[key] || 0) !== (nextDetails[key] || 0)) return false;
-  }
-  return true;
-};
-
-const ScheduleStaffRow = React.memo(function ScheduleStaffRow({
-  staff,
-  index,
-  groupCount,
-  stats,
-  scheduleRow,
-  customColumnRowValues,
-  daysInMonth,
-  densityConfig,
-  effectiveDensityConfig,
-  tableFontSizeClass,
-  tableFontColor,
-  shiftColumnBgColor,
-  shiftColumnFontColor,
-  shiftColumnFontSizeClass,
-  shiftCellLabelFontSize,
-  nameDateColumnBgColor,
-  nameDateColumnFontColor,
-  nameDateColumnFontSizeClass,
-  group,
-  showShiftLabels,
-  showRightStats,
-  showLeaveStats,
-  mergedLeaveCodes,
-  customColumns,
-  colors,
-  currentMonthPreScheduleCodeMap,
-  cellDrafts,
-  invalidCellKeys,
-  cellRuleWarnings,
-  selectedRangeCellKeySet,
-  primarySelectedCellKey,
-  dangerTintColor,
-  warningTintColor,
-  preScheduleHintBorderColor,
-  preScheduleTextColor,
-  showBlueDots,
-  selectionMode,
-  selectorDotClass,
-  shiftOptionsNodes,
-  leaveOptionsNodes,
-  preScheduleEditMode,
-  isDraggingRow,
-  isDragOverBefore,
-  isDragOverAfter,
-  rowInsertStyle,
-  onStaffDragStart,
-  onStaffDragEnd,
-  onStartEditingStaff,
-  editingStaffId,
-  editingNameDraft,
-  onEditingNameDraftChange,
-  onCommitEditingStaffName,
-  onCancelEditingStaffName,
-  onRemoveStaff,
-  onStaffDragOver,
-  onStaffDrop,
-  getPreScheduleBackgroundColor,
-  getFourWeekDividerStyle,
-  startRangeSelection,
-  updateRangeSelection,
-  applyPreScheduleValueToCells,
-  applySelectionValue,
-  setCustomColumnValues
-}) {
-  return (
-    <tr
-      className={`relative border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isDraggingRow ? 'opacity-45 bg-blue-50/40' : ''} ${isDragOverBefore ? 'drag-insert-before' : ''} ${isDragOverAfter ? 'drag-insert-after' : ''}`}
-    >
-      {index === 0 && (
-        <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, ...(rowInsertStyle || {}) }}>
-          <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
-            {showShiftLabels && (
-              <span className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`} style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}>
-                {group}
-              </span>
-            )}
-          </div>
-        </td>
-      )}
-
-      <td
-        className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5 relative"
-        style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, ...(rowInsertStyle || {}) }}
-        onDragOver={(e) => onStaffDragOver(e, staff)}
-        onDrop={(e) => onStaffDrop(e, staff)}
-      >
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            draggable
-            onDragStart={(e) => onStaffDragStart(e, staff)}
-            onDragEnd={onStaffDragEnd}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            className="shrink-0 w-4 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-grab active:cursor-grabbing"
-            aria-label={`拖曳排序 ${staff.name}`}
-          >
-            <GripVertical size={14} />
-          </button>
-          {editingStaffId === staff.id ? (
-            <div
-              contentEditable
-              suppressContentEditableWarning
-              ref={(node) => {
-                if (node && editingStaffId === staff.id) {
-                  requestAnimationFrame(() => {
-                    node.focus();
-                    const selection = window.getSelection();
-                    const range = document.createRange();
-                    range.selectNodeContents(node);
-                    range.collapse(false);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                  });
-                }
-              }}
-              onInput={(e) => onEditingNameDraftChange(e.currentTarget.textContent || '')}
-              onBlur={(e) => onCommitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft)}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  onCommitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft);
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  onCancelEditingStaffName();
-                }
-              }}
-              className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold bg-transparent whitespace-nowrap outline-none ${nameDateColumnFontSizeClass}`}
-              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", maxWidth: '100%' }}
-            >
-              {editingNameDraft}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onStartEditingStaff(staff)}
-              className={`flex-1 min-w-0 bg-transparent border-none text-center font-bold whitespace-nowrap px-0.5 py-0 ${nameDateColumnFontSizeClass}`}
-              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em" }}
-              title="點擊編輯姓名"
-            >
-              <span className="block truncate">{staff.name}</span>
-            </button>
-          )}
-
-          <button onClick={() => onRemoveStaff(staff.id)} className="text-slate-400 hover:text-red-500 shrink-0 w-3 flex items-center justify-center">
-            <Minus size={14} />
-          </button>
-        </div>
-      </td>
-
-      {daysInMonth.map((d) => {
-        const cellData = scheduleRow?.[d.date];
-        const val = typeof cellData === 'object' && cellData !== null ? (cellData?.value || '') : (cellData || '');
-        const cellTextColor = typeof cellData === 'object' && cellData !== null ? String(cellData?.textColor || '').trim() : '';
-        const cellKey = makeCellKey(staff.id, d.date);
-        const draftValue = cellDrafts[cellKey];
-        const displayValue = draftValue !== undefined ? draftValue : val;
-        const preScheduleCode = currentMonthPreScheduleCodeMap[cellKey] || '';
-        const hasFormalValue = Boolean(displayValue);
-        const hasSameVisibleCode = hasFormalValue && Boolean(preScheduleCode) && String(displayValue).trim() === String(preScheduleCode).trim();
-        const showPreScheduleAsMain = !hasFormalValue && Boolean(preScheduleCode);
-        const showPreScheduleAsHint = hasFormalValue && Boolean(preScheduleCode) && !hasSameVisibleCode;
-        const baseCellBackgroundColor = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent');
-        const cellBackgroundColor = showPreScheduleAsMain ? getPreScheduleBackgroundColor(baseCellBackgroundColor, false) : baseCellBackgroundColor;
-        const inRangeSelection = selectedRangeCellKeySet.has(cellKey);
-        const isPrimarySelected = primarySelectedCellKey === cellKey;
-        const isInvalid = Boolean(invalidCellKeys[cellKey]);
-        const ruleWarningMessage = cellRuleWarnings[cellKey] || '';
-        const isRuleWarning = Boolean(ruleWarningMessage) && !isInvalid;
-        const targetCells = [{ staffId: staff.id, dateStr: d.date }];
-        return (
-          <ScheduleGridCell
-            key={cellKey}
-            dayInfo={d}
-            densityConfig={densityConfig}
-            tableFontSizeClass={tableFontSizeClass}
-            tableFontColor={tableFontColor}
-            dangerTintColor={dangerTintColor}
-            warningTintColor={warningTintColor}
-            preScheduleHintBorderColor={preScheduleHintBorderColor}
-            preScheduleTextColor={preScheduleTextColor}
-            displayValue={displayValue}
-            cellTextColor={cellTextColor}
-            showPreScheduleAsMain={showPreScheduleAsMain}
-            showPreScheduleAsHint={showPreScheduleAsHint}
-            preScheduleCode={preScheduleCode}
-            cellBackgroundColor={cellBackgroundColor}
-            inRangeSelection={inRangeSelection}
-            isPrimarySelected={isPrimarySelected}
-            isInvalid={isInvalid}
-            isRuleWarning={isRuleWarning}
-            ruleWarningMessage={ruleWarningMessage}
-            rowInsertStyle={rowInsertStyle}
-            fourWeekDividerStyle={getFourWeekDividerStyle(d.date)}
-            showBlueDots={showBlueDots}
-            selectionMode={selectionMode}
-            showShiftLabels={showShiftLabels}
-            selectorDotClass={densityConfig.selectorDotClass}
-            selectValue={showPreScheduleAsMain ? preScheduleCode : displayValue}
-            selectTitle={preScheduleEditMode ? `預班：${staff.name} / ${d.date}` : `設定：${staff.name} / ${d.date}`}
-            shiftOptionsNodes={shiftOptionsNodes}
-            leaveOptionsNodes={leaveOptionsNodes}
-            preScheduleEditMode={preScheduleEditMode}
-            onMouseDownCell={(e) => {
-              if (selectionMode === 'cell' || !showBlueDots) {
-                startRangeSelection(staff, d.date, e);
-              }
-            }}
-            onMouseEnterCell={() => updateRangeSelection(staff, d.date)}
-            onClickCell={() => {
-              if (selectionMode === 'cell' || !showBlueDots) {
-                startRangeSelection(staff, d.date);
-              }
-            }}
-            onDotClick={(e) => {
-              e.stopPropagation();
-              startRangeSelection(staff, d.date);
-            }}
-            onSelectChange={(e) => {
-              startRangeSelection(staff, d.date);
-              if (preScheduleEditMode) {
-                applyPreScheduleValueToCells(targetCells, e.target.value, {
-                  advance: Boolean(e.target.value),
-                  direction: 1,
-                  preserveSelection: false,
-                  activeCell: targetCells[targetCells.length - 1],
-                  showFeedback: true
-                });
-              } else {
-                applySelectionValue(targetCells, e.target.value, {
-                  advance: Boolean(e.target.value),
-                  direction: 1,
-                  source: 'manual'
-                });
-              }
-              e.currentTarget.blur();
-            }}
-            onSelectClick={(e) => {
-              e.stopPropagation();
-              startRangeSelection(staff, d.date);
-            }}
-            onSelectMouseDown={(e) => {
-              if (e.button !== 0) return;
-              e.stopPropagation();
-              startRangeSelection(staff, d.date, e);
-            }}
-          />
-        );
-      })}
-
-      {showRightStats && (
-        <>
-          <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.work}</td>
-          <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.holidayLeave}</td>
-          <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.totalLeave}</td>
-        </>
-      )}
-      {showLeaveStats && mergedLeaveCodes.map((l) => (
-        <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>
-          {stats.leaveDetails[l] || ''}
-        </td>
-      ))}
-      {(customColumns || []).map((col) => (
-        <td key={col} className={`border-r bg-violet-50/10 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>
-          <input
-            type="text"
-            value={customColumnRowValues?.[col] || ''}
-            onChange={(e) => setCustomColumnValues((prev) => ({ ...prev, [staff.id]: { ...(prev?.[staff.id] || {}), [col]: e.target.value } }))}
-            className="w-full h-full px-2 py-1 text-center bg-transparent border-none focus:ring-1 focus:ring-violet-300"
-            placeholder=""
-          />
-        </td>
-      ))}
-    </tr>
-  );
-}, (prevProps, nextProps) => {
-  if (prevProps.staff !== nextProps.staff) return false;
-  if (prevProps.index !== nextProps.index || prevProps.groupCount !== nextProps.groupCount) return false;
-  if (prevProps.scheduleRow !== nextProps.scheduleRow) return false;
-  if (prevProps.customColumnRowValues !== nextProps.customColumnRowValues) return false;
-  if (!areStaffStatsEqual(prevProps.stats, nextProps.stats)) return false;
-  if (prevProps.isDraggingRow !== nextProps.isDraggingRow || prevProps.isDragOverBefore !== nextProps.isDragOverBefore || prevProps.isDragOverAfter !== nextProps.isDragOverAfter) return false;
-  if (prevProps.editingStaffId !== nextProps.editingStaffId || prevProps.editingNameDraft !== nextProps.editingNameDraft) return false;
-  if (prevProps.daysInMonth !== nextProps.daysInMonth) return false;
-  if (prevProps.selectedRangeCellKeySet !== nextProps.selectedRangeCellKeySet) return false;
-  if (prevProps.primarySelectedCellKey !== nextProps.primarySelectedCellKey) return false;
-  if (prevProps.currentMonthPreScheduleCodeMap !== nextProps.currentMonthPreScheduleCodeMap) return false;
-  if (prevProps.cellDrafts !== nextProps.cellDrafts || prevProps.invalidCellKeys !== nextProps.invalidCellKeys || prevProps.cellRuleWarnings !== nextProps.cellRuleWarnings) return false;
-  if (prevProps.preScheduleEditMode !== nextProps.preScheduleEditMode) return false;
-  if (prevProps.showBlueDots !== nextProps.showBlueDots || prevProps.selectionMode !== nextProps.selectionMode) return false;
-  return true;
-});
 
 function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, setPreScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
   // ==========================================
@@ -3061,13 +2750,15 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       new Map(normalizedEntries.map((entry) => [makeCellKey(entry.staffId, entry.dateStr), entry])).values()
     );
 
+    const touchedStaffIds = Array.from(new Set(dedupedEntries.map(({ staffId }) => staffId)));
     const nextSchedule = { ...(schedule || {}) };
-    const clonedStaffIds = new Set();
+    touchedStaffIds.forEach((staffId) => {
+      const currentRow = schedule?.[staffId];
+      nextSchedule[staffId] = currentRow && typeof currentRow === 'object' ? { ...currentRow } : {};
+    });
+
     dedupedEntries.forEach(({ staffId, dateStr, value, source }) => {
-      if (!clonedStaffIds.has(staffId)) {
-        nextSchedule[staffId] = { ...(nextSchedule[staffId] || {}) };
-        clonedStaffIds.add(staffId);
-      }
+      if (!nextSchedule[staffId]) nextSchedule[staffId] = {};
       const existingCell = nextSchedule[staffId]?.[dateStr];
       const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
       nextSchedule[staffId][dateStr] = value ? { ...existingMeta, value, source } : null;
@@ -4777,7 +4468,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     setSchedule(prev => {
       const next = { ...(prev || {}) };
-      next[staffId] = { ...(next[staffId] || {}) };
+      const currentRow = prev?.[staffId];
+      next[staffId] = currentRow && typeof currentRow === 'object' ? { ...currentRow } : {};
       const existingCell = next[staffId]?.[dateStr];
       const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
       next[staffId][dateStr] = {
@@ -5722,6 +5414,7 @@ const openSelectedCellFillModal = () => {
                   {visibleGroupStaffList.map((staff, index) => {
                     const stats = getStaffStats(staff.id);
                     const groupCount = visibleGroupStaffList.length + 1;
+
                     const isDraggingRow = draggingStaffId === staff.id;
                     const isDragOverBefore = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'before';
                     const isDragOverAfter = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'after';
@@ -5732,78 +5425,232 @@ const openSelectedCellFillModal = () => {
                         : null;
 
                     return (
-                      <ScheduleStaffRow
+                      <tr
                         key={staff.id}
-                        staff={staff}
-                        index={index}
-                        groupCount={groupCount}
-                        stats={stats}
-                        scheduleRow={schedule[staff.id] || EMPTY_OBJECT}
-                        customColumnRowValues={customColumnValues?.[staff.id] || EMPTY_OBJECT}
-                        daysInMonth={daysInMonth}
-                        densityConfig={densityConfig}
-                        effectiveDensityConfig={effectiveDensityConfig}
-                        tableFontSizeClass={tableFontSizeClass}
-                        tableFontColor={tableFontColor}
-                        shiftColumnBgColor={shiftColumnBgColor}
-                        shiftColumnFontColor={shiftColumnFontColor}
-                        shiftColumnFontSizeClass={shiftColumnFontSizeClass}
-                        shiftCellLabelFontSize={shiftCellLabelFontSize}
-                        nameDateColumnBgColor={nameDateColumnBgColor}
-                        nameDateColumnFontColor={nameDateColumnFontColor}
-                        nameDateColumnFontSizeClass={nameDateColumnFontSizeClass}
-                        group={group}
-                        showShiftLabels={showShiftLabels}
-                        showRightStats={showRightStats}
-                        showLeaveStats={showLeaveStats}
-                        mergedLeaveCodes={mergedLeaveCodes}
-                        customColumns={customColumns}
-                        colors={colors}
-                        currentMonthPreScheduleCodeMap={currentMonthPreScheduleCodeMap}
-                        cellDrafts={cellDrafts}
-                        invalidCellKeys={invalidCellKeys}
-                        cellRuleWarnings={cellRuleWarnings}
-                        selectedRangeCellKeySet={selectedRangeCellKeySet}
-                        primarySelectedCellKey={primarySelectedCellKey}
-                        dangerTintColor={dangerTintColor}
-                        warningTintColor={warningTintColor}
-                        preScheduleHintBorderColor={preScheduleHintBorderColor}
-                        preScheduleTextColor={preScheduleTextColor}
-                        showBlueDots={showBlueDots}
-                        selectionMode={selectionMode}
-                        selectorDotClass={densityConfig.selectorDotClass}
-                        shiftOptionsNodes={shiftOptionsNodes}
-                        leaveOptionsNodes={leaveOptionsNodes}
-                        preScheduleEditMode={preScheduleEditMode}
-                        isDraggingRow={isDraggingRow}
-                        isDragOverBefore={isDragOverBefore}
-                        isDragOverAfter={isDragOverAfter}
-                        rowInsertStyle={rowInsertStyle}
-                        onStaffDragStart={handleStaffDragStart}
-                        onStaffDragEnd={handleStaffDragEnd}
-                        onStartEditingStaff={(targetStaff) => {
-                          setEditingStaffId(targetStaff.id);
-                          setEditingNameDraft(targetStaff.name || '');
-                        }}
-                        editingStaffId={editingStaffId}
-                        editingNameDraft={editingNameDraft}
-                        onEditingNameDraftChange={setEditingNameDraft}
-                        onCommitEditingStaffName={commitEditingStaffName}
-                        onCancelEditingStaffName={() => {
-                          setEditingStaffId(null);
-                          setEditingNameDraft('');
-                        }}
-                        onRemoveStaff={removeStaff}
-                        onStaffDragOver={handleStaffDragOver}
-                        onStaffDrop={handleStaffDrop}
-                        getPreScheduleBackgroundColor={getPreScheduleBackgroundColor}
-                        getFourWeekDividerStyle={getFourWeekDividerStyle}
-                        startRangeSelection={startRangeSelection}
-                        updateRangeSelection={updateRangeSelection}
-                        applyPreScheduleValueToCells={applyPreScheduleValueToCells}
-                        applySelectionValue={applySelectionValue}
-                        setCustomColumnValues={setCustomColumnValues}
-                      />
+                        className={`relative border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isDraggingRow ? 'opacity-45 bg-blue-50/40' : ''} ${isDragOverBefore ? 'drag-insert-before' : ''} ${isDragOverAfter ? 'drag-insert-after' : ''}`}
+                      >
+                        {index === 0 && (
+                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, ...(rowInsertStyle || {}) }}>
+                            <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
+                              {showShiftLabels && (
+                                <span
+                                  className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`}
+                                  style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}
+                                >
+                                  {group}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+
+                        <td
+                          className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5 relative`}
+                          style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, ...(rowInsertStyle || {}) }}
+                          onDragOver={(e) => handleStaffDragOver(e, staff)}
+                          onDrop={(e) => handleStaffDrop(e, staff)}
+                        >
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              draggable
+                              onDragStart={(e) => handleStaffDragStart(e, staff)}
+                              onDragEnd={handleStaffDragEnd}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              className="shrink-0 w-4 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-grab active:cursor-grabbing"
+                              aria-label={`拖曳排序 ${staff.name}`}
+                            >
+                              <GripVertical size={14} />
+                            </button>
+                            {editingStaffId === staff.id ? (
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              ref={(node) => {
+                                if (node && editingStaffId === staff.id) {
+                                  requestAnimationFrame(() => {
+                                    node.focus();
+                                    const selection = window.getSelection();
+                                    const range = document.createRange();
+                                    range.selectNodeContents(node);
+                                    range.collapse(false);
+                                    selection.removeAllRanges();
+                                    selection.addRange(range);
+                                  });
+                                }
+                              }}
+                              onInput={(e) => setEditingNameDraft(e.currentTarget.textContent || '')}
+                              onBlur={(e) => commitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft)}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  commitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft);
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setEditingStaffId(null);
+                                  setEditingNameDraft('');
+                                }
+                              }}
+                              className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold bg-transparent whitespace-nowrap outline-none ${nameDateColumnFontSizeClass}`}
+                              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", maxWidth: '100%' }}
+                            >
+                              {editingNameDraft}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingStaffId(staff.id);
+                                setEditingNameDraft(staff.name || '');
+                              }}
+                              className={`flex-1 min-w-0 bg-transparent border-none text-center font-bold whitespace-nowrap px-0.5 py-0 ${nameDateColumnFontSizeClass}`}
+                              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em" }}
+                              title="點擊編輯姓名"
+                            >
+                              <span className="block truncate">{staff.name}</span>
+                            </button>
+                          )}
+
+                            <button
+                              onClick={() => removeStaff(staff.id)}
+                              className="text-slate-400 hover:text-red-500 shrink-0 w-3 flex items-center justify-center"
+                            >
+                              <Minus size={14} />
+                            </button>
+                          </div>
+                        </td>
+
+                        {daysInMonth.map(d => {
+                          const cellData = schedule[staff.id]?.[d.date];
+                          const val = typeof cellData === 'object' && cellData !== null ? (cellData?.value || '') : (cellData || '');
+                          const cellTextColor = typeof cellData === 'object' && cellData !== null ? String(cellData?.textColor || '').trim() : '';
+                          const cellKey = makeCellKey(staff.id, d.date);
+                          const draftValue = cellDrafts[cellKey];
+                          const displayValue = draftValue !== undefined ? draftValue : val;
+                          const preScheduleCode = currentMonthPreScheduleCodeMap[cellKey] || '';
+                          const hasFormalValue = Boolean(displayValue);
+                          const hasSameVisibleCode = hasFormalValue && Boolean(preScheduleCode) && String(displayValue).trim() === String(preScheduleCode).trim();
+                          const showPreScheduleAsMain = !hasFormalValue && Boolean(preScheduleCode);
+                          const showPreScheduleAsHint = hasFormalValue && Boolean(preScheduleCode) && !hasSameVisibleCode;
+                          const baseCellBackgroundColor = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent');
+                          const cellBackgroundColor = showPreScheduleAsMain
+                            ? getPreScheduleBackgroundColor(baseCellBackgroundColor, false)
+                            : baseCellBackgroundColor;
+                          const inRangeSelection = selectedRangeCellKeySet.has(cellKey);
+                          const isPrimarySelected = primarySelectedCellKey === cellKey;
+                          const isInvalid = Boolean(invalidCellKeys[cellKey]);
+                          const ruleWarningMessage = cellRuleWarnings[cellKey] || '';
+                          const isRuleWarning = Boolean(ruleWarningMessage) && !isInvalid;
+
+                          return (
+                            <ScheduleGridCell
+                              key={cellKey}
+                              dayInfo={d}
+                              densityConfig={densityConfig}
+                              tableFontSizeClass={tableFontSizeClass}
+                              tableFontColor={tableFontColor}
+                              dangerTintColor={dangerTintColor}
+                              warningTintColor={warningTintColor}
+                              preScheduleHintBorderColor={preScheduleHintBorderColor}
+                              preScheduleTextColor={preScheduleTextColor}
+                              displayValue={displayValue}
+                              cellTextColor={cellTextColor}
+                              showPreScheduleAsMain={showPreScheduleAsMain}
+                              showPreScheduleAsHint={showPreScheduleAsHint}
+                              preScheduleCode={preScheduleCode}
+                              cellBackgroundColor={cellBackgroundColor}
+                              inRangeSelection={inRangeSelection}
+                              isPrimarySelected={isPrimarySelected}
+                              isInvalid={isInvalid}
+                              isRuleWarning={isRuleWarning}
+                              ruleWarningMessage={ruleWarningMessage}
+                              rowInsertStyle={rowInsertStyle}
+                              fourWeekDividerStyle={getFourWeekDividerStyle(d.date)}
+                              showBlueDots={showBlueDots}
+                              selectionMode={selectionMode}
+                              showShiftLabels={showShiftLabels}
+                              selectorDotClass={densityConfig.selectorDotClass}
+                              selectValue={preScheduleEditMode ? preScheduleCode : val}
+                              selectTitle={showPreScheduleAsHint ? `選擇班別/假別｜預班 ${preScheduleCode}` : '選擇班別/假別'}
+                              shiftOptionsNodes={shiftOptionsNodes}
+                              leaveOptionsNodes={leaveOptionsNodes}
+                              preScheduleEditMode={preScheduleEditMode}
+                              onMouseDownCell={(e) => {
+                                if (e.button !== 0) return;
+                                e.preventDefault();
+                                setIsRangeDragging(true);
+                                startRangeSelection(staff, d.date, e);
+                              }}
+                              onMouseEnterCell={() => updateRangeSelection(staff, d.date)}
+                              onClickCell={() => {
+                                if (selectionMode === 'cell' || !showBlueDots) {
+                                  startRangeSelection(staff, d.date);
+                                }
+                              }}
+                              onDotClick={(e) => {
+                                e.stopPropagation();
+                                startRangeSelection(staff, d.date);
+                              }}
+                              onSelectChange={(e) => {
+                                startRangeSelection(staff, d.date);
+                                const targetCells = [{ staffId: staff.id, dateStr: d.date }];
+                                if (preScheduleEditMode) {
+                                  applyPreScheduleValueToCells(targetCells, e.target.value, {
+                                    advance: Boolean(e.target.value),
+                                    direction: 1,
+                                    preserveSelection: false,
+                                    activeCell: targetCells[targetCells.length - 1],
+                                    showFeedback: true
+                                  });
+                                } else {
+                                  applySelectionValue(targetCells, e.target.value, {
+                                    advance: Boolean(e.target.value),
+                                    direction: 1,
+                                    source: 'manual'
+                                  });
+                                }
+                                e.currentTarget.blur();
+                              }}
+                              onSelectClick={(e) => {
+                                e.stopPropagation();
+                                startRangeSelection(staff, d.date);
+                              }}
+                              onSelectMouseDown={(e) => {
+                                if (e.button !== 0) return;
+                                e.stopPropagation();
+                                startRangeSelection(staff, d.date, e);
+                              }}
+                            />
+                          );
+                        })}
+
+                        {showRightStats && (
+                        <>
+                        <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.work}</td>
+                        <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.holidayLeave}</td>
+                        <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.totalLeave}</td>
+                        </>
+                        )}
+                        {showLeaveStats && mergedLeaveCodes.map(l => (
+                          <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>
+                            {stats.leaveDetails[l] || ''}
+                          </td>
+                        ))}
+                        {(customColumns || []).map(col => (
+                          <td key={col} className={`border-r bg-violet-50/10 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>
+                            <input
+                              type="text"
+                              value={customColumnValues?.[staff.id]?.[col] || ''}
+                              onChange={(e) => setCustomColumnValues(prev => ({ ...prev, [staff.id]: { ...(prev?.[staff.id] || {}), [col]: e.target.value } }))}
+                              className="w-full h-full px-2 py-1 text-center bg-transparent border-none focus:ring-1 focus:ring-violet-300"
+                              placeholder=""
+                            />
+                          </td>
+                        ))}
+                      </tr>
                     );
                   })}
 
