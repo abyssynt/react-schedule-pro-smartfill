@@ -2,10 +2,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Plus, Minus, Settings, Sparkles, Loader2,
-  Save, History as Clock, Download,
+  ArrowUp, ArrowDown, Save, History as Clock, Download,
   FileSpreadsheet, FileText, X, Check, Calendar, CalendarDays,
   User, Lock, Info, Layout, ShieldCheck, Grid, UserCheck,
-  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2, GripVertical, AlertTriangle
+  Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2
 } from 'lucide-react';
 
 // ==========================================
@@ -14,19 +14,6 @@ import {
 const DICT = {
   SHIFTS: ['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16'],
   LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
-};
-
-let CUSTOM_SHIFT_DEFS = [];
-const getCustomShiftCodes = () => CUSTOM_SHIFT_DEFS.map((item) => String(item?.code || '').trim()).filter(Boolean);
-const getAllShiftCodes = () => Array.from(new Set([...(DICT.SHIFTS || []), ...getCustomShiftCodes()]));
-const setCustomShiftDefsRegistry = (defs = []) => {
-  CUSTOM_SHIFT_DEFS = Array.isArray(defs) ? defs : [];
-};
-const getCustomShiftGroup = (code = '') => {
-  const normalized = String(code || '').trim();
-  if (!normalized) return null;
-  const matched = CUSTOM_SHIFT_DEFS.find((item) => String(item?.code || '').trim() === normalized);
-  return matched?.group || null;
 };
 
 const SMART_RULES = {
@@ -268,22 +255,8 @@ const getSystemHolidayCalendar = (year, options = {}) => {
     workdays: workdayDates
   };
 };
-
-const readSchedulingRulesTextFromLocalSettings = () => {
-  try {
-    const stored = localStorage.getItem(LOCAL_SETTINGS_KEY);
-    if (!stored) return '';
-    const parsed = JSON.parse(stored);
-    return typeof parsed?.schedulingRulesText === 'string' ? parsed.schedulingRulesText : '';
-  } catch (error) {
-    console.error('讀取本機排班規則設定失敗', error);
-    return '';
-  }
-};
-
 const STORAGE_KEY = 'schedule_app_history';
 const ACTIVE_DRAFT_KEY = 'schedule_app_active_draft';
-const LOCAL_SETTINGS_KEY = 'schedule_app_local_settings';
 
 // 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
 const loadExcelJS = () => {
@@ -314,26 +287,12 @@ const loadSheetJS = () => {
   });
 };
 
-const normalizeImportedHalfWidth = (input = '') => String(input ?? '')
-  .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
-  .replace(/　/g, ' ')
-  .trim();
-
-const getImportedRawNumberedLeaveValue = (rawValue = '') => {
-  const normalized = normalizeImportedHalfWidth(rawValue).replace(/\s+/g, '');
-  const match = normalized.match(/^(例|休)([1-4])$/);
-  if (!match) return '';
-  return `${match[1]}${match[2]}`;
-};
-
 const normalizeImportedShiftCode = (rawValue = '') => {
   const value = String(rawValue ?? '').trim();
   if (!value) return '';
 
-  const normalizedWhitespace = normalizeImportedHalfWidth(value).replace(/\s+/g, '');
+  const normalizedWhitespace = value.replace(/\s+/g, '');
   const lower = normalizedWhitespace.toLowerCase();
-  const numberedLeaveValue = getImportedRawNumberedLeaveValue(normalizedWhitespace);
-  if (numberedLeaveValue) return numberedLeaveValue.startsWith('例') ? '例' : '休';
 
   const directMap = {
     d: 'D',
@@ -350,433 +309,126 @@ const normalizeImportedShiftCode = (rawValue = '') => {
   };
 
   if (directMap[lower]) return directMap[lower];
-  if (DICT.LEAVES.includes(normalizedWhitespace) || getAllShiftCodes().includes(normalizedWhitespace)) return normalizedWhitespace;
-  return normalizeImportedHalfWidth(value);
+  if (DICT.LEAVES.includes(normalizedWhitespace) || DICT.SHIFTS.includes(normalizedWhitespace)) return normalizedWhitespace;
+  return value;
 };
 
 const buildMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 
-const isConfiguredImportedLeaveCode = (code = '', customLeaveCodes = []) => {
-  const mergedLeaveCodes = Array.from(new Set([...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).filter(Boolean);
-  const prefix = getCodePrefix(code);
-  return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
-};
-
-const normalizeCodeComparisonValue = (input = '') => normalizeImportedHalfWidth(input).trim().replace(/\s+/g, '');
-const normalizeCodeComparisonCompact = (input = '') => normalizeCodeComparisonValue(input).replace(/[－—–~～_]/g, '-');
-const normalizeCodeComparisonCompactNoHyphen = (input = '') => normalizeCodeComparisonCompact(input).replace(/-/g, '');
-const isBuiltInCode = (code = '') => DICT.SHIFTS.includes(code) || DICT.LEAVES.includes(code);
-
-
-const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) return { normalized: '', isValid: true };
-
-  const normalizedBase = normalizeImportedHalfWidth(value).trim();
-  const collapsed = normalizeCodeComparisonValue(normalizedBase);
-  const lower = collapsed.toLowerCase();
-  const compact = lower.replace(/[－—–~～_]/g, '-');
-  const compactNoHyphen = compact.replace(/-/g, '');
-  const exactCompact = normalizeCodeComparisonCompact(normalizedBase);
-  const exactCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(normalizedBase);
-  const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
-
-  const exactAllowed = allowedCodes.find((code) => {
-    const codeCompact = normalizeCodeComparisonCompact(code);
-    const codeCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(code);
-    return codeCompact === exactCompact || codeCompactNoHyphen === exactCompactNoHyphen;
-  });
-  if (exactAllowed) return { normalized: exactAllowed, isValid: true };
-
-  const directMap = {
-    d: 'D',
-    e: 'E',
-    n: 'N',
-    off: 'off',
-    of: 'off',
-    o: 'off',
-    am: 'AM',
-    pm: 'PM',
-    a: 'AM',
-    p: 'PM',
-    '8-12': '8-12',
-    '812': '8-12',
-    '08-12': '8-12',
-    '0812': '8-12',
-    '12-16': '12-16',
-    '1216': '12-16',
-    '白8-8': '白8-8',
-    '白88': '白8-8',
-    '白8-08': '白8-8',
-    '白8to8': '白8-8',
-    '夜8-8': '夜8-8',
-    '夜88': '夜8-8',
-    '夜8to8': '夜8-8'
-  };
-
-  const directCandidate = directMap[compact] || directMap[compactNoHyphen] || directMap[lower];
-  if (directCandidate) return { normalized: directCandidate, isValid: allowedCodes.includes(directCandidate) };
-
-  const directAllowed = allowedCodes.find((code) => {
-    if (!isBuiltInCode(code)) return false;
-    const codeLower = normalizeCodeComparisonValue(code).toLowerCase();
-    const codeCompact = codeLower.replace(/[－—–~～_]/g, '-');
-    const codeCompactNoHyphen = codeCompact.replace(/-/g, '');
-    return codeLower === lower || codeCompact === compact || codeCompactNoHyphen === compactNoHyphen;
-  });
-  if (directAllowed) return { normalized: directAllowed, isValid: true };
-
-  return { normalized: normalizedBase, isValid: false };
-};
-
-const getNormalizedManualCodeCandidates = (rawValue = '', allowedLeaveCodes = []) => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) return [];
-
-  const normalizedBase = normalizeImportedHalfWidth(value).trim();
-  const collapsed = normalizeCodeComparisonValue(normalizedBase);
-  const lower = collapsed.toLowerCase();
-  const compact = lower.replace(/[－—–~～_]/g, '-');
-  const compactNoHyphen = compact.replace(/-/g, '');
-  const aliases = new Set([lower, compact, compactNoHyphen]);
-  const exactCompact = normalizeCodeComparisonCompact(normalizedBase);
-  const exactCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(normalizedBase);
-  const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
-
-  const expandedAliases = new Set(aliases);
-  if (aliases.has('o')) {
-    expandedAliases.add('of');
-    expandedAliases.add('off');
-  }
-  if (aliases.has('of')) expandedAliases.add('off');
-  if (aliases.has('a')) expandedAliases.add('am');
-  if (aliases.has('p')) expandedAliases.add('pm');
-  if (aliases.has('8')) {
-    expandedAliases.add('8-12');
-    expandedAliases.add('812');
-  }
-  if (aliases.has('12')) {
-    expandedAliases.add('12-16');
-    expandedAliases.add('1216');
-  }
-  if (aliases.has('白8')) {
-    expandedAliases.add('白8-8');
-    expandedAliases.add('白88');
-  }
-  if (aliases.has('夜8')) {
-    expandedAliases.add('夜8-8');
-    expandedAliases.add('夜88');
-  }
-
-  return allowedCodes.filter((code) => {
-    const codeCompact = normalizeCodeComparisonCompact(code);
-    const codeCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(code);
-    if (!isBuiltInCode(code)) {
-      return codeCompact.startsWith(exactCompact) || codeCompactNoHyphen.startsWith(exactCompactNoHyphen);
-    }
-    const codeLower = normalizeCodeComparisonValue(code).toLowerCase();
-    const codeLowerCompact = codeLower.replace(/[－—–~～_]/g, '-');
-    const codeLowerCompactNoHyphen = codeLowerCompact.replace(/-/g, '');
-    return Array.from(expandedAliases).some((alias) => codeLower.startsWith(alias) || codeLowerCompact.startsWith(alias) || codeLowerCompactNoHyphen.startsWith(alias));
-  });
-};
-
-const isPotentialManualShiftPrefix = (rawValue = '', allowedLeaveCodes = []) => {
-  if (!String(rawValue ?? '').trim()) return true;
-  return getNormalizedManualCodeCandidates(rawValue, allowedLeaveCodes).length > 0;
-};
-
-const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
-
-const parseClipboardGrid = (text = '') => {
-  const raw = String(text || '').replace(/\r/g, '');
-  if (!raw.trim()) return [];
-  return raw.split('\n').map(row => row.split('\t'));
-};
-
-const getSelectionGroupStaffs = (selection, staffs = []) => {
-  const selectionGroup = selection?.start?.group || selection?.end?.group || '';
-  if (!selectionGroup) return staffs;
-  return staffs.filter((staff) => (staff.group || '白班') === selectionGroup);
-};
-
-const getRectFromSelection = (selection, staffs = [], daysInMonth = []) => {
-  if (!selection?.start || !selection?.end) return null;
-  const scopedStaffs = getSelectionGroupStaffs(selection, staffs);
-  const staffIndexMap = new Map(scopedStaffs.map((staff, index) => [staff.id, index]));
-  const dayIndexMap = new Map(daysInMonth.map((day, index) => [day.date, index]));
-
-  const startRow = staffIndexMap.get(selection.start.staffId);
-  const endRow = staffIndexMap.get(selection.end.staffId);
-  const startCol = dayIndexMap.get(selection.start.dateStr);
-  const endCol = dayIndexMap.get(selection.end.dateStr);
-
-  if ([startRow, endRow, startCol, endCol].some(v => v === undefined)) return null;
-
-  return {
-    rowStart: Math.min(startRow, endRow),
-    rowEnd: Math.max(startRow, endRow),
-    colStart: Math.min(startCol, endCol),
-    colEnd: Math.max(startCol, endCol),
-    scopedStaffs
-  };
-};
-
-const expandSelectionCells = (selection, staffs = [], daysInMonth = []) => {
-  const rect = getRectFromSelection(selection, staffs, daysInMonth);
-  if (!rect) return [];
-  const cells = [];
-  for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
-    for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
-      const staff = rect.scopedStaffs[rowIndex];
-      const day = daysInMonth[colIndex];
-      if (staff && day) cells.push({ staffId: staff.id, dateStr: day.date, rowIndex, colIndex });
-    }
-  }
-  return cells;
-};
-
-const isCellInSelectionRect = (selection, staffs = [], daysInMonth = [], staffId, dateStr) => {
-  const rect = getRectFromSelection(selection, staffs, daysInMonth);
-  if (!rect) return false;
-  const rowIndex = rect.scopedStaffs.findIndex(staff => staff.id === staffId);
-  const colIndex = daysInMonth.findIndex(day => day.date === dateStr);
-  if (rowIndex === -1 || colIndex === -1) return false;
-  return rowIndex >= rect.rowStart && rowIndex <= rect.rowEnd && colIndex >= rect.colStart && colIndex <= rect.colEnd;
-};
-
 const extractYearMonthCandidates = (...sources) => {
-  const fullPatterns = [
+  const patterns = [
     /(\d{4})\s*年\s*(\d{1,2})\s*月/,
-    /(\d{4})[\/_\-.](\d{1,2})/
-  ];
-  const monthOnlyPatterns = [
+    /(\d{4})[\/_\-.](\d{1,2})/,
     /(\d{1,2})\s*月/
   ];
-
-  let monthOnlyCandidate = { year: null, month: null };
 
   for (const source of sources) {
     const text = String(source || '').trim();
     if (!text) continue;
 
-    for (const pattern of fullPatterns) {
+    for (const pattern of patterns) {
       const match = text.match(pattern);
       if (!match) continue;
-      const year = Number(match[1]);
-      const month = Number(match[2]);
-      if (year >= 1900 && month >= 1 && month <= 12) {
-        return { year, month };
+      if (match.length >= 3 && pattern !== patterns[2]) {
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        if (year >= 1900 && month >= 1 && month <= 12) return { year, month };
       }
-    }
-
-    if (!monthOnlyCandidate.month) {
-      for (const pattern of monthOnlyPatterns) {
-        const match = text.match(pattern);
-        if (!match) continue;
+      if (pattern === patterns[2]) {
         const month = Number(match[1]);
-        if (month >= 1 && month <= 12) {
-          monthOnlyCandidate = { year: null, month };
-          break;
-        }
+        if (month >= 1 && month <= 12) return { year: null, month };
       }
     }
   }
 
-  return monthOnlyCandidate;
+  return { year: null, month: null };
 };
 
-const detectImportedDayNumber = (label = '') => {
-  const text = String(label ?? '').replace(/\r/g, '').trim();
-  if (!text) return null;
-  const firstLine = text.split('\n').map(part => part.trim()).find(Boolean) || text;
-  const compact = text.replace(/\s+/g, '');
-  const firstCompact = firstLine.replace(/\s+/g, '');
-  const patterns = [
-    /^(\d{1,2})日$/,
-    /^(\d{1,2})$/,
-    /^(\d{1,2})\(.+\)$/,
-  ];
-  for (const source of [firstCompact, compact]) {
-    for (const pattern of patterns) {
-      const match = source.match(pattern);
-      if (match) {
-        const day = Number(match[1]);
-        if (day >= 1 && day <= 31) return day;
-      }
-    }
-  }
-  const looseMatch = compact.match(/^(\d{1,2})/);
-  if (looseMatch) {
-    const day = Number(looseMatch[1]);
-    if (day >= 1 && day <= 31) return day;
-  }
-  return null;
-};
-
-const inferImportedGroupFromCodes = (dayMap = {}) => {
-  const counts = { 白班: 0, 小夜: 0, 大夜: 0 };
-  Object.values(dayMap || {}).forEach((cell) => {
-    const code = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
-    const group = getShiftGroupByCode(code);
-    if (group && counts[group] !== undefined) counts[group] += 1;
-  });
-  const ranked = Object.entries(counts).sort((a, b) => {
-    if (b[1] !== a[1]) return b[1] - a[1];
-    return SHIFT_GROUPS.indexOf(a[0]) - SHIFT_GROUPS.indexOf(b[0]);
-  });
-  return ranked[0]?.[1] > 0 ? ranked[0][0] : '';
-};
-
-const buildExistingStaffGroupLookup = (monthlySchedules = {}) => {
-  const byMonth = {};
-  const fallback = {};
-
-  Object.entries(monthlySchedules || {}).forEach(([monthKey, monthState]) => {
-    const monthLookup = {};
-    const monthStaffs = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
-    monthStaffs.forEach((staff) => {
-      const nameKey = String(staff?.name || '').trim();
-      const group = staff?.group || '';
-      if (!nameKey || !group) return;
-      if (!monthLookup[nameKey]) monthLookup[nameKey] = group;
-      if (!fallback[nameKey]) fallback[nameKey] = group;
-    });
-    byMonth[monthKey] = monthLookup;
-  });
-
-  return { byMonth, fallback };
-};
-
-const mergeImportedMonthStates = (baseState = null, incomingState = null) => {
-  if (!baseState) return incomingState;
-  if (!incomingState) return baseState;
-
-  const mergedStaffs = [];
-  const mergedSchedule = {};
-  const staffKeyToId = new Map();
-  const signatureToKey = new Map();
-
-  const registerStaffs = (monthState, priority = 'base') => {
-    const staffList = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
-    const scheduleData = monthState?.scheduleData || monthState?.schedule || {};
-
-    staffList.forEach((staff) => {
-      const name = String(staff?.name || '').trim();
-      const group = staff?.group || '白班';
-      if (!name) return;
-      const signature = `${name}__${group}`;
-      const fallbackSignature = `${name}__*`;
-      const matchedSignature = signatureToKey.has(signature)
-        ? signature
-        : (signatureToKey.has(fallbackSignature) ? signatureToKey.get(fallbackSignature) : null);
-
-      let staffKey = matchedSignature || signature;
-      let existingId = staffKeyToId.get(staffKey);
-
-      if (!existingId) {
-        existingId = priority === 'base' ? (staff.id || `${priority}_${mergedStaffs.length + 1}`) : (staff.id || `${priority}_${mergedStaffs.length + 1}`);
-        staffKeyToId.set(staffKey, existingId);
-        signatureToKey.set(signature, staffKey);
-        signatureToKey.set(fallbackSignature, staffKey);
-        mergedStaffs.push({
-          ...staff,
-          id: existingId,
-          name,
-          group
-        });
-        mergedSchedule[existingId] = { ...(scheduleData?.[staff.id] || {}) };
-        return;
-      }
-
-      const existingIndex = mergedStaffs.findIndex((item) => item.id === existingId);
-      if (existingIndex !== -1 && priority === 'incoming') {
-        mergedStaffs[existingIndex] = {
-          ...mergedStaffs[existingIndex],
-          ...staff,
-          id: existingId,
-          name,
-          group
-        };
-      }
-
-      mergedSchedule[existingId] = {
-        ...(mergedSchedule[existingId] || {}),
-        ...(scheduleData?.[staff.id] || {})
-      };
-    });
-  };
-
-  registerStaffs(baseState, 'base');
-  registerStaffs(incomingState, 'incoming');
-
-  const baseImportMeta = baseState?.importMeta || {};
-  const incomingImportMeta = incomingState?.importMeta || {};
-
-  return {
-    ...baseState,
-    ...incomingState,
-    staffs: mergedStaffs,
-    scheduleData: mergedSchedule,
-    importMeta: {
-      ...baseImportMeta,
-      ...incomingImportMeta,
-      sourceType: incomingImportMeta.sourceType || baseImportMeta.sourceType || 'preScheduleExcel',
-      sourceFiles: Array.from(new Set([...(baseImportMeta.sourceFiles || []), ...(incomingImportMeta.sourceFiles || [])])),
-      sourceSheets: Array.from(new Set([...(baseImportMeta.sourceSheets || []), ...(incomingImportMeta.sourceSheets || [])])),
-      importedAt: baseImportMeta.importedAt || incomingImportMeta.importedAt || new Date().toISOString(),
-      lastUpdatedAt: new Date().toISOString()
-    },
-    warnings: [...(baseState?.warnings || []), ...(incomingState?.warnings || [])]
-  };
-};
-
-const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, customLeaveCodes = [], importMode = 'schedule', existingStaffGroupLookup = { byMonth: {}, fallback: {} } }) => {
+const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear }) => {
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
   let headerRowIndex = -1;
-  let nameColumnIndex = -1;
-  let groupColumnIndex = -1;
-  let dayColumnPairs = [];
-
+  let headerMap = {};
   for (let rowIndex = 0; rowIndex < Math.min(20, rows.length); rowIndex += 1) {
     const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
-    let detectedNameIndex = -1;
-    let detectedGroupIndex = -1;
-    const detectedDayPairs = [];
-
+    const map = {};
     row.forEach((cellValue, columnIndex) => {
       const value = String(cellValue ?? '').trim();
-      if (!value) return;
-      if (value === '姓名') detectedNameIndex = columnIndex;
-      if (value === '班別群組') detectedGroupIndex = columnIndex;
-      const dayNumber = detectImportedDayNumber(value);
-      if (dayNumber) detectedDayPairs.push({ day: dayNumber, colNumber: columnIndex });
+      if (value) map[value] = columnIndex;
     });
-
-    const uniqueDayPairs = Array.from(
-      new Map(detectedDayPairs.sort((a, b) => a.day - b.day).map(item => [item.day, item])).values()
-    );
-
-    if (detectedNameIndex !== -1 && uniqueDayPairs.length > 0) {
+    if (map['姓名'] !== undefined && map['班別群組'] !== undefined) {
       headerRowIndex = rowIndex;
-      nameColumnIndex = detectedNameIndex;
-      groupColumnIndex = detectedGroupIndex;
-      dayColumnPairs = uniqueDayPairs;
+      headerMap = map;
       break;
     }
   }
 
-  if (headerRowIndex === -1 || nameColumnIndex === -1 || dayColumnPairs.length === 0) return null;
+  if (headerRowIndex === -1) return null;
 
   const validGroups = new Set(SHIFT_GROUPS);
-  const knownCodes = new Set([...getAllShiftCodes(), ...DICT.LEAVES, ...(customLeaveCodes || [])]);
+  const validCodes = new Set([...DICT.SHIFTS, ...DICT.LEAVES]);
+
+  const dayColumnPairs = Object.entries(headerMap)
+    .map(([label, colNumber]) => {
+      const match = String(label).match(/^(\d{1,2})日$/);
+      return match ? { day: Number(match[1]), colNumber } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.day - b.day);
+
+  if (dayColumnPairs.length === 0) {
+    throw new Error(`工作表「${sheetName}」找不到日期欄（格式需為 1日、2日 ...）`);
+  }
+
+  const importedStaffs = [];
+  const importedSchedule = {};
+  const invalidMessages = [];
+
+  for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
+    const rawName = String(row[headerMap['姓名']] ?? '').trim();
+    const rawGroup = String(row[headerMap['班別群組']] ?? '').trim();
+
+    const hasAnyContent = row.some((value) => String(value ?? '').trim() !== '');
+    if (!hasAnyContent || !rawName) continue;
+
+    const normalizedGroup = validGroups.has(rawGroup) ? rawGroup : '白班';
+    const rowNumber = rowIndex + 1;
+    const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
+
+    importedStaffs.push({
+      id: staffId,
+      name: rawName,
+      group: normalizedGroup,
+      pregnant: false
+    });
+    importedSchedule[staffId] = {};
+
+    if (rawGroup && !validGroups.has(rawGroup)) {
+      invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，已自動改為白班`);
+    }
+
+    dayColumnPairs.forEach(({ day, colNumber }) => {
+      const rawValue = String(row[colNumber] ?? '').trim();
+      if (!rawValue) return;
+
+      const normalizedCode = normalizeImportedShiftCode(rawValue);
+      if (!validCodes.has(normalizedCode)) {
+        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的 ${day}日 代碼「${rawValue}」無法匯入，已略過`);
+        return;
+      }
+
+      importedSchedule[staffId][day] = { value: normalizedCode, source: 'manual' };
+    });
+  }
+
+  if (importedStaffs.length === 0) return null;
 
   const scanTexts = [];
-  const maxRowsToScan = Math.min(rows.length, 10);
+  const maxRowsToScan = Math.min(rows.length, 8);
   for (let r = 0; r < maxRowsToScan; r += 1) {
     const row = Array.isArray(rows[r]) ? rows[r] : [];
-    for (let c = 0; c < row.length; c += 1) {
+    for (let c = 0; c < Math.min(row.length, 8); c += 1) {
       const cellText = String(row[c] ?? '').trim();
       if (cellText) scanTexts.push(cellText);
     }
@@ -791,106 +443,6 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
   }
 
   const monthKey = buildMonthKey(year, month);
-  const monthGroupLookup = existingStaffGroupLookup?.byMonth?.[monthKey] || {};
-  const fallbackGroupLookup = existingStaffGroupLookup?.fallback || {};
-
-  const importedStaffs = [];
-  const importedSchedule = {};
-  const invalidMessages = [];
-  const unknownCodes = [];
-
-  for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
-    const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
-    const rawName = String(row[nameColumnIndex] ?? '').trim();
-    const rawGroup = groupColumnIndex === -1 ? '' : String(row[groupColumnIndex] ?? '').trim();
-
-    const hasAnyContent = row.some((value) => String(value ?? '').trim() !== '');
-    if (!hasAnyContent || !rawName) continue;
-
-    const rowNumber = rowIndex + 1;
-    const hasAnyDayContent = dayColumnPairs.some(({ colNumber }) => String(row[colNumber] ?? '').trim() !== '');
-
-    const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
-    importedSchedule[staffId] = {};
-
-    dayColumnPairs.forEach(({ day, colNumber }) => {
-      const rawValue = String(row[colNumber] ?? '').trim();
-      if (!rawValue) return;
-
-      const normalizedCode = normalizeImportedShiftCode(rawValue);
-      const rawImportedValue = getImportedRawNumberedLeaveValue(rawValue);
-      const isKnownCode = knownCodes.has(normalizedCode);
-
-      importedSchedule[staffId][day] = {
-        value: normalizedCode,
-        source: 'manual',
-        ...(rawImportedValue ? { rawImportedValue } : {}),
-        ...(!isKnownCode ? { isUnknownCode: true } : {})
-      };
-
-      if (!isKnownCode) {
-        unknownCodes.push(normalizedCode);
-      }
-    });
-
-    const importedCodes = Object.values(importedSchedule[staffId] || {}).map((cell) => {
-      if (!cell) return '';
-      return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
-    }).filter(Boolean);
-    const hasShiftCode = importedCodes.some(code => !isConfiguredImportedLeaveCode(code, customLeaveCodes));
-    const hasLeaveCode = importedCodes.some(code => isConfiguredImportedLeaveCode(code, customLeaveCodes));
-
-    let normalizedGroup = '';
-    if (rawGroup) {
-      if (validGroups.has(rawGroup)) {
-        normalizedGroup = rawGroup;
-      } else {
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，將改用其他規則判定`);
-      }
-    }
-
-    if (!normalizedGroup) {
-      normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '';
-    }
-
-    if (!normalizedGroup) {
-      normalizedGroup = inferImportedGroupFromCodes(importedSchedule[staffId]);
-    }
-
-    if (!normalizedGroup) {
-      if (!hasAnyDayContent) {
-        normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '白班';
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有排班內容，已先保留人員名單`);
-      } else if (importMode === 'preSchedule') {
-        normalizedGroup = '白班';
-        if (hasLeaveCode && !hasShiftCode) {
-          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有預假代碼，且無可對照群組，已先歸入白班保留資料`);
-        } else {
-          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」無法判定群組，已依預班規則先歸入白班`);
-        }
-      } else if (hasLeaveCode && !hasShiftCode) {
-        normalizedGroup = '白班';
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有休假代碼，已先歸入白班保留資料`);
-      } else {
-        normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '白班';
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已先歸入${normalizedGroup}`);
-      }
-    }
-
-    if (!hasAnyDayContent && importMode === 'preSchedule') {
-      invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有預班內容，已先建立人員骨架供後續預班使用`);
-    }
-
-    importedStaffs.push({
-      id: staffId,
-      name: rawName,
-      group: normalizedGroup,
-      pregnant: false
-    });
-  }
-
-  if (importedStaffs.length === 0) return null;
-
   const importedScheduleByDate = Object.fromEntries(
     Object.entries(importedSchedule).map(([staffId, dayMap]) => [
       staffId,
@@ -911,27 +463,22 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
     customColumnValues: {},
     schedulingRulesText: '',
     warnings: invalidMessages,
-    unknownCodes: Array.from(new Set(unknownCodes)).sort(),
     importMeta: {
-      sourceType: importMode === 'preSchedule' ? 'preScheduleExcel' : 'excel',
+      sourceType: 'excel',
       sourceFiles: [fileName],
       sourceSheets: [sheetName],
       importedAt: new Date().toISOString(),
-      lastUpdatedAt: new Date().toISOString(),
-      importMode
+      lastUpdatedAt: new Date().toISOString()
     }
   };
 };
 
-const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().getFullYear(), options = {}) => {
+const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().getFullYear()) => {
   const XLSX = await loadSheetJS();
   const fileList = Array.from(files || []);
   const monthlySchedules = {};
   const warnings = [];
-  const unknownCodes = [];
   let firstMonthKey = '';
-  const importMode = options.importMode || 'schedule';
-  const existingStaffGroupLookup = buildExistingStaffGroupLookup(options.existingMonthlySchedules || {});
 
   for (const file of fileList) {
     const buffer = await file.arrayBuffer();
@@ -952,10 +499,7 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
           rows,
           sheetName,
           fileName: file.name,
-          fallbackYear,
-          customLeaveCodes: options.customLeaveCodes || [],
-          importMode,
-          existingStaffGroupLookup
+          fallbackYear
         });
 
         if (!parsed) continue;
@@ -978,7 +522,6 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
         }
 
         warnings.push(...(parsed.warnings || []));
-        unknownCodes.push(...(parsed.unknownCodes || []));
       } catch (error) {
         warnings.push(error?.message || `檔案「${file.name}」工作表「${sheetName}」無法匯入`);
       }
@@ -987,17 +530,16 @@ const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().get
 
   const keys = Object.keys(monthlySchedules).sort();
   if (keys.length === 0) {
-    throw new Error('匯入失敗：找不到可匯入的月份資料，請確認檔案至少包含「姓名」與日期欄（可為 1日~31日，或系統匯出格式的 1\n(六) 這類表頭）；班別群組欄位可省略');
+    throw new Error('匯入失敗：找不到可匯入的月份資料，請確認檔案使用系統範本或至少包含「姓名」、「班別群組」、「1日~31日」欄位');
   }
 
   return {
     monthlySchedules,
     firstMonthKey: firstMonthKey || keys[0],
-    warnings,
-    unknownCodes: Array.from(new Set(unknownCodes.filter(Boolean))).sort(),
-    importMode
+    warnings
   };
 };
+
 
 
 const normalizeStaffGroup = (staffList = []) => {
@@ -1055,53 +597,16 @@ const getShiftGroupByCode = (code = '') => {
   if (['D', '白8-8', '8-12', '12-16'].includes(code)) return '白班';
   if (['E', '夜8-8'].includes(code)) return '小夜';
   if (['N'].includes(code)) return '大夜';
-  return getCustomShiftGroup(code);
+  return null;
 };
 
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
-const isShiftCode = (code = '') => getAllShiftCodes().includes(code);
+const isShiftCode = (code = '') => DICT.SHIFTS.includes(code);
 
 const GROUP_TO_DEMAND_KEY = {
   '白班': 'white',
   '小夜': 'evening',
   '大夜': 'night'
-};
-
-const DEFAULT_REQUIRED_STAFFING = {
-  weekday: { white: 6, evening: 3, night: 2 },
-  saturday: { white: 4, evening: 2, night: 2 },
-  sunday: { white: 4, evening: 2, night: 2 }
-};
-
-const normalizeRequiredStaffingConfig = (requiredStaffing = {}) => {
-  const holidayFallback = requiredStaffing?.holiday || {};
-  return {
-    weekday: {
-      white: Number(requiredStaffing?.weekday?.white ?? DEFAULT_REQUIRED_STAFFING.weekday.white) || 0,
-      evening: Number(requiredStaffing?.weekday?.evening ?? DEFAULT_REQUIRED_STAFFING.weekday.evening) || 0,
-      night: Number(requiredStaffing?.weekday?.night ?? DEFAULT_REQUIRED_STAFFING.weekday.night) || 0,
-    },
-    saturday: {
-      white: Number(requiredStaffing?.saturday?.white ?? holidayFallback?.white ?? DEFAULT_REQUIRED_STAFFING.saturday.white) || 0,
-      evening: Number(requiredStaffing?.saturday?.evening ?? holidayFallback?.evening ?? DEFAULT_REQUIRED_STAFFING.saturday.evening) || 0,
-      night: Number(requiredStaffing?.saturday?.night ?? holidayFallback?.night ?? DEFAULT_REQUIRED_STAFFING.saturday.night) || 0,
-    },
-    sunday: {
-      white: Number(requiredStaffing?.sunday?.white ?? holidayFallback?.white ?? DEFAULT_REQUIRED_STAFFING.sunday.white) || 0,
-      evening: Number(requiredStaffing?.sunday?.evening ?? holidayFallback?.evening ?? DEFAULT_REQUIRED_STAFFING.sunday.evening) || 0,
-      night: Number(requiredStaffing?.sunday?.night ?? holidayFallback?.night ?? DEFAULT_REQUIRED_STAFFING.sunday.night) || 0,
-    }
-  };
-};
-
-const getRequiredStaffingBucketByDay = (day) => {
-  if (!day) return 'weekday';
-  if (day.isHoliday) return 'sunday';
-  const date = typeof day.date === 'string' ? parseDateKey(day.date) : null;
-  const weekDay = date ? date.getDay() : null;
-  if (weekDay === 6) return 'saturday';
-  if (weekDay === 0) return 'sunday';
-  return 'weekday';
 };
 
 const DEFAULT_SHIFT_BY_GROUP = {
@@ -1138,41 +643,41 @@ const getShiftCellLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[s
 const UI_DENSITY_OPTIONS = {
   compact: {
     shiftWidth: 58,
-    nameWidth: 84,
+    nameWidth: 98,
     dayMinWidth: 32,
     dayHeaderClass: 'px-0.5 py-1 text-[11px]',
     statHeaderClass: 'p-1.5',
     leaveHeaderClass: 'p-1',
     cellHeightClass: 'h-8',
-    nameCellPaddingClass: 'px-0.5 py-0.5',
+    nameCellPaddingClass: 'px-1.5 py-1',
     footCellPaddingClass: 'p-1.5',
     groupLabelClass: '',
     selectorDotClass: 'w-1.5 h-1.5',
     rowMinHeight: 72
   },
   standard: {
-    shiftWidth: 68,
-    nameWidth: 84,
-    dayMinWidth: 52,
+    shiftWidth: 76,
+    nameWidth: 122,
+    dayMinWidth: 42,
     dayHeaderClass: 'px-1.5 py-2 text-xs',
-    statHeaderClass: 'px-1 py-1',
-    leaveHeaderClass: 'px-1 py-1.5',
-    cellHeightClass: 'h-9',
-    nameCellPaddingClass: 'px-1 py-1',
-    footCellPaddingClass: 'px-1 py-1',
+    statHeaderClass: 'p-3',
+    leaveHeaderClass: 'p-1.5',
+    cellHeightClass: 'h-10',
+    nameCellPaddingClass: 'px-2 py-2',
+    footCellPaddingClass: 'p-2.5',
     groupLabelClass: '',
     selectorDotClass: 'w-2 h-2',
-    rowMinHeight: 72
+    rowMinHeight: 80
   },
   relaxed: {
     shiftWidth: 100,
     nameWidth: 156,
-    dayMinWidth: 68,
-    dayHeaderClass: 'px-1 py-1.5 text-sm',
+    dayMinWidth: 56,
+    dayHeaderClass: 'px-2 py-2.5 text-sm',
     statHeaderClass: 'p-4',
     leaveHeaderClass: 'p-2',
     cellHeightClass: 'h-12',
-    nameCellPaddingClass: 'px-2 py-2',
+    nameCellPaddingClass: 'px-3 py-2.5',
     footCellPaddingClass: 'p-3',
     groupLabelClass: '',
     selectorDotClass: 'w-3 h-3',
@@ -1185,166 +690,48 @@ const getUiDensityConfig = (densityKey = 'standard') => UI_DENSITY_OPTIONS[densi
 
 const UI_THEME_PRESETS = {
   classic: {
-    pageBackgroundColor: '#f8fbff',
-    weekendColor: '#dbeafe',
+    pageBackgroundColor: '#f8fafc',
+    weekendColor: '#dcfce7',
     holidayColor: '#fca5a5',
-    tableFontColor: '#1f3b5b',
+    tableFontColor: '#1f2937',
     shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#f8fbff',
-    shiftColumnFontColor: '#1d4ed8',
-    nameDateColumnFontColor: '#1f3b5b',
-    demandOverColor: '#fde68a',
-    groupSummaryRowBgColor: '#dbeafe',
-    warningTintColor: '#60a5fa',
-    warningTextColor: '#1d4ed8',
-    infoTintColor: '#38bdf8',
-    infoTextColor: '#075985',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
+    nameDateColumnBgColor: '#ffffff',
+    shiftColumnFontColor: '#1e293b',
+    nameDateColumnFontColor: '#1e293b',
+    demandOverColor: '#fde68a'
   },
   soft: {
-    pageBackgroundColor: '#f5faf7',
-    weekendColor: '#dcfce7',
-    holidayColor: '#f9a8d4',
+    pageBackgroundColor: '#f7faf7',
+    weekendColor: '#e7f7ec',
+    holidayColor: '#f6c7c7',
     tableFontColor: '#334155',
-    shiftColumnBgColor: '#fbfefc',
-    nameDateColumnBgColor: '#f8fcfa',
-    shiftColumnFontColor: '#3f6212',
+    shiftColumnBgColor: '#f7fbf8',
+    nameDateColumnBgColor: '#fcfdfc',
+    shiftColumnFontColor: '#365314',
     nameDateColumnFontColor: '#334155',
-    demandOverColor: '#d9f99d',
-    groupSummaryRowBgColor: '#ecfccb',
-    warningTintColor: '#84cc16',
-    warningTextColor: '#3f6212',
-    infoTintColor: '#5eead4',
-    infoTextColor: '#115e59',
-    dangerTintColor: '#fb7185',
-    dangerTextColor: '#9f1239'
+    demandOverColor: '#fde68a'
   },
   warm: {
-    pageBackgroundColor: '#fff9f2',
-    weekendColor: '#ffedd5',
-    holidayColor: '#fdba74',
-    tableFontColor: '#7c2d12',
-    shiftColumnBgColor: '#fffdf9',
-    nameDateColumnBgColor: '#fffbf5',
-    shiftColumnFontColor: '#c2410c',
-    nameDateColumnFontColor: '#7c2d12',
-    demandOverColor: '#fed7aa',
-    groupSummaryRowBgColor: '#ffedd5',
-    warningTintColor: '#fb923c',
-    warningTextColor: '#9a3412',
-    infoTintColor: '#fdba74',
-    infoTextColor: '#9a3412',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
+    pageBackgroundColor: '#fffaf5',
+    weekendColor: '#fef3c7',
+    holidayColor: '#fecaca',
+    tableFontColor: '#44403c',
+    shiftColumnBgColor: '#fff7ed',
+    nameDateColumnBgColor: '#fffbeb',
+    shiftColumnFontColor: '#7c2d12',
+    nameDateColumnFontColor: '#44403c',
+    demandOverColor: '#fdba74'
   },
   dark: {
     pageBackgroundColor: '#0f172a',
-    weekendColor: '#1e293b',
+    weekendColor: '#334155',
     holidayColor: '#7f1d1d',
     tableFontColor: '#e2e8f0',
-    shiftColumnBgColor: '#111827',
+    shiftColumnBgColor: '#1e293b',
     nameDateColumnBgColor: '#172033',
     shiftColumnFontColor: '#f8fafc',
     nameDateColumnFontColor: '#e2e8f0',
-    demandOverColor: '#78350f',
-    groupSummaryRowBgColor: '#334155',
-    warningTintColor: '#fbbf24',
-    warningTextColor: '#fef3c7',
-    infoTintColor: '#38bdf8',
-    infoTextColor: '#e0f2fe',
-    dangerTintColor: '#fb7185',
-    dangerTextColor: '#ffe4e6'
-  },
-  sky: {
-    pageBackgroundColor: '#f2f8ff',
-    weekendColor: '#cfe8ff',
-    holidayColor: '#fca5a5',
-    tableFontColor: '#0f3d66',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#f7fbff',
-    shiftColumnFontColor: '#0369a1',
-    nameDateColumnFontColor: '#0f3d66',
-    demandOverColor: '#bae6fd',
-    groupSummaryRowBgColor: '#dbeafe',
-    warningTintColor: '#0ea5e9',
-    warningTextColor: '#075985',
-    infoTintColor: '#7dd3fc',
-    infoTextColor: '#075985',
-    dangerTintColor: '#f87171',
-    dangerTextColor: '#991b1b'
-  },
-  lavender: {
-    pageBackgroundColor: '#f5f5f7',
-    weekendColor: '#e5e7eb',
-    holidayColor: '#d1d5db',
-    tableFontColor: '#111827',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#fafafa',
-    shiftColumnFontColor: '#374151',
-    nameDateColumnFontColor: '#111827',
-    demandOverColor: '#d1d5db',
-    groupSummaryRowBgColor: '#e5e7eb',
-    warningTintColor: '#9ca3af',
-    warningTextColor: '#374151',
-    infoTintColor: '#94a3b8',
-    infoTextColor: '#334155',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
-  },
-  forest: {
-    pageBackgroundColor: '#f3faf5',
-    weekendColor: '#d1fae5',
-    holidayColor: '#fca5a5',
-    tableFontColor: '#14532d',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#f7fcf8',
-    shiftColumnFontColor: '#166534',
-    nameDateColumnFontColor: '#14532d',
-    demandOverColor: '#86efac',
-    groupSummaryRowBgColor: '#d1fae5',
-    warningTintColor: '#22c55e',
-    warningTextColor: '#166534',
-    infoTintColor: '#34d399',
-    infoTextColor: '#065f46',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
-  },
-  sakura: {
-    pageBackgroundColor: '#fff7fb',
-    weekendColor: '#fce7f3',
-    holidayColor: '#fb7185',
-    tableFontColor: '#9d174d',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#fffafd',
-    shiftColumnFontColor: '#be185d',
-    nameDateColumnFontColor: '#9d174d',
-    demandOverColor: '#fbcfe8',
-    groupSummaryRowBgColor: '#fce7f3',
-    warningTintColor: '#f472b6',
-    warningTextColor: '#be185d',
-    infoTintColor: '#f9a8d4',
-    infoTextColor: '#9d174d',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
-  },
-  sand: {
-    pageBackgroundColor: '#fff8ef',
-    weekendColor: '#fde68a',
-    holidayColor: '#fb923c',
-    tableFontColor: '#78350f',
-    shiftColumnBgColor: '#fffdf8',
-    nameDateColumnBgColor: '#fffbf3',
-    shiftColumnFontColor: '#92400e',
-    nameDateColumnFontColor: '#78350f',
-    demandOverColor: '#fdba74',
-    groupSummaryRowBgColor: '#fef3c7',
-    warningTintColor: '#f59e0b',
-    warningTextColor: '#92400e',
-    infoTintColor: '#fbbf24',
-    infoTextColor: '#92400e',
-    dangerTintColor: '#dc2626',
-    dangerTextColor: '#991b1b'
+    demandOverColor: '#78350f'
   }
 };
 
@@ -1359,126 +746,101 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   return {
     ...baseConfig,
     shiftWidth: Math.max(48, baseConfig.shiftWidth + shiftAdjust),
-    nameWidth: Math.max(76, baseConfig.nameWidth + nameAdjust),
+    nameWidth: Math.max(90, baseConfig.nameWidth + nameAdjust),
     dayMinWidth: Math.max(28, baseConfig.dayMinWidth + dayAdjust),
     rowMinHeight: Math.max(72, (baseConfig.rowMinHeight || 80) + heightAdjust * 4),
     selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
   };
 };
 
-const clampColorChannel = (value) => Math.max(0, Math.min(255, Math.round(value)));
 
-const normalizeHexColor = (hex, fallback = '#000000') => {
-  const raw = String(hex || '').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
-  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
-    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
-  }
-  return fallback;
-};
+const EMPTY_OBJ = Object.freeze({});
 
-const hexToRgbObject = (hex, fallback = '#000000') => {
-  const normalized = normalizeHexColor(hex, fallback).replace('#', '');
-  return {
-    r: parseInt(normalized.slice(0, 2), 16),
-    g: parseInt(normalized.slice(2, 4), 16),
-    b: parseInt(normalized.slice(4, 6), 16)
-  };
-};
+const ScheduleGridCell = React.memo(function ScheduleGridCell({
+  staffId,
+  staffName,
+  dateStr,
+  value,
+  isSelected,
+  isHoliday,
+  isWeekend,
+  holidayColor,
+  weekendColor,
+  selectionMode,
+  showBlueDots,
+  densityConfig,
+  tableFontSizeClass,
+  tableFontColor,
+  shiftCodes,
+  leaveCodes,
+  onValueChange,
+  onSelectCell
+}) {
+  return (
+    <td
+      className={`border-r p-0 relative overflow-hidden ${isSelected ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
+      style={{
+        backgroundColor: isHoliday ? holidayColor : (isWeekend ? weekendColor : 'transparent'),
+        opacity: isHoliday || isWeekend ? 0.9 : 1
+      }}
+      onClick={() => {
+        if (selectionMode === 'cell') onSelectCell(staffId, dateStr);
+      }}
+    >
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onValueChange(staffId, dateStr, e.target.value)}
+          className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none cursor-pointer font-bold appearance-none hover:bg-black/5 ${tableFontSizeClass}`}
+          style={{ color: tableFontColor }}
+        >
+          <option value=""></option>
+          <optgroup label="上班">
+            {shiftCodes.map((shiftCode) => <option key={shiftCode} value={shiftCode}>{shiftCode}</option>)}
+          </optgroup>
+          <optgroup label="休假">
+            {leaveCodes.map((leaveCode) => <option key={leaveCode} value={leaveCode}>{leaveCode}</option>)}
+          </optgroup>
+        </select>
 
-const rgbObjectToHex = ({ r, g, b }) => {
-  const toHex = (value) => clampColorChannel(value).toString(16).padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
+        {showBlueDots && selectionMode === 'dot' && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectCell(staffId, dateStr);
+            }}
+            className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
+            aria-label={`選取 ${staffName} ${dateStr} 儲存格`}
+            title={`選取 ${staffName} ${dateStr} 儲存格`}
+          >
+            <span className={`${densityConfig.selectorDotClass} rounded-full transition-all ${isSelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90 hover:bg-blue-500'}`}></span>
+          </button>
+        )}
+      </div>
+    </td>
+  );
+}, (prev, next) => (
+  prev.staffId === next.staffId &&
+  prev.staffName === next.staffName &&
+  prev.dateStr === next.dateStr &&
+  prev.value === next.value &&
+  prev.isSelected === next.isSelected &&
+  prev.isHoliday === next.isHoliday &&
+  prev.isWeekend === next.isWeekend &&
+  prev.holidayColor === next.holidayColor &&
+  prev.weekendColor === next.weekendColor &&
+  prev.selectionMode === next.selectionMode &&
+  prev.showBlueDots === next.showBlueDots &&
+  prev.densityConfig === next.densityConfig &&
+  prev.tableFontSizeClass === next.tableFontSizeClass &&
+  prev.tableFontColor === next.tableFontColor &&
+  prev.shiftCodes === next.shiftCodes &&
+  prev.leaveCodes === next.leaveCodes
+));
 
-const blendHexColors = (baseHex, mixHex, mixRatio = 0.5) => {
-  const ratio = Math.max(0, Math.min(1, Number(mixRatio) || 0));
-  const base = hexToRgbObject(baseHex, '#ffffff');
-  const mix = hexToRgbObject(mixHex, '#ffffff');
-  return rgbObjectToHex({
-    r: base.r * (1 - ratio) + mix.r * ratio,
-    g: base.g * (1 - ratio) + mix.g * ratio,
-    b: base.b * (1 - ratio) + mix.b * ratio
-  });
-};
 
-const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
-  return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
-};
-
-const FOUR_WEEK_CYCLE_START = '2026-04-13';
-const FOUR_WEEK_CYCLE_DAYS = 28;
-const RULE_CROSS_MONTH_CONTEXT_DAYS = 7;
-
-const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => {
-  if (!dateStr) return false;
-  const target = parseDateKey(dateStr);
-  const start = parseDateKey(cycleStart);
-  target.setHours(0, 0, 0, 0);
-  start.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
-  const cycleOffset = ((diffDays + 1) % FOUR_WEEK_CYCLE_DAYS + FOUR_WEEK_CYCLE_DAYS) % FOUR_WEEK_CYCLE_DAYS;
-  return cycleOffset === 0;
-};
-
-
-const normalizeStoredScheduleCellValue = (rawValue = '', customLeaveCodes = []) => {
-  const trimmedValue = String(rawValue ?? '').trim();
-  if (!trimmedValue) return '';
-  const exactKnownCode = Array.from(new Set([...(getAllShiftCodes() || []), ...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).find((code) => {
-    return normalizeCodeComparisonCompact(code) === normalizeCodeComparisonCompact(trimmedValue)
-      || normalizeCodeComparisonCompactNoHyphen(code) === normalizeCodeComparisonCompactNoHyphen(trimmedValue);
-  });
-  if (exactKnownCode) return exactKnownCode;
-  const { normalized, isValid } = normalizeManualShiftCode(trimmedValue, customLeaveCodes || []);
-  return isValid ? normalized : normalizeImportedHalfWidth(trimmedValue);
-};
-
-const reconcileScheduleDataMap = (scheduleData = {}, customLeaveCodes = []) => {
-  const nextScheduleData = {};
-  Object.entries(scheduleData || {}).forEach(([staffId, dateMap]) => {
-    if (!dateMap || typeof dateMap !== 'object') {
-      nextScheduleData[staffId] = {};
-      return;
-    }
-    nextScheduleData[staffId] = {};
-    Object.entries(dateMap || {}).forEach(([dateStr, cell]) => {
-      if (!cell) {
-        nextScheduleData[staffId][dateStr] = null;
-        return;
-      }
-      const rawValue = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
-      const normalizedValue = normalizeStoredScheduleCellValue(rawValue, customLeaveCodes);
-      if (!normalizedValue) {
-        nextScheduleData[staffId][dateStr] = null;
-        return;
-      }
-      const isKnownCode = getAllShiftCodes().includes(normalizedValue) || DICT.LEAVES.includes(normalizedValue) || (customLeaveCodes || []).includes(normalizedValue);
-      const existingMeta = typeof cell === 'object' && cell !== null ? { ...cell } : {};
-      delete existingMeta.value;
-      delete existingMeta.isUnknownCode;
-      nextScheduleData[staffId][dateStr] = {
-        ...existingMeta,
-        value: normalizedValue,
-        ...(isKnownCode ? {} : { isUnknownCode: true })
-      };
-    });
-  });
-  return nextScheduleData;
-};
-
-const reconcileMonthStateCollections = (collection = {}, customLeaveCodes = []) => {
-  const nextCollection = {};
-  Object.entries(collection || {}).forEach(([monthKey, monthState]) => {
-    nextCollection[monthKey] = {
-      ...(monthState || {}),
-      scheduleData: reconcileScheduleDataMap(monthState?.scheduleData || monthState?.schedule || {}, customLeaveCodes)
-    };
-  });
-  return nextCollection;
-};
-
-function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, preScheduleMonthlySchedules, setPreScheduleMonthlySchedules, importedPreSchedulePayload, onImportedPreScheduleApplied, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule, onDownloadDraftFile, onImportDraftFileClick, draftImportInputRef, onImportDraftFileChange }) {
+function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, customColumnValues, setCustomColumnValues, schedulingRulesText, setSchedulingRulesText, loadLatestOnEnter, onLatestLoaded, importedSchedulePayload, onImportedScheduleApplied, monthlySchedules, setMonthlySchedules, pendingOpenMonthKey, onPendingOpenHandled, year, setYear, month, setMonth, staffs, setStaffs, schedule, setSchedule }) {
   // ==========================================
   // 2. 核心 State 定義
   // ==========================================
@@ -1498,26 +860,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const [fillCandidates, setFillCandidates] = useState([]);
   const [showFillModal, setShowFillModal] = useState(false);
   const [selectedGridCell, setSelectedGridCell] = useState(null);
-  const [rangeClearMode, setRangeClearMode] = useState('preScheduleOnly');
-  const [cellDrafts, setCellDrafts] = useState({});
-  const [invalidCellKeys, setInvalidCellKeys] = useState({});
-  const [cellRuleWarnings, setCellRuleWarnings] = useState({});
-  const [importRuleViolations, setImportRuleViolations] = useState([]);
-  const [showImportViolationList, setShowImportViolationList] = useState(false);
-  const [showImportViolationSummary, setShowImportViolationSummary] = useState(false);
-  const [rangeSelection, setRangeSelection] = useState(null);
-  const [selectionAnchor, setSelectionAnchor] = useState(null);
-  const [isRangeDragging, setIsRangeDragging] = useState(false);
-  const [clipboardGrid, setClipboardGrid] = useState([]);
-  const [keyInputBuffer, setKeyInputBuffer] = useState('');
-  const [collapsedGroups, setCollapsedGroups] = useState({ 白班: false, 小夜: false, 大夜: false });
-  const [draggingStaffId, setDraggingStaffId] = useState(null);
-  const [dragOverTarget, setDragOverTarget] = useState(null);
-  const [dragOverGroup, setDragOverGroup] = useState('');
-  const [editingStaffId, setEditingStaffId] = useState(null);
-  const [editingNameDraft, setEditingNameDraft] = useState('');
-  const [preScheduleEditMode, setPreScheduleEditMode] = useState(false);
-  const [inputAssist, setInputAssist] = useState({ type: '', message: '' });
+  const [rangeClearMode, setRangeClearMode] = useState('autoOnly');
 
   // 規則補空指定設定
   const [ruleFillConfig, setRuleFillConfig] = useState({
@@ -1532,26 +875,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftLabelFontSize = getShiftLabelFontSize(uiSettings?.shiftColumnFontSize);
   const shiftCellLabelFontSize = getShiftCellLabelFontSize(uiSettings?.shiftColumnFontSize);
   const densityConfig = getAdjustedDensityConfig(getUiDensityConfig(uiSettings?.tableDensity), uiSettings);
-  const dynamicNameWidth = useMemo(() => {
-    const longestNameLength = Math.max(
-      ...((staffs || []).map((staff) => String(staff?.name || '').trim().length || 0)),
-      0
-    );
-    const safeLength = Math.max(1, longestNameLength);
-    const compactControlSpace = 54;
-    const estimatedNameWidth = compactControlSpace + (safeLength * 16);
-    return Math.max(96, Math.min(196, estimatedNameWidth));
-  }, [staffs]);
-  const effectiveDensityConfig = useMemo(() => ({
-    ...densityConfig,
-    nameWidth: dynamicNameWidth
-  }), [densityConfig, dynamicNameWidth]);
   const monthLoadSkipRef = useRef(false);
   const initializedMonthRef = useRef(false);
   const monthSwitchSeedRef = useRef('');
-  const keyInputTimerRef = useRef(null);
-  const inputAssistTimerRef = useRef(null);
-  const tableScrollContainerRef = useRef(null);
 
   const pageBackgroundColor = uiSettings?.pageBackgroundColor || '#f8fafc';
   const tableFontColor = uiSettings?.tableFontColor || '#1f2937';
@@ -1560,51 +886,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const shiftColumnBgColor = uiSettings?.shiftColumnBgColor || '#ffffff';
   const nameDateColumnBgColor = uiSettings?.nameDateColumnBgColor || '#ffffff';
   const demandOverColor = uiSettings?.demandOverColor || '#fde68a';
-  const groupSummaryRowBgColor = uiSettings?.groupSummaryRowBgColor || '#fef3c7';
-  const warningTintColor = uiSettings?.warningTintColor || '#f59e0b';
-  const warningTextColor = uiSettings?.warningTextColor || '#92400e';
-  const infoTintColor = uiSettings?.infoTintColor || '#38bdf8';
-  const infoTextColor = uiSettings?.infoTextColor || '#075985';
-  const dangerTintColor = uiSettings?.dangerTintColor || '#ef4444';
-  const dangerTextColor = uiSettings?.dangerTextColor || '#9f1239';
-  const warningSoftBgColor = blendHexColors(pageBackgroundColor, warningTintColor, 0.16);
-  const warningSoftBorderColor = blendHexColors(pageBackgroundColor, warningTintColor, 0.35);
-  const infoSoftBgColor = blendHexColors(pageBackgroundColor, infoTintColor, 0.16);
-  const infoSoftBorderColor = blendHexColors(pageBackgroundColor, infoTintColor, 0.35);
-  const dangerSoftBgColor = blendHexColors(pageBackgroundColor, dangerTintColor, 0.14);
-  const dangerSoftBorderColor = blendHexColors(pageBackgroundColor, dangerTintColor, 0.32);
-  const preScheduleTintColor = uiSettings?.preScheduleTintColor || infoTintColor;
-  const preScheduleTextColor = uiSettings?.preScheduleTextColor || infoTextColor;
-  const preScheduleMainBgColor = blendHexColors(pageBackgroundColor, preScheduleTintColor, 0.18);
-  const preScheduleHintBgColor = blendHexColors(pageBackgroundColor, preScheduleTintColor, 0.12);
-  const preScheduleHintBorderColor = blendHexColors(pageBackgroundColor, preScheduleTintColor, 0.32);
-  const stickyGroupSummaryTop = 44;
-  const stickyGroupSummaryShadow = '0 6px 12px rgba(15, 23, 42, 0.08)';
-  const fourWeekDividerBaseColor = nameDateColumnFontColor || shiftColumnFontColor || tableFontColor || '#1e293b';
-  const fourWeekDividerColor = blendHexColors(fourWeekDividerBaseColor, pageBackgroundColor, 0.18);
-
-  const getFourWeekDividerStyle = (dateStr) => (
-    isFourWeekCycleEndDate(dateStr)
-      ? { boxShadow: `inset -3px 0 0 ${fourWeekDividerColor}` }
-      : null
-  );
-
-  const getWordCycleDividerStyle = (dateStr) => (
-    isFourWeekCycleEndDate(dateStr)
-      ? `border-right:3pt solid ${fourWeekDividerColor};mso-border-right-alt:3pt solid ${fourWeekDividerColor};`
-      : ''
-  );
-
-  const applyExcelFourWeekDivider = (border = {}, dateStr) => {
-    if (!isFourWeekCycleEndDate(dateStr)) return border;
-    return {
-      ...border,
-      right: {
-        style: 'thick',
-        color: { argb: hexToExcelArgb(fourWeekDividerColor, '#64748B') }
-      }
-    };
-  };
   const showRightStats = uiSettings?.showRightStats ?? uiSettings?.showStats ?? true;
   const showLeaveStats = uiSettings?.showLeaveStats ?? uiSettings?.showStats ?? true;
   const showBottomStats = uiSettings?.showBottomStats ?? true;
@@ -1613,7 +894,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const defaultAutoLeaveCode = uiSettings?.defaultAutoLeaveCode || 'off';
   const selectionMode = uiSettings?.selectionMode || 'dot';
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...DICT.LEAVES, ...(customLeaveCodes || [])])).filter(Boolean), [customLeaveCodes]);
-  const mergedShiftCodes = useMemo(() => Array.from(new Set([...(DICT.SHIFTS || []), ...((customWorkShifts || []).map(item => String(item?.code || '').trim()).filter(Boolean))])).filter(Boolean), [customWorkShifts]);
   const isConfiguredLeaveCode = (code = '') => {
     if (!code) return false;
     const prefix = getCodePrefix(code);
@@ -1630,9 +910,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         const parsed = JSON.parse(stored);
         if (parsed && parsed.length > 0) {
           setHistoryList(parsed);
+          setShowDraftPrompt(true);
         }
       } catch (e) {
-        console.error("本機暫存紀錄解析失敗");
+        console.error("歷史紀錄解析失敗");
       }
     }
   }, []);
@@ -1653,7 +934,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         loadHistory(parsed[0]);
       }
     } catch (e) {
-      console.error("自動載入最新本機暫存紀錄失敗");
+      console.error("自動載入最新歷史紀錄失敗");
     } finally {
       onLatestLoaded?.();
     }
@@ -1694,29 +975,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       initializedMonthRef.current = true;
     }
 
-    const importedMonthKeys = Object.keys(importedSchedulePayload.monthlySchedules || {});
-    const scannedViolations = scanScheduleRuleViolations(mergedSchedules, { targetMonthKeys: importedMonthKeys });
-    setImportRuleViolations(scannedViolations);
-    setShowImportViolationList(false);
-    setShowImportViolationSummary(scannedViolations.length > 0);
-
+    if (Array.isArray(importedSchedulePayload.warnings) && importedSchedulePayload.warnings.length > 0) {
+      setRuleFillFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份；另有 ${importedSchedulePayload.warnings.length} 筆資料已自動略過、修正或覆蓋`);
+    } else {
+      setRuleFillFeedback(`✅ 匯入完成，共載入 ${totalMonths} 個月份`);
+    }
     onImportedScheduleApplied?.();
   }, [importedSchedulePayload, monthlySchedules, onImportedScheduleApplied, pendingOpenMonthKey, setMonthlySchedules, year, month]);
-
-
-  useEffect(() => {
-    if (!importedPreSchedulePayload || !importedPreSchedulePayload.monthlySchedules) return;
-
-    const targetMonthKey = pendingOpenMonthKey || importedPreSchedulePayload.firstMonthKey || buildMonthKey(year, month);
-    const [targetYear, targetMonth] = String(targetMonthKey).split('-').map(Number);
-    if (!Number.isFinite(targetYear) || !Number.isFinite(targetMonth)) return;
-
-    monthSwitchSeedRef.current = targetMonthKey;
-    if (year !== targetYear) setYear(targetYear);
-    if (month !== targetMonth) setMonth(targetMonth);
-
-    onImportedPreScheduleApplied?.();
-  }, [importedPreSchedulePayload, pendingOpenMonthKey]);
 
   useEffect(() => {
     const currentKey = buildMonthKey(year, month);
@@ -1758,7 +1023,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }));
   }, [year, month, staffs, schedule, customColumnValues, schedulingRulesText, setMonthlySchedules]);
 
-
   const holidayCalendar = useMemo(() => {
     return getSystemHolidayCalendar(year, {
       customHolidays,
@@ -1799,36 +1063,73 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     [daysInMonth]
   );
 
+  const shiftCodes = useMemo(() => [...DICT.SHIFTS], []);
+  const shiftCodeSet = useMemo(() => new Set(shiftCodes), [shiftCodes]);
+  const leaveCodeSet = useMemo(() => new Set(mergedLeaveCodes), [mergedLeaveCodes]);
 
-  useEffect(() => {
-    const currentMonthPrefix = buildMonthKey(year, month);
-    setCellRuleWarnings(prev => {
-      const next = { ...prev };
-      Object.keys(next).forEach((cellKey) => {
-        if (String(cellKey).includes('__') && String(cellKey).split('__')[1]?.startsWith(currentMonthPrefix)) {
-          delete next[cellKey];
+  const staffStatsMap = useMemo(() => {
+    const nextMap = {};
+    staffs.forEach((staff) => {
+      const stats = {
+        work: 0,
+        holidayLeave: 0,
+        totalLeave: 0,
+        leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
+      };
+      const rowSchedule = schedule[staff.id] || EMPTY_OBJ;
+      daysInMonth.forEach((day) => {
+        const cellData = rowSchedule[day.date];
+        const code = typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+        if (!code) return;
+        if (shiftCodeSet.has(code)) stats.work += 1;
+        if (leaveCodeSet.has(code) || leaveCodeSet.has(getCodePrefix(code))) {
+          stats.totalLeave += 1;
+          if (stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
+          if (day.isWeekend || day.isHoliday) stats.holidayLeave += 1;
         }
       });
-
-      const monthSnapshot = schedule || {};
-      (staffs || []).forEach((staff) => {
-        daysInMonth.forEach((day) => {
-          const reasons = evaluateRuleWarningForCellInSnapshot(monthSnapshot, staff, day.date);
-          if (reasons.length > 0) {
-            next[makeCellKey(staff.id, day.date)] = reasons[0];
-          }
-        });
-      });
-
-      importRuleViolations
-        .filter((item) => String(item.dateStr || '').startsWith(currentMonthPrefix))
-        .forEach((item) => {
-          const matchedStaff = staffs.find((staff) => String(staff.name || '').trim() === String(item.staffName || '').trim());
-          if (matchedStaff) next[makeCellKey(matchedStaff.id, item.dateStr)] = item.reason;
-        });
-      return next;
+      nextMap[staff.id] = stats;
     });
-  }, [importRuleViolations, year, month, staffs, schedule, daysInMonth]);
+    return nextMap;
+  }, [staffs, schedule, daysInMonth, mergedLeaveCodes, shiftCodeSet, leaveCodeSet]);
+
+  const dailyStatsMap = useMemo(() => {
+    const nextMap = {};
+    daysInMonth.forEach((day) => {
+      const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
+      staffs.forEach((staff) => {
+        const cellData = schedule[staff.id]?.[day.date];
+        const code = typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
+        if (!code) return;
+        const shiftGroup = getShiftGroupByCode(code);
+        if (shiftGroup === '白班') stats.D += 1;
+        else if (shiftGroup === '小夜') stats.E += 1;
+        else if (shiftGroup === '大夜') stats.N += 1;
+        else if (leaveCodeSet.has(code) || leaveCodeSet.has(getCodePrefix(code))) stats.totalLeave += 1;
+      });
+      nextMap[day.date] = stats;
+    });
+    return nextMap;
+  }, [daysInMonth, staffs, schedule, leaveCodeSet]);
+
+  const requiredCountMap = useMemo(() => {
+    const nextMap = {};
+    daysInMonth.forEach((day) => {
+      const bucket = getRequiredStaffingBucketByDay(day);
+      nextMap[day.date] = {
+        D: Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0),
+        E: Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0),
+        N: Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0),
+      };
+    });
+    return nextMap;
+  }, [daysInMonth, staffingConfig]);
+
+  const selectCell = (staffId, dateStr) => {
+    const selectedStaff = staffs.find((staff) => staff.id === staffId);
+    if (!selectedStaff) return;
+    setSelectedGridCell({ staff: selectedStaff, dateStr });
+  };
 
   const createBlankScheduleForStaffs = (staffList = []) => {
     return staffList.reduce((acc, staff) => {
@@ -1840,18 +1141,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const loadMonthState = (targetYear, targetMonth, schedulesSource = monthlySchedules) => {
     const monthKey = buildMonthKey(targetYear, targetMonth);
     const monthData = schedulesSource?.[monthKey];
-    const preMonthData = preScheduleMonthlySchedules?.[monthKey];
-    const currentRulesText = typeof schedulingRulesText === 'string' ? schedulingRulesText : '';
-    const savedLocalRulesText = readSchedulingRulesTextFromLocalSettings();
-    const resolveRulesText = (...candidates) => {
-      for (const candidate of candidates) {
-        if (typeof candidate === 'string' && candidate.trim() !== '') return candidate;
-      }
-      for (const candidate of candidates) {
-        if (typeof candidate === 'string') return candidate;
-      }
-      return '';
-    };
     monthLoadSkipRef.current = true;
 
     if (monthData) {
@@ -1872,1456 +1161,29 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       setStaffs(normalizedMonthStaffs);
       setSchedule(rebuiltScheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
       setCustomColumnValues(monthData.customColumnValues || {});
-      setSchedulingRulesText(resolveRulesText(monthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
-    } else if (preMonthData) {
-      const normalizedPreMonthStaffs = normalizeStaffGroup(preMonthData.staffs || []);
-      setStaffs(normalizedPreMonthStaffs);
-      setSchedule(createBlankScheduleForStaffs(normalizedPreMonthStaffs));
-      setCustomColumnValues(preMonthData.customColumnValues || {});
-      setSchedulingRulesText(resolveRulesText(preMonthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
+      setSchedulingRulesText(typeof monthData.schedulingRulesText === 'string' ? monthData.schedulingRulesText : '');
     } else {
       const blankMonthState = createBlankMonthState(targetYear, targetMonth);
       setStaffs(blankMonthState.staffs);
       setSchedule(blankMonthState.schedule);
       setCustomColumnValues(blankMonthState.customColumnValues);
-      setSchedulingRulesText(resolveRulesText(currentRulesText, savedLocalRulesText, blankMonthState.schedulingRulesText));
+      setSchedulingRulesText(blankMonthState.schedulingRulesText);
     }
 
     setSelectedGridCell(null);
-    setRangeSelection(null);
-    setSelectionAnchor(null);
-    setCellDrafts({});
-    setInvalidCellKeys({});
-    setCellRuleWarnings({});
-    setKeyInputBuffer('');
-    clearInputAssist();
-    setEditingStaffId(null);
-    setEditingNameDraft('');
-    setDraggingStaffId(null);
-    setDragOverTarget(null);
     setTimeout(() => {
       monthLoadSkipRef.current = false;
     }, 0);
   };
 
-
-  const currentMonthKey = buildMonthKey(year, month);
-
-  const getRuleContextMonthState = (monthKey, options = {}) => {
-    if (!monthKey) return null;
-    if (monthKey === currentMonthKey) {
-      return {
-        year,
-        month,
-        staffs,
-        scheduleData: options.snapshot || schedule
-      };
-    }
-    return monthlySchedules?.[monthKey] || null;
-  };
-
-  const findComparableStaffInMonthState = (targetStaff, monthState) => {
-    if (!targetStaff || !monthState?.staffs) return null;
-    const monthStaffs = Array.isArray(monthState.staffs) ? monthState.staffs : [];
-    const byId = monthStaffs.find((staff) => staff.id === targetStaff.id);
-    if (byId) return byId;
-
-    const targetName = String(targetStaff.name || '').trim();
-    const targetGroup = targetStaff.group || '白班';
-    if (!targetName) return null;
-
-    return monthStaffs.find((staff) => {
-      const candidateName = String(staff.name || '').trim();
-      const candidateGroup = staff.group || '白班';
-      return candidateName === targetName && candidateGroup === targetGroup;
-    }) || monthStaffs.find((staff) => String(staff.name || '').trim() === targetName) || null;
-  };
-
-  const getStaffRefFromCurrentMonth = (staffOrId) => {
-    if (!staffOrId) return null;
-    if (typeof staffOrId === 'object') return staffOrId;
-    return staffs.find((staff) => staff.id === staffOrId) || null;
-  };
-
-  const getContextCellData = (staffOrId, dateStr, options = {}) => {
-    if (!dateStr) return null;
-    const monthKey = String(dateStr).slice(0, 7);
-    const monthState = getRuleContextMonthState(monthKey, options);
-    if (!monthState) return null;
-
-    const targetStaff = getStaffRefFromCurrentMonth(staffOrId);
-    const matchedStaff = findComparableStaffInMonthState(targetStaff, monthState) || (typeof staffOrId === 'string'
-      ? (Array.isArray(monthState.staffs) ? monthState.staffs.find((staff) => staff.id === staffOrId) : null)
-      : null);
-    if (!matchedStaff) return null;
-
-    const monthSchedule = monthState.scheduleData || monthState.schedule || {};
-    return monthSchedule?.[matchedStaff.id]?.[dateStr] || null;
-  };
-
-  const getContextCellCode = (staffOrId, dateStr, options = {}) => {
-    const cellData = getContextCellData(staffOrId, dateStr, options);
-    return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-  };
-
-  const getPreScheduleMonthState = (monthKey) => {
-    if (!monthKey) return null;
-    return preScheduleMonthlySchedules?.[monthKey] || null;
-  };
-
-  const getPreScheduleCellData = (staffOrId, dateStr) => {
-    if (!dateStr) return null;
-    const monthKey = String(dateStr).slice(0, 7);
-    const monthState = getPreScheduleMonthState(monthKey);
-    if (!monthState) return null;
-
-    const targetStaff = getStaffRefFromCurrentMonth(staffOrId);
-    const matchedStaff = findComparableStaffInMonthState(targetStaff, monthState) || (typeof staffOrId === 'string'
-      ? (Array.isArray(monthState.staffs) ? monthState.staffs.find((staff) => staff.id === staffOrId) : null)
-      : null);
-    if (!matchedStaff) return null;
-
-    const monthSchedule = monthState.scheduleData || monthState.schedule || {};
-    return monthSchedule?.[matchedStaff.id]?.[dateStr] || null;
-  };
-
-  const getPreScheduleCellCode = (staffOrId, dateStr) => {
-    const cellData = getPreScheduleCellData(staffOrId, dateStr);
-    return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-  };
-
-  const getVisiblePreScheduleCode = (staffOrId, dateStr) => {
-    const code = getPreScheduleCellCode(staffOrId, dateStr);
-    return code || '';
-  };
-
-  const resolvePreScheduleMatchedStaff = (staffOrId, monthState) => {
-    if (!monthState) return null;
-    const targetStaff = getStaffRefFromCurrentMonth(staffOrId);
-    return findComparableStaffInMonthState(targetStaff, monthState) || (typeof staffOrId === 'string'
-      ? (Array.isArray(monthState?.staffs) ? monthState.staffs.find((staff) => staff.id === staffOrId) : null)
-      : null);
-  };
-
-  const updatePreScheduleEntries = (entries = []) => {
-    const normalizedEntries = Array.isArray(entries)
-      ? entries.filter((entry) => entry?.staffId && entry?.dateStr)
-      : [];
-    if (normalizedEntries.length === 0) return 0;
-
-    const entriesByMonth = normalizedEntries.reduce((acc, entry) => {
-      const monthKey = String(entry.dateStr).slice(0, 7);
-      if (!acc[monthKey]) acc[monthKey] = [];
-      acc[monthKey].push(entry);
-      return acc;
-    }, {});
-
-    let changedCount = 0;
-    setPreScheduleMonthlySchedules((prev) => {
-      const next = { ...(prev || {}) };
-
-      Object.entries(entriesByMonth).forEach(([monthKey, monthEntries]) => {
-        const [targetYear, targetMonth] = String(monthKey).split('-').map(Number);
-        const baseMonthState = next[monthKey] || {
-          year: targetYear,
-          month: targetMonth,
-          staffs: normalizeStaffGroup((staffs || []).map((staff) => ({
-            id: staff.id,
-            name: staff.name,
-            group: staff.group || '白班',
-            pregnant: Boolean(staff.pregnant)
-          }))),
-          scheduleData: {},
-          customColumnValues: {},
-          schedulingRulesText: '',
-          importMeta: {
-            sourceType: 'manualPreSchedule',
-            sourceFiles: [],
-            sourceSheets: [],
-            importedAt: new Date().toISOString(),
-            lastUpdatedAt: new Date().toISOString(),
-            importMode: 'preSchedule'
-          }
-        };
-
-        const monthState = {
-          ...baseMonthState,
-          staffs: Array.isArray(baseMonthState.staffs) && baseMonthState.staffs.length > 0
-            ? baseMonthState.staffs
-            : normalizeStaffGroup((staffs || []).map((staff) => ({
-                id: staff.id,
-                name: staff.name,
-                group: staff.group || '白班',
-                pregnant: Boolean(staff.pregnant)
-              })))
-        };
-
-        const monthSchedule = JSON.parse(JSON.stringify(monthState.scheduleData || monthState.schedule || {}));
-        monthEntries.forEach(({ staffId, dateStr, value }) => {
-          const matchedStaff = resolvePreScheduleMatchedStaff(staffId, monthState)
-            || monthState.staffs.find((staff) => staff.id === staffId)
-            || (() => {
-              const currentStaff = staffs.find((staff) => staff.id === staffId);
-              if (!currentStaff) return null;
-              const clonedStaff = {
-                id: currentStaff.id,
-                name: currentStaff.name,
-                group: currentStaff.group || '白班',
-                pregnant: Boolean(currentStaff.pregnant)
-              };
-              monthState.staffs = [...(monthState.staffs || []), clonedStaff];
-              return clonedStaff;
-            })();
-          if (!matchedStaff) return;
-          if (!monthSchedule[matchedStaff.id]) monthSchedule[matchedStaff.id] = {};
-          const previousCell = monthSchedule[matchedStaff.id]?.[dateStr];
-          const previousValue = typeof previousCell === 'object' && previousCell !== null ? (previousCell.value || '') : String(previousCell || '');
-          if (value) {
-            monthSchedule[matchedStaff.id][dateStr] = { value, source: 'manual' };
-            if (previousValue !== value) changedCount += 1;
-          } else if (previousValue) {
-            delete monthSchedule[matchedStaff.id][dateStr];
-            changedCount += 1;
-          }
-        });
-
-        next[monthKey] = {
-          ...monthState,
-          year: targetYear,
-          month: targetMonth,
-          scheduleData: monthSchedule,
-          importMeta: {
-            ...(monthState.importMeta || {}),
-            sourceType: monthState.importMeta?.sourceType || 'manualPreSchedule',
-            importMode: 'preSchedule',
-            lastUpdatedAt: new Date().toISOString()
-          }
-        };
-      });
-
-      return next;
-    });
-
-    return changedCount;
-  };
-
-  const getPreScheduleBackgroundColor = (baseColor = 'transparent', hasFormalValue = false) => {
-    const normalizedBaseColor = baseColor && baseColor !== 'transparent' ? baseColor : pageBackgroundColor;
-    return blendHexColors(normalizedBaseColor, preScheduleTintColor, hasFormalValue ? 0.12 : 0.2);
-  };
-
-
-  const getExportCellPresentation = (staffOrId, dayInfo) => {
-    const dateStr = dayInfo?.date;
-    const formalCode = getCellCode(staffOrId, dateStr) || '';
-    const preScheduleCode = getVisiblePreScheduleCode(staffOrId, dateStr) || '';
-    const formalTextColor = getCellTextColor(staffOrId, dateStr) || '';
-    const baseBackgroundColor = dayInfo?.isHoliday
-      ? colors.holiday
-      : (dayInfo?.isWeekend ? colors.weekend : pageBackgroundColor);
-    const hasFormalValue = Boolean(formalCode);
-    const hasPreSchedule = Boolean(preScheduleCode);
-    const displayValue = hasFormalValue ? formalCode : preScheduleCode;
-    const backgroundColor = hasPreSchedule
-      ? getPreScheduleBackgroundColor(baseBackgroundColor, hasFormalValue)
-      : baseBackgroundColor;
-    const textColor = hasFormalValue
-      ? (formalTextColor || tableFontColor)
-      : (hasPreSchedule ? preScheduleTextColor : tableFontColor);
-
-    return {
-      formalCode,
-      preScheduleCode,
-      displayValue,
-      backgroundColor,
-      textColor,
-      hasFormalValue,
-      hasPreSchedule
-    };
-  };
-
-
-  const getRawImportedLeaveSeed = (staffOrId, leaveType) => {
-    if (!leaveType || !['例', '休'].includes(leaveType)) return 0;
-    const monthStartDate = daysInMonth?.[0]?.date ? parseDateKey(daysInMonth[0].date) : null;
-    if (!monthStartDate) return 0;
-
-    let cursor = addDays(monthStartDate, -1);
-    for (let i = 0; i < 62; i += 1) {
-      const dateKey = formatDateKey(cursor);
-      const rawCell = getContextCellData(staffOrId, dateKey);
-      const rawImportedValue = typeof rawCell === 'object' && rawCell !== null ? String(rawCell.rawImportedValue || '').trim() : '';
-      const match = rawImportedValue.match(/^(例|休)([1-4])$/);
-      if (match && match[1] === leaveType) return Number(match[2]) || 0;
-      cursor = addDays(cursor, -1);
-    }
-
-    return 0;
-  };
-
-  const buildExportNumberedValueMap = (staffOrId) => {
-    const valueMap = {};
-    let leaveCounters = {
-      例: 0,
-      休: 0
-    };
-    let isFirstSegment = true;
-    let firstSegmentSeed = {
-      例: getRawImportedLeaveSeed(staffOrId, '例'),
-      休: getRawImportedLeaveSeed(staffOrId, '休')
-    };
-    let firstSegmentCarryUsed = {
-      例: false,
-      休: false
-    };
-
-    daysInMonth.forEach((dayInfo, index) => {
-      const presentation = getExportCellPresentation(staffOrId, dayInfo);
-      const displayValue = presentation.displayValue || '';
-
-      if (displayValue === '例' || displayValue === '休') {
-        const leaveType = displayValue;
-
-        if (isFirstSegment && Number(firstSegmentSeed[leaveType] || 0) > 0) {
-          if (!firstSegmentCarryUsed[leaveType]) {
-            const continuedCount = Math.min(Number(firstSegmentSeed[leaveType] || 0) + 1, 4);
-            valueMap[dayInfo.date] = `${leaveType}${continuedCount}`;
-            firstSegmentCarryUsed[leaveType] = true;
-          } else {
-            valueMap[dayInfo.date] = leaveType;
-          }
-        } else {
-          const nextCount = Number(leaveCounters[leaveType] || 0) + 1;
-          leaveCounters[leaveType] = nextCount;
-          valueMap[dayInfo.date] = nextCount <= 4 ? `${leaveType}${nextCount}` : leaveType;
-        }
-      } else {
-        valueMap[dayInfo.date] = displayValue;
-      }
-
-      if (isFourWeekCycleEndDate(dayInfo.date) && index < daysInMonth.length - 1) {
-        leaveCounters = { 例: 0, 休: 0 };
-        isFirstSegment = false;
-        firstSegmentSeed = { 例: 0, 休: 0 };
-        firstSegmentCarryUsed = { 例: false, 休: false };
-      }
-    });
-
-    return valueMap;
-  };
-
-  const getExportNumberedValue = (staffOrId, dateStr) => {
-    if (!dateStr) return '';
-    const valueMap = buildExportNumberedValueMap(staffOrId);
-    return valueMap[dateStr] || '';
-  };
-
-  const buildExportStaffStats = (staffId) => {
-    const stats = {
-      work: 0,
-      holidayLeave: 0,
-      totalLeave: 0,
-      leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
-    };
-
-    daysInMonth.forEach((dayInfo) => {
-      const displayValue = getExportNumberedValue(staffId, dayInfo.date);
-      if (!displayValue) return;
-      if (getAllShiftCodes().includes(displayValue)) stats.work += 1;
-      if (isConfiguredLeaveCode(displayValue)) {
-        stats.totalLeave += 1;
-        const leavePrefix = getCodePrefix(displayValue);
-        if (stats.leaveDetails[leavePrefix] !== undefined) stats.leaveDetails[leavePrefix] += 1;
-        if (dayInfo.isWeekend || dayInfo.isHoliday) stats.holidayLeave += 1;
-      }
-    });
-
-    return stats;
-  };
-
-  const buildExportDailyStats = (dateStr) => {
-    const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
-    staffs.forEach((staff) => {
-      const displayValue = getExportNumberedValue(staff.id, dateStr);
-      if (!displayValue) return;
-
-      const shiftGroup = getShiftGroupByCode(displayValue);
-      if (shiftGroup === '白班') stats.D += 1;
-      else if (shiftGroup === '小夜') stats.E += 1;
-      else if (shiftGroup === '大夜') stats.N += 1;
-      else if (isConfiguredLeaveCode(displayValue)) stats.totalLeave += 1;
-    });
-    return stats;
-  };
-
-  const clearRuleWarningCells = (cells = []) => {
-    if (!Array.isArray(cells) || cells.length === 0) return;
-    setCellRuleWarnings(prev => {
-      const next = { ...prev };
-      cells.forEach(({ staffId, dateStr }) => {
-        delete next[makeCellKey(staffId, dateStr)];
-      });
-      return next;
-    });
-  };
-
-  const setRuleWarningsForEntries = (warningEntries = []) => {
-    const normalizedWarnings = Array.isArray(warningEntries) ? warningEntries : [];
-    if (normalizedWarnings.length === 0) return;
-    setCellRuleWarnings(prev => {
-      const next = { ...prev };
-      normalizedWarnings.forEach(({ staffId, dateStr, reasons = [] }) => {
-        next[makeCellKey(staffId, dateStr)] = reasons?.[0] || '此格違反排班規則';
-      });
-      return next;
-    });
-  };
-
-  const getCellCodeFromSnapshot = (snapshot = {}, staffId, dateStr) => {
-    const staffSnapshot = snapshot?.[staffId];
-    if (staffSnapshot && Object.prototype.hasOwnProperty.call(staffSnapshot, dateStr)) {
-      const cellData = staffSnapshot?.[dateStr];
-      if (!cellData) return '';
-      return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-    }
-
-    const targetMonthKey = String(dateStr || '').slice(0, 7);
-    if (!targetMonthKey || targetMonthKey === currentMonthKey) return '';
-    return getContextCellCode(staffId, dateStr, { snapshot }) || '';
-  };
-
-  const countConsecutiveWorkDaysBeforeInSnapshot = (snapshot = {}, staffId, dateStr) => {
-    let count = 0;
-    let cursor = addDays(parseDateKey(dateStr), -1);
-    while (true) {
-      const key = formatDateKey(cursor);
-      const code = getCellCodeFromSnapshot(snapshot, staffId, key);
-      if (!isShiftCode(code)) break;
-      count += 1;
-      cursor = addDays(cursor, -1);
-    }
-    return count;
-  };
-
-  const evaluateRuleWarningForCellInSnapshot = (snapshot = {}, staff, dateStr) => {
-    if (!staff || !dateStr) return [];
-    const shiftCode = getCellCodeFromSnapshot(snapshot, staff.id, dateStr);
-    if (!shiftCode || isConfiguredLeaveCode(shiftCode) || !isShiftCode(shiftCode)) return [];
-
-    const reasons = [];
-    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-    const prevCode = getCellCodeFromSnapshot(snapshot, staff.id, prevKey);
-    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-    if (disallowed.includes(shiftCode)) {
-      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
-    }
-
-    const consecutiveBefore = countConsecutiveWorkDaysBeforeInSnapshot(snapshot, staff.id, dateStr);
-    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
-      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
-    }
-
-    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
-      reasons.push('懷孕標記人員不可排 N / 夜8-8');
-    }
-
-    return reasons;
-  };
-
-  const refreshRuleWarningsForCells = (cells = [], snapshot = schedule) => {
-    const normalizedCells = Array.isArray(cells)
-      ? Array.from(new Map(cells.filter((cell) => cell?.staffId && cell?.dateStr).map((cell) => [makeCellKey(cell.staffId, cell.dateStr), cell])).values())
-      : [];
-
-    if (normalizedCells.length === 0) return;
-
-    setCellRuleWarnings(prev => {
-      const next = { ...prev };
-      normalizedCells.forEach(({ staffId, dateStr }) => {
-        const staff = staffs.find((item) => item.id === staffId);
-        const reasons = evaluateRuleWarningForCellInSnapshot(snapshot, staff, dateStr);
-        const cellKey = makeCellKey(staffId, dateStr);
-        if (reasons.length > 0) next[cellKey] = reasons[0];
-        else delete next[cellKey];
-      });
-      return next;
-    });
-  };
-
-  const expandCellsForRuleRecheck = (cells = []) => {
-    const staffIds = Array.from(new Set(
-      (Array.isArray(cells) ? cells : [])
-        .map((cell) => cell?.staffId)
-        .filter(Boolean)
-    ));
-
-    if (staffIds.length === 0) return [];
-
-    const expanded = [];
-    staffIds.forEach((staffId) => {
-      daysInMonth.forEach((day) => {
-        expanded.push({ staffId, dateStr: day.date });
-      });
-    });
-
-    return expanded;
-  };
-
-  const scanScheduleRuleViolations = (schedulesSource = {}, options = {}) => {
-    const monthKeys = Object.keys(schedulesSource || {}).sort();
-    const targetMonthKeys = new Set(Array.isArray(options.targetMonthKeys) ? options.targetMonthKeys : monthKeys);
-    const byName = new Map();
-
-    monthKeys.forEach((monthKey) => {
-      const monthState = schedulesSource?.[monthKey];
-      const monthStaffs = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
-      const monthSchedule = monthState?.scheduleData || monthState?.schedule || {};
-      monthStaffs.forEach((staff) => {
-        const nameKey = String(staff?.name || '').trim();
-        if (!nameKey) return;
-        const staffSchedule = monthSchedule?.[staff.id] || {};
-        if (!byName.has(nameKey)) byName.set(nameKey, { staff, cells: {} });
-        const ref = byName.get(nameKey);
-        Object.entries(staffSchedule).forEach(([dateStr, cell]) => {
-          ref.cells[dateStr] = cell;
-        });
-      });
-    });
-
-    const violations = [];
-    byName.forEach((ref, nameKey) => {
-      const dateKeys = Object.keys(ref.cells || {}).sort();
-      const getCode = (dateStr) => {
-        const cell = ref.cells?.[dateStr];
-        return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
-      };
-      dateKeys.forEach((dateStr) => {
-        if (!targetMonthKeys.has(String(dateStr).slice(0, 7))) return;
-        const code = getCode(dateStr);
-        if (!isShiftCode(code)) return;
-        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-        const prevCode = getCode(prevKey);
-        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-        if (disallowed.includes(code)) {
-          violations.push({
-            staffName: nameKey,
-            dateStr,
-            code,
-            reason: `${prevCode} 後不可接 ${code}`
-          });
-        }
-        let consecutiveBefore = 0;
-        let cursor = addDays(parseDateKey(dateStr), -1);
-        while (true) {
-          const cursorKey = formatDateKey(cursor);
-          const cursorCode = getCode(cursorKey);
-          if (!isShiftCode(cursorCode)) break;
-          consecutiveBefore += 1;
-          cursor = addDays(cursor, -1);
-        }
-        if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
-          violations.push({
-            staffName: nameKey,
-            dateStr,
-            code,
-            reason: `連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`
-          });
-        }
-      });
-    });
-
-    return violations;
-  };
-
-  const clearInvalidCellLater = (cellKey) => {
-    window.setTimeout(() => {
-      setInvalidCellKeys(prev => {
-        const next = { ...prev };
-        delete next[cellKey];
-        return next;
-      });
-    }, 1200);
-  };
-
-  const flashInvalidSelection = (cells = []) => {
-    cells.forEach(({ staffId, dateStr }) => {
-      const cellKey = makeCellKey(staffId, dateStr);
-      setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
-      clearInvalidCellLater(cellKey);
-    });
-  };
-
-  const showInputAssist = (message, type = 'error', duration = 1600) => {
-    if (!message) return;
-    setInputAssist({ type, message });
-    if (inputAssistTimerRef.current) window.clearTimeout(inputAssistTimerRef.current);
-    inputAssistTimerRef.current = window.setTimeout(() => {
-      setInputAssist({ type: '', message: '' });
-      inputAssistTimerRef.current = null;
-    }, duration);
-  };
-
-  const clearInputAssist = () => {
-    setInputAssist({ type: '', message: '' });
-    if (inputAssistTimerRef.current) {
-      window.clearTimeout(inputAssistTimerRef.current);
-      inputAssistTimerRef.current = null;
-    }
-  };
-
-  const resetKeyInputBuffer = () => {
-    setKeyInputBuffer('');
-    if (keyInputTimerRef.current) {
-      window.clearTimeout(keyInputTimerRef.current);
-      keyInputTimerRef.current = null;
-    }
-  };
-
-  const keepKeyInputBufferAlive = () => {
-    if (keyInputTimerRef.current) window.clearTimeout(keyInputTimerRef.current);
-    keyInputTimerRef.current = window.setTimeout(() => {
-      setKeyInputBuffer('');
-      keyInputTimerRef.current = null;
-    }, 1500);
-  };
-
-  const getEffectiveSelection = () => {
-    if (rangeSelection?.start && rangeSelection?.end) return rangeSelection;
-    if (selectedGridCell?.staff?.id && selectedGridCell?.dateStr) {
-      return {
-        start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
-        end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
-      };
-    }
-    return null;
-  };
-
-  const selectedRangeCells = useMemo(
-    () => expandSelectionCells(getEffectiveSelection(), staffs, daysInMonth),
-    [rangeSelection, selectedGridCell, staffs, daysInMonth]
-  );
-
-  const selectedCellHasPreSchedule = useMemo(() => {
-    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return false;
-    return Boolean(getVisiblePreScheduleCode(selectedGridCell.staff.id, selectedGridCell.dateStr));
-  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, preScheduleMonthlySchedules, staffs, year, month]);
-
-  const selectedCellTextColor = useMemo(() => {
-    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return '';
-    return getCellTextColor(selectedGridCell.staff.id, selectedGridCell.dateStr);
-  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, schedule, monthlySchedules, year, month]);
-
-  const selectedCellHasFormalValue = useMemo(() => {
-    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return false;
-    return Boolean(getCellCode(selectedGridCell.staff.id, selectedGridCell.dateStr));
-  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, schedule, monthlySchedules, year, month]);
-
-  useEffect(() => {
-    if (selectedRangeCells.length > 0) clearInputAssist();
-  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr]);
-
-  useEffect(() => {
-    resetKeyInputBuffer();
-    clearInputAssist();
-  }, [preScheduleEditMode]);
-
-  const setSelectionRangeFromCells = (cells = [], options = {}) => {
-    if (!Array.isArray(cells) || cells.length === 0) return false;
-
-    const cellMap = new Map(cells.map((cell) => [makeCellKey(cell.staffId, cell.dateStr), cell]));
-    const orderedCells = expandSelectionCells(getEffectiveSelection(), staffs, daysInMonth);
-    const orderedMatchedCells = orderedCells.filter((cell) => cellMap.has(makeCellKey(cell.staffId, cell.dateStr)));
-    const targetCells = orderedMatchedCells.length > 0 ? orderedMatchedCells : cells;
-    const firstCell = targetCells[0];
-    const lastCell = targetCells[targetCells.length - 1];
-    if (!firstCell || !lastCell) return false;
-
-    const startStaff = staffs.find((staff) => staff.id === firstCell.staffId);
-    const endStaff = staffs.find((staff) => staff.id === lastCell.staffId);
-    if (!startStaff || !endStaff) return false;
-
-    const anchorPoint = {
-      staffId: firstCell.staffId,
-      dateStr: firstCell.dateStr,
-      group: startStaff.group || '白班'
-    };
-    const endPoint = {
-      staffId: lastCell.staffId,
-      dateStr: lastCell.dateStr,
-      group: endStaff.group || '白班'
-    };
-    const activeCell = options.activeCell || lastCell;
-    const activeStaff = staffs.find((staff) => staff.id === activeCell.staffId) || endStaff;
-
-    setSelectionAnchor(anchorPoint);
-    setRangeSelection({ start: anchorPoint, end: endPoint });
-    setSelectedGridCell({ staff: activeStaff, dateStr: activeCell.dateStr });
-    return true;
-  };
-
-  const clearSelectionContents = () => {
-    if (selectedRangeCells.length === 0) return false;
-    return applyScheduleEntries(
-      selectedRangeCells.map(({ staffId, dateStr }) => ({
-        staffId,
-        dateStr,
-        value: '',
-        source: 'manual'
-      })),
-      {
-        preserveSelection: true,
-        selectionCells: selectedRangeCells,
-        activeCell: selectedRangeCells[selectedRangeCells.length - 1]
-      }
-    );
-  };
-
-  const applyScheduleEntries = (entries = [], options = {}) => {
-    if (!Array.isArray(entries) || entries.length === 0) return false;
-
-    const normalizedEntries = entries
-      .map((entry) => ({
-        staffId: entry?.staffId,
-        dateStr: entry?.dateStr,
-        value: entry?.value || '',
-        source: entry?.source || 'manual'
-      }))
-      .filter((entry) => entry.staffId && entry.dateStr);
-
-    if (normalizedEntries.length === 0) return false;
-
-    const dedupedEntries = Array.from(
-      new Map(normalizedEntries.map((entry) => [makeCellKey(entry.staffId, entry.dateStr), entry])).values()
-    );
-
-    const nextSchedule = JSON.parse(JSON.stringify(schedule || {}));
-    dedupedEntries.forEach(({ staffId, dateStr, value, source }) => {
-      if (!nextSchedule[staffId]) nextSchedule[staffId] = {};
-      const existingCell = nextSchedule[staffId]?.[dateStr];
-      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
-      nextSchedule[staffId][dateStr] = value ? { ...existingMeta, value, source } : null;
-    });
-
-    setSchedule(nextSchedule);
-
-    const recheckCells = expandCellsForRuleRecheck(dedupedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })));
-    refreshRuleWarningsForCells(recheckCells, nextSchedule);
-
-    if (options.preserveSelection) {
-      const selectionCells = Array.isArray(options.selectionCells) && options.selectionCells.length > 0
-        ? options.selectionCells
-        : dedupedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr }));
-      setSelectionRangeFromCells(selectionCells, { activeCell: options.activeCell });
-    }
-
-    if (options.clearAssist !== false) clearInputAssist();
-    if (options.resetBuffer !== false) resetKeyInputBuffer();
-
-    return true;
-  };
-
-
-  const buildEntriesFromSnapshotDiff = (snapshot = {}, options = {}) => {
-    const entries = [];
-    const onlyCells = Array.isArray(options.onlyCells) ? new Set(options.onlyCells.map((cell) => makeCellKey(cell.staffId, cell.dateStr))) : null;
-
-    staffs.forEach((staff) => {
-      daysInMonth.forEach((day) => {
-        const cellKey = makeCellKey(staff.id, day.date);
-        if (onlyCells && !onlyCells.has(cellKey)) return;
-
-        const currentCell = schedule[staff.id]?.[day.date];
-        const nextCell = snapshot[staff.id]?.[day.date];
-        const currentValue = typeof currentCell === 'object' && currentCell !== null ? (currentCell.value || '') : (currentCell || '');
-        const currentSource = typeof currentCell === 'object' && currentCell !== null ? (currentCell.source || 'manual') : (currentValue ? 'manual' : '');
-        const nextValue = typeof nextCell === 'object' && nextCell !== null ? (nextCell.value || '') : (nextCell || '');
-        const nextSource = typeof nextCell === 'object' && nextCell !== null ? (nextCell.source || 'manual') : (nextValue ? 'manual' : '');
-
-        if (currentValue === nextValue && currentSource === nextSource) return;
-        entries.push({ staffId: staff.id, dateStr: day.date, value: nextValue, source: nextSource || 'manual' });
-      });
-    });
-
-    return entries;
-  };
-
-  const applyRuleFillSnapshot = (snapshot = {}, options = {}) => {
-    const entries = buildEntriesFromSnapshotDiff(snapshot, { onlyCells: options.onlyCells });
-    if (entries.length === 0) return false;
-    return applyScheduleEntries(entries, {
-      preserveSelection: options.preserveSelection === true,
-      selectionCells: options.selectionCells || entries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
-      activeCell: options.activeCell || (entries.length > 0 ? { staffId: entries[entries.length - 1].staffId, dateStr: entries[entries.length - 1].dateStr } : null),
-      clearAssist: options.clearAssist,
-      resetBuffer: options.resetBuffer
-    });
-  };
-
-  const applyRuleFillEntries = (entries = [], options = {}) => {
-    if (!Array.isArray(entries) || entries.length === 0) return false;
-    return applyScheduleEntries(
-      entries.map((entry) => ({ ...entry, source: entry?.source || 'auto' })),
-      {
-        preserveSelection: options.preserveSelection === true,
-        selectionCells: options.selectionCells || entries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
-        activeCell: options.activeCell || (entries.length > 0 ? { staffId: entries[entries.length - 1].staffId, dateStr: entries[entries.length - 1].dateStr } : null),
-        clearAssist: options.clearAssist,
-        resetBuffer: options.resetBuffer
-      }
-    );
-  };
-
-  const applyValueToCells = (cells, normalized, options = {}) => {
-    if (!cells || cells.length === 0) return false;
-    const targetCells = Array.isArray(cells) ? cells : [];
-    const source = options.source || 'manual';
-    const rawEntries = targetCells.map(({ staffId, dateStr }) => ({
-      staffId,
-      dateStr,
-      value: normalized,
-      source
-    }));
-    const { allowedEntries, warningEntries } = source === 'manual'
-      ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
-      : { allowedEntries: rawEntries, warningEntries: [] };
-    if (allowedEntries.length === 0) return false;
-    const nonWarningCells = targetCells.filter(({ staffId, dateStr }) => !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr));
-    if (source === 'manual') clearRuleWarningCells(nonWarningCells);
-    return applyScheduleEntries(
-      allowedEntries,
-      {
-        ...options,
-        clearAssist: options.clearAssist !== false && warningEntries.length === 0,
-        preserveSelection: options.preserveSelection === true || warningEntries.length > 0,
-        selectionCells: options.selectionCells || targetCells,
-        activeCell: options.activeCell || targetCells[targetCells.length - 1]
-      }
-    );
-  };
-
-  const normalizePreScheduleInput = (rawValue = '') => {
-    const raw = String(rawValue ?? '').trim();
-    if (!raw) return { normalized: '', isValid: true };
-
-    const normalizedNumberedLeave = getImportedRawNumberedLeaveValue(raw);
-    if (normalizedNumberedLeave) {
-      return {
-        normalized: normalizedNumberedLeave.startsWith('例') ? '例' : '休',
-        isValid: true
-      };
-    }
-
-    const { normalized, isValid } = normalizeManualShiftCode(raw, [...mergedLeaveCodes, ...mergedShiftCodes]);
-    if (!isValid) return { normalized: '', isValid: false };
-    return { normalized, isValid: true };
-  };
-
-  const buildPreSchedulePastePlan = (grid = [], rect = null) => {
-    if (!rect || !Array.isArray(grid) || grid.length === 0) {
-      return { entries: [], affectedCells: [], invalidCount: 0, clearCount: 0, writeCount: 0, clipped: false };
-    }
-
-    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
-    const selectionColCount = rect.colEnd - rect.colStart + 1;
-    const sourceRowCount = grid.length;
-    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
-    const isSingleCellPaste = sourceRowCount === 1 && sourceColCount === 1;
-
-    let targetRowCount = sourceRowCount;
-    let targetColCount = sourceColCount;
-    let clipped = false;
-
-    if (selectionRowCount > 1 || selectionColCount > 1) {
-      if (isSingleCellPaste) {
-        targetRowCount = selectionRowCount;
-        targetColCount = selectionColCount;
-      } else {
-        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
-        targetColCount = Math.min(sourceColCount, selectionColCount);
-        clipped = sourceRowCount > selectionRowCount || sourceColCount > selectionColCount;
-      }
-    }
-
-    const entries = [];
-    const affectedCells = [];
-    let invalidCount = 0;
-    let clearCount = 0;
-    let writeCount = 0;
-
-    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
-        const sourceRow = isSingleCellPaste ? 0 : rowOffset;
-        const sourceCol = isSingleCellPaste ? 0 : colOffset;
-        const targetRow = rect.rowStart + rowOffset;
-        const targetCol = rect.colStart + colOffset;
-        const staff = rect.scopedStaffs[targetRow];
-        const day = daysInMonth[targetCol];
-        if (!staff || !day) continue;
-
-        const targetCell = { staffId: staff.id, dateStr: day.date };
-        affectedCells.push(targetCell);
-
-        const rawValue = String(grid[sourceRow]?.[sourceCol] ?? '').trim();
-        if (!rawValue) {
-          entries.push({ ...targetCell, value: '' });
-          clearCount += 1;
-          continue;
-        }
-
-        const result = normalizePreScheduleInput(rawValue);
-        if (!result.isValid) {
-          invalidCount += 1;
-          continue;
-        }
-
-        entries.push({ ...targetCell, value: result.normalized });
-        writeCount += 1;
-      }
-    }
-
-    return { entries, affectedCells, invalidCount, clearCount, writeCount, clipped };
-  };
-
-  const isPotentialPreSchedulePrefix = (rawValue = '') => {
-    if (!String(rawValue ?? '').trim()) return true;
-    return getNormalizedManualCodeCandidates(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]).length > 0;
-  };
-
-  const clearSelectedPreScheduleRangeByKeyboard = () => {
-    if (!Array.isArray(selectedRangeCells) || selectedRangeCells.length === 0) return false;
-    const changedCount = updatePreScheduleEntries(selectedRangeCells.map(({ staffId, dateStr }) => ({
-      staffId,
-      dateStr,
-      value: ''
-    })));
-    if (changedCount <= 0) return false;
-    setSelectionRangeFromCells(selectedRangeCells, { activeCell: selectedRangeCells[selectedRangeCells.length - 1] });
-    clearInputAssist();
-    resetKeyInputBuffer();
-    return true;
-  };
-
-  const applyPreScheduleValueToCells = (cells = [], rawValue = '', options = {}) => {
-    if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
-    const { normalized, isValid } = normalizePreScheduleInput(rawValue);
-    if (!isValid) {
-      flashInvalidSelection(cells);
-      if (options.showFeedback !== false) showInputAssist('預班可輸入上班或休假代號', 'error');
-      return { applied: false, normalized: '' };
-    }
-
-    const changedCount = updatePreScheduleEntries(cells.map(({ staffId, dateStr }) => ({
-      staffId,
-      dateStr,
-      value: normalized
-    })));
-
-    if (changedCount <= 0 && normalized) return { applied: false, normalized: '' };
-
-    const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
-    if (options.preserveSelection || !shouldAdvance) {
-      setSelectionRangeFromCells(cells, { activeCell: options.activeCell || cells[cells.length - 1] });
-    }
-
-    if (options.clearAssist !== false) clearInputAssist();
-    resetKeyInputBuffer();
-
-    if (shouldAdvance) moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
-
-    return { applied: true, normalized };
-  };
-
-  const moveSelectionAfterInput = (cells = [], direction = 1) => {
-    if (!Array.isArray(cells) || cells.length !== 1) return false;
-    return moveSelectedCell(0, direction);
-  };
-
-  const applySelectionValue = (cells = [], rawValue = '', options = {}) => {
-    if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
-    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
-    if (!isValid) return { applied: false, normalized: '' };
-
-    const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
-    const applied = applyValueToCells(cells, normalized, {
-      source: options.source || 'manual',
-      preserveSelection: !shouldAdvance,
-      selectionCells: cells,
-      activeCell: cells[cells.length - 1],
-      clearAssist: options.clearAssist,
-      resetBuffer: options.resetBuffer
-    });
-    if (!applied) return { applied: false, normalized: '' };
-
-    if (options.clearAssist !== false) clearInputAssist();
-    resetKeyInputBuffer();
-
-    if (shouldAdvance) {
-      moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
-    }
-
-    return { applied: true, normalized };
-  };
-
-  const navigateSelection = (rowDelta = 0, colDelta = 0) => {
-    clearInputAssist();
-    resetKeyInputBuffer();
-    return moveSelectedCell(rowDelta, colDelta);
-  };
-
-  const tryApplyBufferedCode = (buffer) => {
-    if (!buffer || selectedRangeCells.length === 0) return false;
-    return (preScheduleEditMode
-      ? applyPreScheduleValueToCells(selectedRangeCells, buffer, { advance: true, showFeedback: true })
-      : applySelectionValue(selectedRangeCells, buffer, { advance: true })
-    ).applied;
-  };
-
-  const applyShortcutCodeToSelection = (shortcutCode) => {
-    if (!shortcutCode || selectedRangeCells.length === 0) return false;
-    return (preScheduleEditMode
-      ? applyPreScheduleValueToCells(selectedRangeCells, shortcutCode, { advance: true, showFeedback: true })
-      : applySelectionValue(selectedRangeCells, shortcutCode, { advance: true })
-    ).applied;
-  };
-
-  const moveSelectedCell = (rowDelta = 0, colDelta = 0) => {
-    const selection = getEffectiveSelection();
-    if (!selection?.start) return false;
-
-    const activeStaffId = selectedGridCell?.staff?.id || selection.end?.staffId || selection.start.staffId;
-    const activeDateStr = selectedGridCell?.dateStr || selection.end?.dateStr || selection.start.dateStr;
-    const activeStaff = staffs.find((staff) => staff.id === activeStaffId);
-    if (!activeStaff || !activeDateStr) return false;
-
-    const scopedStaffs = staffs.filter((staff) => (staff.group || '白班') === (activeStaff.group || '白班'));
-    const rowIndex = scopedStaffs.findIndex((staff) => staff.id === activeStaff.id);
-    const colIndex = daysInMonth.findIndex((day) => day.date === activeDateStr);
-    if (rowIndex === -1 || colIndex === -1) return false;
-
-    let nextRowIndex = rowIndex + rowDelta;
-    let nextColIndex = colIndex + colDelta;
-
-    if (colDelta !== 0 && daysInMonth.length > 0) {
-      while (nextColIndex >= daysInMonth.length) {
-        if (nextRowIndex >= scopedStaffs.length - 1) {
-          nextRowIndex = scopedStaffs.length - 1;
-          nextColIndex = daysInMonth.length - 1;
-          break;
-        }
-        nextRowIndex += 1;
-        nextColIndex -= daysInMonth.length;
-      }
-
-      while (nextColIndex < 0) {
-        if (nextRowIndex <= 0) {
-          nextRowIndex = 0;
-          nextColIndex = 0;
-          break;
-        }
-        nextRowIndex -= 1;
-        nextColIndex += daysInMonth.length;
-      }
-    }
-
-    nextRowIndex = Math.max(0, Math.min(scopedStaffs.length - 1, nextRowIndex));
-    nextColIndex = Math.max(0, Math.min(daysInMonth.length - 1, nextColIndex));
-
-    const nextStaff = scopedStaffs[nextRowIndex];
-    const nextDay = daysInMonth[nextColIndex];
-    if (!nextStaff || !nextDay) return false;
-
-    const nextPoint = { staffId: nextStaff.id, dateStr: nextDay.date, group: nextStaff.group || '白班' };
-    setSelectionAnchor(nextPoint);
-    setRangeSelection({ start: nextPoint, end: nextPoint });
-    setSelectedGridCell({ staff: nextStaff, dateStr: nextDay.date });
-    resetKeyInputBuffer();
-    return true;
-  };
-
-  const commitCellValue = (staffId, dateStr, rawValue) => {
-    const cellKey = makeCellKey(staffId, dateStr);
-    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
-
-    if (!isValid) {
-      setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
-      clearInvalidCellLater(cellKey);
-      setCellDrafts(prev => {
-        const next = { ...prev };
-        delete next[cellKey];
-        return next;
-      });
-      return false;
-    }
-
-    const result = applySelectionValue([{ staffId, dateStr }], normalized, { advance: true });
-    if (!result.applied) return false;
-
-    setCellDrafts(prev => {
-      const next = { ...prev };
-      delete next[cellKey];
-      return next;
-    });
-    setInvalidCellKeys(prev => {
-      const next = { ...prev };
-      delete next[cellKey];
-      return next;
-    });
-    return true;
-  };
-
-  const startRangeSelection = (staff, dateStr, event = {}) => {
-    const mouseButton = typeof event.button === 'number' ? event.button : 0;
-    if (mouseButton !== 0) return;
-
-    const point = { staffId: staff.id, dateStr, group: staff.group || '白班' };
-    if (event.shiftKey && selectionAnchor) {
-      setRangeSelection({ start: selectionAnchor, end: point });
-    } else {
-      setSelectionAnchor(point);
-      setRangeSelection({ start: point, end: point });
-    }
-    setSelectedGridCell({ staff, dateStr });
-    resetKeyInputBuffer();
-  };
-
-  const updateRangeSelection = (staff, dateStr) => {
-    if (!isRangeDragging || !selectionAnchor) return;
-    const anchorGroup = selectionAnchor.group || '白班';
-    const targetGroup = staff.group || '白班';
-    if (anchorGroup !== targetGroup) return;
-    setRangeSelection({ start: selectionAnchor, end: { staffId: staff.id, dateStr, group: targetGroup } });
-  };
-
-  const copySelectionToClipboard = async () => {
-    const selection = getEffectiveSelection();
-    const rect = getRectFromSelection(selection, staffs, daysInMonth);
-    if (!rect) return;
-
-    const grid = [];
-    for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
-      const row = [];
-      const staff = rect.scopedStaffs[rowIndex];
-      for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
-        const day = daysInMonth[colIndex];
-        const copiedValue = preScheduleEditMode
-          ? (getVisiblePreScheduleCode(staff?.id, day?.date) || '')
-          : (getCellCode(staff?.id, day?.date) || '');
-        row.push(copiedValue);
-      }
-      grid.push(row);
-    }
-
-    setClipboardGrid(grid);
-    const text = grid.map(row => row.join('\t')).join('\n');
-    try {
-      if (navigator?.clipboard?.writeText) await navigator.clipboard.writeText(text);
-    } catch (error) {
-      console.error('寫入剪貼簿失敗', error);
-    }
-  };
-
-  const buildPastePlan = (grid = [], rect = null) => {
-    if (!rect || !Array.isArray(grid) || grid.length === 0) {
-      return { updates: [], affectedCells: [], invalidCount: 0, clearCount: 0, writeCount: 0, clipped: false };
-    }
-
-    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
-    const selectionColCount = rect.colEnd - rect.colStart + 1;
-    const sourceRowCount = grid.length;
-    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
-    const isSingleCellPaste = sourceRowCount === 1 && sourceColCount === 1;
-
-    let targetRowCount = sourceRowCount;
-    let targetColCount = sourceColCount;
-    let clipped = false;
-
-    if (selectionRowCount > 1 || selectionColCount > 1) {
-      if (isSingleCellPaste) {
-        targetRowCount = selectionRowCount;
-        targetColCount = selectionColCount;
-      } else {
-        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
-        targetColCount = Math.min(sourceColCount, selectionColCount);
-        clipped = sourceRowCount > selectionRowCount || sourceColCount > selectionColCount;
-      }
-    }
-
-    const updates = [];
-    const affectedCells = [];
-    let invalidCount = 0;
-    let clearCount = 0;
-    let writeCount = 0;
-
-    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
-        const sourceRow = isSingleCellPaste ? 0 : rowOffset;
-        const sourceCol = isSingleCellPaste ? 0 : colOffset;
-        const targetRow = rect.rowStart + rowOffset;
-        const targetCol = rect.colStart + colOffset;
-        const staff = rect.scopedStaffs[targetRow];
-        const day = daysInMonth[targetCol];
-        if (!staff || !day) continue;
-
-        const targetCell = { staffId: staff.id, dateStr: day.date };
-        affectedCells.push(targetCell);
-
-        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
-        const rawText = String(rawValue ?? '').trim();
-        if (!rawText) {
-          updates.push({ ...targetCell, value: '', source: 'manual' });
-          clearCount += 1;
-          continue;
-        }
-
-        const { normalized, isValid } = normalizeManualShiftCode(rawText, [...mergedLeaveCodes, ...mergedShiftCodes]);
-        if (!isValid) {
-          invalidCount += 1;
-          continue;
-        }
-
-        updates.push({ ...targetCell, value: normalized, source: 'manual' });
-        writeCount += 1;
-      }
-    }
-
-    return { updates, affectedCells, invalidCount, clearCount, writeCount, clipped };
-  };
-
-  const pasteGridToSelection = async () => {
-    const selection = getEffectiveSelection();
-    const rect = getRectFromSelection(selection, staffs, daysInMonth);
-    if (!rect) return;
-
-    let grid = clipboardGrid;
-    if (!grid || grid.length === 0) {
-      try {
-        if (navigator?.clipboard?.readText) {
-          const text = await navigator.clipboard.readText();
-          grid = parseClipboardGrid(text);
-        }
-      } catch (error) {
-        console.error('讀取剪貼簿失敗', error);
-      }
-    }
-    if (!grid || grid.length === 0) return;
-
-    if (preScheduleEditMode) {
-      const pastePlan = buildPreSchedulePastePlan(grid, rect);
-      if (pastePlan.affectedCells.length === 0) return;
-
-      if (pastePlan.entries.length === 0) {
-        if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-        return;
-      }
-
-      updatePreScheduleEntries(pastePlan.entries);
-      setSelectionRangeFromCells(pastePlan.affectedCells, { activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1] });
-      resetKeyInputBuffer();
-      clearInputAssist();
-      if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-      return;
-    }
-
-    const pastePlan = buildPastePlan(grid, rect);
-    if (pastePlan.updates.length === 0) {
-      if (pastePlan.invalidCount > 0) flashInvalidSelection(selectedRangeCells);
-      return;
-    }
-
-    const { allowedEntries } = validateManualEntries(pastePlan.updates, { showFeedback: false });
-    if (allowedEntries.length === 0) {
-      if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-      return;
-    }
-
-    applyScheduleEntries(allowedEntries, {
-      preserveSelection: true,
-      selectionCells: pastePlan.affectedCells,
-      activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1],
-      clearAssist: false,
-      resetBuffer: true
-    });
-
-    if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-    clearInputAssist();
-  };
-
-  useEffect(() => {
-    const stopDrag = () => setIsRangeDragging(false);
-    window.addEventListener('mouseup', stopDrag);
-    return () => window.removeEventListener('mouseup', stopDrag);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (inputAssistTimerRef.current) window.clearTimeout(inputAssistTimerRef.current);
-      if (keyInputTimerRef.current) window.clearTimeout(keyInputTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (event) => {
-      const target = event.target;
-      const tagName = String(target?.tagName || '').toLowerCase();
-      const isTypingTarget = tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target?.isContentEditable;
-      const hasSelection = selectedRangeCells.length > 0;
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && hasSelection) {
-        event.preventDefault();
-        copySelectionToClipboard();
-        return;
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && hasSelection) {
-        event.preventDefault();
-        pasteGridToSelection();
-        return;
-      }
-
-      if (!hasSelection) return;
-      if (isTypingTarget) return;
-
-      const shortcutCodeMap = {
-        F1: 'D',
-        F2: 'E',
-        F3: 'N',
-        F4: defaultAutoLeaveCode || 'off'
-      };
-      if (shortcutCodeMap[event.key]) {
-        event.preventDefault();
-        applyShortcutCodeToSelection(shortcutCodeMap[event.key]);
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        if (keyInputBuffer) {
-          resetKeyInputBuffer();
-          clearInputAssist();
-          return;
-        }
-        clearInputAssist();
-        setRangeSelection(null);
-        setSelectionAnchor(null);
-        setSelectedGridCell(null);
-        return;
-      }
-
-      if (event.key === 'Backspace' || event.key === 'Delete') {
-        event.preventDefault();
-
-        if (event.key === 'Backspace' && keyInputBuffer) {
-          const nextBuffer = keyInputBuffer.slice(0, -1);
-          if (!nextBuffer) {
-            resetKeyInputBuffer();
-            clearInputAssist();
-            return;
-          }
-          setKeyInputBuffer(nextBuffer);
-          keepKeyInputBufferAlive();
-          if (!isPotentialManualShiftPrefix(nextBuffer, [...mergedLeaveCodes, ...mergedShiftCodes])) {
-            flashInvalidSelection(selectedRangeCells);
-          } else {
-            clearInputAssist();
-          }
-          return;
-        }
-
-        if (preScheduleEditMode) {
-          clearSelectedPreScheduleRangeByKeyboard();
-        } else {
-          clearSelectionContents();
-        }
-        return;
-      }
-
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        navigateSelection(0, -1);
-        return;
-      }
-
-      if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        navigateSelection(0, 1);
-        return;
-      }
-
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        navigateSelection(-1, 0);
-        return;
-      }
-
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        navigateSelection(1, 0);
-        return;
-      }
-
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        navigateSelection(0, event.shiftKey ? -1 : 1);
-        return;
-      }
-
-      if (event.key === 'Tab') {
-        event.preventDefault();
-        navigateSelection(0, event.shiftKey ? -1 : 1);
-        return;
-      }
-
-      if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
-        event.preventDefault();
-        const nextBuffer = `${keyInputBuffer}${event.key}`;
-        const applied = tryApplyBufferedCode(nextBuffer);
-        if (applied) return;
-
-        const prefixValid = preScheduleEditMode
-          ? isPotentialPreSchedulePrefix(nextBuffer)
-          : isPotentialManualShiftPrefix(nextBuffer, [...mergedLeaveCodes, ...mergedShiftCodes]);
-
-        if (!prefixValid) {
-          flashInvalidSelection(selectedRangeCells);
-          resetKeyInputBuffer();
-          if (preScheduleEditMode) showInputAssist('預班只能輸入預假代號', 'error');
-          return;
-        }
-
-        clearInputAssist();
-        setKeyInputBuffer(nextBuffer);
-        keepKeyInputBufferAlive();
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedRangeCells, keyInputBuffer, clipboardGrid, rangeSelection, selectedGridCell, staffs, daysInMonth, mergedLeaveCodes, defaultAutoLeaveCode]);
-
   // ==========================================
   // 4. Excel 匯出 (ExcelJS 實現)
   // ==========================================
   const exportToExcel = async () => {
+    setRuleFillFeedback("📊 正在產生高品質 Excel 報表...");
     const ExcelJS = await loadExcelJS();
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
-
-    const exportTheme = {
-      pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
-      tableFont: uiSettings?.tableFontColor || '#1f2937',
-      shiftBg: uiSettings?.shiftColumnBgColor || '#ffffff',
-      shiftFont: uiSettings?.shiftColumnFontColor || '#1e293b',
-      nameBg: uiSettings?.nameDateColumnBgColor || '#ffffff',
-      nameFont: uiSettings?.nameDateColumnFontColor || '#1e293b',
-      weekdayHeadBg: blendHexColors(uiSettings?.nameDateColumnBgColor || '#ffffff', '#f1f5f9', 0.7),
-      weekendHeadBg: colors.weekend || '#dcfce7',
-      holidayHeadBg: colors.holiday || '#fca5a5',
-      weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
-      holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
-      monthTitleBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.55),
-      summaryBg: uiSettings?.groupSummaryRowBgColor || '#fef3c7',
-      leaveRowBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.2)
-    };
 
     const statHeaders = ['上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
@@ -3339,154 +1201,102 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       worksheet.mergeCells(1, titleStartCol, 1, titleEndCol);
       const titleCell = monthTitleRow.getCell(titleStartCol);
       titleCell.value = `${month}月班表`;
+      titleCell.font = { bold: true, size: 14 };
       titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
-      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
     }
 
     if (leaveEndCol >= leaveStartCol) {
       if (leaveEndCol > leaveStartCol) worksheet.mergeCells(1, leaveStartCol, 1, leaveEndCol);
       const leaveCell = monthTitleRow.getCell(leaveStartCol);
       leaveCell.value = `應休${requiredLeaves}天`;
+      leaveCell.font = { bold: true, size: 11 };
       leaveCell.alignment = { vertical: 'middle', horizontal: 'right' };
-      leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
-      leaveCell.font = { bold: true, size: 11, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
     }
 
-    for (let col = 1; col <= totalColumns; col += 1) {
+    for (let col = 1; col <= totalColumns; col++) {
       const cell = monthTitleRow.getCell(col);
       cell.border = {
         top: { style: 'thin' }, left: { style: 'thin' },
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
       if (col === 1 || col > lastDateColumn) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#FFFFFF') } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
       }
     }
 
-    const headerRow = ['姓名', ...daysInMonth.map(d => `${d.day}\n(${d.weekStr})`), ...statHeaders];
+    const headerRow = ['姓名', ...daysInMonth.map(d => `${d.day}
+(${d.weekStr})`), ...statHeaders];
     const header = worksheet.addRow(headerRow);
     header.height = 30;
 
     header.eachCell((cell, colNumber) => {
-      cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      cell.font = { bold: true, size: 10 };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      const baseBorder = {
+      cell.border = {
         top: { style: 'thin' }, left: { style: 'thin' },
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
-      cell.border = baseBorder;
 
       if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
         const d = daysInMonth[colNumber - 2];
-        cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
-        if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayHeadBg, '#FFCACA') } };
-        else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendHeadBg, '#DCFCE7') } };
-        else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekdayHeadBg, '#F1F5F9') } };
-      } else if (colNumber === 1) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
-        cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
+        if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCACA' } };
+        else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+        else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
       } else {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#F8FAFC') } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
       }
     });
 
-    const makeBaseBorder = () => ({
-      top: { style: 'thin' }, left: { style: 'thin' },
-      bottom: { style: 'thin' }, right: { style: 'thin' }
-    });
-
-    const applyStandardCellStyle = (cell, colNumber, dateObj = null) => {
-      const baseBorder = makeBaseBorder();
-      cell.alignment = { vertical: 'middle', horizontal: 'center' };
-      cell.font = { color: { argb: hexToExcelArgb(colNumber === 1 ? exportTheme.nameFont : exportTheme.tableFont, '#1F2937') } };
-      cell.border = baseBorder;
-      if (dateObj) {
-        cell.numFmt = '@';
-        cell.border = applyExcelFourWeekDivider(baseBorder, dateObj.date);
-        if (dateObj.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayCellBg, '#FFE4E4') } };
-        else if (dateObj.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendCellBg, '#F0FDF4') } };
-      }
-    };
-
-    const addStaffRow = (staff) => {
-      const stats = buildExportStaffStats(staff.id);
+    staffs.forEach(staff => {
+      const stats = getStaffStats(staff.id);
       const rowData = [
         staff.name,
-        ...daysInMonth.map((d) => getExportNumberedValue(staff.id, d.date) || ''),
-        stats.work,
-        stats.holidayLeave,
-        stats.totalLeave,
-        ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''),
-        ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
+        ...daysInMonth.map(d => {
+          const cellData = schedule[staff.id]?.[d.date];
+          return typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
+        }),
+        stats.work, stats.holidayLeave, stats.totalLeave,
+        ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''), ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
       ];
       const row = worksheet.addRow(rowData);
-      row.eachCell((cell, colNumber) => {
-        const dateObj = (colNumber >= 2 && colNumber <= daysInMonth.length + 1) ? daysInMonth[colNumber - 2] : null;
-        applyStandardCellStyle(cell, colNumber, dateObj);
-        if (dateObj) {
-          const presentation = getExportCellPresentation(staff.id, dateObj);
-          if (presentation.backgroundColor) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(presentation.backgroundColor, '#DBEAFE') } };
-          }
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(presentation.textColor || exportTheme.tableFont, '#1F2937') } };
-        }
-      });
-      return row;
-    };
 
-    const addSummaryRow = (summaryKey, includeRightStats = false) => {
-      const rowData = [
-        '',
-        ...daysInMonth.map(d => buildExportDailyStats(d.date)[summaryKey] || ''),
-        ...(includeRightStats ? Array(statHeaders.length).fill('') : Array(statHeaders.length).fill(''))
-      ];
-      const row = worksheet.addRow(rowData);
       row.eachCell((cell, colNumber) => {
-        const baseBorder = makeBaseBorder();
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.font = { bold: true, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
-        cell.border = baseBorder;
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.summaryBg, '#FEF3C7') } };
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+
         if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
+          cell.numFmt = '@';
           const d = daysInMonth[colNumber - 2];
-          cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
+          if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E4' } };
+          else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
         }
       });
-      return row;
-    };
-
-    groupedStaffs.forEach(({ group, staffs: groupStaffList }) => {
-      groupStaffList.forEach(addStaffRow);
-      const summaryKey = group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N';
-      addSummaryRow(summaryKey);
     });
 
-    const leaveRowData = [
-      '',
-      ...daysInMonth.map(d => buildExportDailyStats(d.date).totalLeave || ''),
-      ...Array(statHeaders.length).fill('')
-    ];
-    const leaveRow = worksheet.addRow(leaveRowData);
-    leaveRow.eachCell((cell, colNumber) => {
-      const baseBorder = makeBaseBorder();
-      cell.alignment = { vertical: 'middle', horizontal: 'center' };
-      cell.font = { bold: true, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
-      cell.border = baseBorder;
-      if (colNumber >= 1 && colNumber <= totalColumns) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.leaveRowBg, '#FFFFFF') } };
-      }
-      if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
-        const d = daysInMonth[colNumber - 2];
-        cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
-      }
+    ['D', 'E', 'N', 'totalLeave'].forEach(rowKey => {
+      const label = rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`;
+      const rowData = [label, ...daysInMonth.map(d => getDailyStats(d.date)[rowKey] || ''), ...Array(statHeaders.length).fill('')];
+      const row = worksheet.addRow(rowData);
+      row.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
     });
 
     worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
 
     worksheet.getColumn(1).width = 15;
-    for (let i = 2; i <= daysInMonth.length + 1; i += 1) worksheet.getColumn(i).width = 5;
-    for (let i = daysInMonth.length + 2; i <= totalColumns; i += 1) worksheet.getColumn(i).width = 8;
+    for (let i = 2; i <= daysInMonth.length + 1; i++) worksheet.getColumn(i).width = 5;
+    for (let i = daysInMonth.length + 2; i <= totalColumns; i++) worksheet.getColumn(i).width = 8;
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
@@ -3497,49 +1307,16 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     a.href = url;
     a.download = `排班表_${year}年${month}月.xlsx`;
     a.click();
-    URL.revokeObjectURL(url);
     setShowExportMenu(false);
+    setRuleFillFeedback("✅ Excel 導出成功！");
   };
 
-  const formatWordDayCellValue = (value = "") => {
-    const text = String(value || '').trim();
-    if (/^(例|休)[1-4]$/.test(text)) {
-      return `<span class="word-numbered-leave">${text}</span>`;
-    }
-    return text;
-  };
 
   const exportToWord = () => {
     const statHeaders = ['上班', '假日休', '總休'];
-    const exportTheme = {
-      pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
-      tableFont: uiSettings?.tableFontColor || '#1f2937',
-      shiftBg: uiSettings?.shiftColumnBgColor || '#ffffff',
-      shiftFont: uiSettings?.shiftColumnFontColor || '#1e293b',
-      nameBg: uiSettings?.nameDateColumnBgColor || '#ffffff',
-      nameFont: uiSettings?.nameDateColumnFontColor || '#1e293b',
-      weekdayHeadBg: blendHexColors(uiSettings?.nameDateColumnBgColor || '#ffffff', '#f1f5f9', 0.7),
-      weekendHeadBg: colors.weekend || '#dcfce7',
-      holidayHeadBg: colors.holiday || '#fca5a5',
-      weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
-      holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
-      statWorkBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#93c5fd', 0.45),
-      statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
-      statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
-    };
-
-    const leaveTitleColSpan = Math.min(3, Math.max(1, daysInMonth.length));
-    const titleColSpan = Math.max(1, daysInMonth.length - leaveTitleColSpan);
-    const statColSpan = statHeaders.length;
+    const titleColSpan = daysInMonth.length;
+    const leaveColSpan = statHeaders.length;
     const totalColumns = 1 + daysInMonth.length + statHeaders.length;
-    const wordPageWidthPt = 841.9;
-    const wordMarginPt = 18;
-    const wordUsableWidthPt = wordPageWidthPt - (wordMarginPt * 2);
-    const wordNameColWidthPt = 54;
-    const wordStatColWidthPt = 30;
-    const rawWordDayColWidthPt = (wordUsableWidthPt - wordNameColWidthPt - (statHeaders.length * wordStatColWidthPt)) / Math.max(daysInMonth.length, 1);
-    const wordDayColWidthPt = Math.max(18, Math.min(24, rawWordDayColWidthPt));
-    const wordTableWidthPt = wordNameColWidthPt + (daysInMonth.length * wordDayColWidthPt) + (statHeaders.length * wordStatColWidthPt);
     const schedulingRuleLines = String(schedulingRulesText || '')
       .split(/\r?\n/)
       .map(line => line.trim())
@@ -3547,52 +1324,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const schedulingRulesHtml = schedulingRuleLines.length > 0
       ? `排班規則：<br/>${schedulingRuleLines.map((line, index) => `${index + 1}. ${line}`).join('<br/>')}`
       : '排班規則：';
-
-    const webSummaryRowBg = uiSettings?.groupSummaryRowBgColor || '#fef3c7';
-    const summaryRows = [
-      { group: '白班', key: 'D', label: '白班上班', bg: webSummaryRowBg },
-      { group: '小夜', key: 'E', label: '小夜上班', bg: webSummaryRowBg },
-      { group: '大夜', key: 'N', label: '大夜上班', bg: webSummaryRowBg }
-    ];
-
-    const groupedExportRowsHtml = SHIFT_GROUPS.map((group) => {
-      const groupStaffsForExport = staffs.filter((staff) => (staff.group || '白班') === group);
-
-      const staffRowsHtml = groupStaffsForExport.map((staff) => {
-        const stats = buildExportStaffStats(staff.id);
-        return `
-                <tr>
-                  <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
-                  ${daysInMonth.map(d => {
-                    const presentation = getExportCellPresentation(staff.id, d);
-                    const value = getExportNumberedValue(staff.id, d.date) || '';
-                    const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
-                    const cellBg = presentation.hasPreSchedule
-                      ? presentation.backgroundColor
-                      : (d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg));
-                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; color:${presentation.textColor || exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${formatWordDayCellValue(value)}</td>`;
-                  }).join('')}
-                  <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
-                  <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
-                  <td class="stat-col stat-total-cell" style="background:${exportTheme.statTotalBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
-                </tr>`;
-      }).join('');
-
-      const summaryConfig = summaryRows.find((item) => item.group === group);
-      const summaryRowHtml = summaryConfig ? `
-                <tr>
-                  <td class="name-col summary-label-cell" style="background:${summaryConfig.bg}; color:${exportTheme.nameFont}; mso-pattern:auto none;"></td>
-                  ${daysInMonth.map(d => {
-                    const count = buildExportDailyStats(d.date)[summaryConfig.key];
-                    return `<td class="day-col summary-value-cell" style="background:${summaryConfig.bg}; color:${exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${count || ''}</td>`;
-                  }).join('')}
-                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
-                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
-                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
-                </tr>` : '';
-
-      return `${staffRowsHtml}${summaryRowHtml}`;
-    }).join('');
 
     const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -3614,21 +1345,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           @page WordSection1 {
             size: 841.9pt 595.3pt;
             mso-page-orientation: landscape;
-            margin: ${wordMarginPt}pt ${wordMarginPt}pt ${wordMarginPt}pt ${wordMarginPt}pt;
+            margin: 28.35pt 28.35pt 28.35pt 28.35pt;
           }
           div.WordSection1 { page: WordSection1; }
           body {
             font-family: "Microsoft JhengHei", Arial, sans-serif;
             margin: 0;
             padding: 0;
-            color: ${exportTheme.tableFont};
-            background: ${exportTheme.pageBg};
           }
           table {
             border-collapse: collapse;
             table-layout: fixed;
-            width: ${wordTableWidthPt}pt;
-            max-width: ${wordTableWidthPt}pt;
+            width: auto;
             margin: 0 auto;
             font-size: 9pt;
           }
@@ -3642,26 +1370,12 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           .month-row td {
             height: 24pt;
             font-weight: 700;
-            background: ${exportTheme.pageBg};
-            border-top: 0;
-            border-left: 0;
-            border-right: 0;
-            border-bottom: 1px solid #000;
+            background: #ffffff;
           }
-          .month-name-spacer,
-          .month-stat-spacer {
-            color: transparent;
-          }
-          .month-title-zone,
-          .month-leave-zone {
+          .month-title-cell {
             height: 24pt;
-            padding: 0 6pt;
-          }
-          .month-title-wrap,
-          .month-leave-wrap {
-            position: relative;
-            width: 100%;
-            height: 24pt;
+            padding: 0 8pt;
+            text-align: center;
           }
           .month-title {
             display: block;
@@ -3670,64 +1384,50 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
             font-size: 14pt;
             font-weight: 700;
             line-height: 24pt;
-            white-space: nowrap;
           }
-          .month-leave-inline {
-            display: block;
-            width: 100%;
-            text-align: right;
+          .leave-title-cell {
+            height: 24pt;
+            padding: 0 8pt;
+            text-align: center;
             font-size: 10.5pt;
             font-weight: 700;
-            line-height: 24pt;
             white-space: nowrap;
           }
           .name-col {
-            width: ${wordNameColWidthPt}pt;
-            min-width: ${wordNameColWidthPt}pt;
+            width: 54pt;
+            min-width: 54pt;
             font-weight: 700;
           }
           .day-col {
-            width: ${wordDayColWidthPt}pt;
-            min-width: ${wordDayColWidthPt}pt;
-            white-space: nowrap;
-          }
-          .word-numbered-leave {
-            display: inline-block;
-            white-space: nowrap;
-            word-break: keep-all;
-            font-size: 8pt;
-            line-height: 1;
-            letter-spacing: -0.1pt;
+            width: 18pt;
+            min-width: 18pt;
           }
           .stat-col {
-            width: ${wordStatColWidthPt}pt;
-            min-width: ${wordStatColWidthPt}pt;
+            width: 28pt;
+            min-width: 28pt;
           }
           .header-cell {
             font-weight: 700;
             line-height: 1.1;
           }
-          .weekday-head { background-color: ${exportTheme.weekdayHeadBg}; }
-          .holiday-head { background-color: ${exportTheme.holidayHeadBg}; }
-          .weekend-head { background-color: ${exportTheme.weekendHeadBg}; }
-          .holiday-cell { background-color: ${exportTheme.holidayCellBg}; }
-          .weekend-cell { background-color: ${exportTheme.weekendCellBg}; }
-          .stat-work-head { background-color: ${exportTheme.statWorkBg}; color: ${exportTheme.tableFont}; }
-          .stat-holiday-head { background-color: ${exportTheme.statHolidayBg}; color: ${exportTheme.tableFont}; }
-          .stat-total-head { background-color: ${exportTheme.statTotalBg}; color: ${exportTheme.tableFont}; }
-          .stat-work-cell { background-color: ${exportTheme.statWorkBg}; }
-          .stat-holiday-cell { background-color: ${exportTheme.statHolidayBg}; }
-          .stat-total-cell { background-color: ${exportTheme.statTotalBg}; }
-          .summary-label-cell, .summary-value-cell {
-            font-weight: 700;
-          }
+          .weekday-head { background-color: #f1f5f9; }
+          .holiday-head { background-color: ${colors.holiday}; }
+          .weekend-head { background-color: ${colors.weekend}; }
+          .holiday-cell { background-color: #ffe4e4; }
+          .weekend-cell { background-color: #f0fdf4; }
+          .stat-work-head { background-color: #dbeafe; color: #1d4ed8; }
+          .stat-holiday-head { background-color: #dcfce7; color: #15803d; }
+          .stat-total-head { background-color: #fee2e2; color: #b91c1c; }
+          .stat-work-cell { background-color: #eff6ff; }
+          .stat-holiday-cell { background-color: #f0fdf4; }
+          .stat-total-cell { background-color: #fef2f2; }
           .rules-row td {
             padding: 8pt 10pt;
             text-align: left;
             vertical-align: top;
             line-height: 1.7;
             font-size: 10pt;
-            background: ${exportTheme.pageBg};
+            background: #ffffff;
           }
         </style>
       </head>
@@ -3736,25 +1436,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           <table>
             <thead>
               <tr class="month-row">
-                <td class="name-col month-name-spacer"></td>
-                <td class="month-title-zone" colspan="${titleColSpan}">
-                  <div class="month-title-wrap">
-                    <span class="month-title">${month}月班表</span>
-                  </div>
+                <td class="name-col"></td>
+                <td class="month-title-cell" colspan="${titleColSpan}">
+                  <span class="month-title">${month}月班表</span>
                 </td>
-                <td class="month-leave-zone" colspan="${leaveTitleColSpan}">
-                  <div class="month-leave-wrap">
-                    <span class="month-leave-inline">應休${requiredLeaves}天</span>
-                  </div>
-                </td>
-                <td class="month-stat-spacer" colspan="${statColSpan}"></td>
+                <td class="leave-title-cell" colspan="${leaveColSpan}">應休${requiredLeaves}天</td>
               </tr>
               <tr>
-                <th class="name-col header-cell" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">姓名</th>
+                <th class="name-col header-cell">姓名</th>
                 ${daysInMonth.map(d => {
                   const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
-                  const headBg = d.isHoliday ? exportTheme.holidayHeadBg : (d.isWeekend ? exportTheme.weekendHeadBg : exportTheme.weekdayHeadBg);
-                  return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${d.day}<br/>(${d.weekStr})</th>`;
+                  const headBg = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9');
+                  return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;">${d.day}<br/>(${d.weekStr})</th>`;
                 }).join('')}
                 <th class="stat-col header-cell stat-work-head">上班</th>
                 <th class="stat-col header-cell stat-holiday-head">假日休</th>
@@ -3762,7 +1455,23 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
               </tr>
             </thead>
             <tbody>
-              ${groupedExportRowsHtml}
+              ${staffs.map(staff => {
+                const stats = getStaffStats(staff.id);
+                return `
+                <tr>
+                  <td class="name-col">${staff.name}</td>
+                  ${daysInMonth.map(d => {
+                    const cellData = schedule[staff.id]?.[d.date];
+                    const value = typeof cellData === 'object' ? (cellData?.value || '') : (cellData || '');
+                    const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
+                    const cellBg = d.isHoliday ? '#ffe4e4' : (d.isWeekend ? '#f0fdf4' : '#ffffff');
+                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; mso-pattern:auto none;">${value}</td>`;
+                  }).join('')}
+                  <td class="stat-col stat-work-cell" style="background:#eff6ff; mso-pattern:auto none;">${stats.work || ''}</td>
+                  <td class="stat-col stat-holiday-cell" style="background:#f0fdf4; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
+                  <td class="stat-col stat-total-cell" style="background:#fef2f2; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
+                </tr>`;
+              }).join('')}
             </tbody>
             <tfoot>
               <tr class="rules-row">
@@ -3782,6 +1491,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     a.click();
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
+    setRuleFillFeedback("✅ Word 導出成功！");
   };
 
   // ==========================================
@@ -3806,8 +1516,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
       const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
 
-      const getScheduleCode = (snapshot, staffRef, dateStr) => {
-        return getContextCellCode(staffRef, dateStr, { snapshot });
+      const getScheduleCode = (snapshot, staffId, dateStr) => {
+        const cellData = snapshot[staffId]?.[dateStr];
+        return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
       };
 
       const setScheduleCode = (snapshot, staffId, dateStr, value, source = 'auto') => {
@@ -3815,7 +1526,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         snapshot[staffId][dateStr] = value ? { value, source } : null;
       };
 
-      const getDemandType = (day) => getRequiredStaffingBucketByDay(day);
+      const getDemandType = (day) => (day.isWeekend || day.isHoliday) ? 'holiday' : 'weekday';
       const getDemandForGroup = (day, group) => {
         const bucket = getDemandType(day);
         const key = GROUP_TO_DEMAND_KEY[group];
@@ -3824,17 +1535,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       const getAssignedCountByGroup = (snapshot, dateStr, group) => {
         return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
-          const code = getScheduleCode(snapshot, s, dateStr);
+          const code = getScheduleCode(snapshot, s.id, dateStr);
           return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
         }, 0);
       };
 
-      const countConsecutiveBeforeFromSnapshot = (snapshot, staffRef, dateStr) => {
+      const countConsecutiveBeforeFromSnapshot = (snapshot, staffId, dateStr) => {
         let count = 0;
         let cursor = addDays(parseDateKey(dateStr), -1);
         while (true) {
           const key = formatDateKey(cursor);
-          const code = getScheduleCode(snapshot, staffRef, key);
+          const code = getScheduleCode(snapshot, staffId, key);
           if (!isShiftCode(code)) break;
           count += 1;
           cursor = addDays(cursor, -1);
@@ -3844,43 +1555,37 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       const canAssignWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
         const reasons = [];
-        const currentCode = getScheduleCode(snapshot, staff, dateStr);
-        const preScheduleCode = getVisiblePreScheduleCode(staff, dateStr);
-        const hasBlockedPreScheduleCode = Boolean(preScheduleCode);
+        const currentCode = getScheduleCode(snapshot, staff.id, dateStr);
         if (currentCode) reasons.push('該格已有排班或休假代碼');
-        if (hasBlockedPreScheduleCode) reasons.push('該格已有預班／預假，不可被規則補空覆蓋');
+        const prefix = getCodePrefix(currentCode);
         if (isConfiguredLeaveCode(currentCode)) reasons.push('該格已有休假，不可再排班');
         const staffGroup = staff.group || '白班';
         const shiftGroup = getShiftGroupByCode(shiftCode);
         if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) reasons.push('不可跨群組排班');
         const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-        const prevCode = getScheduleCode(snapshot, staff, prevKey);
+        const prevCode = getScheduleCode(snapshot, staff.id, prevKey);
         const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
         if (disallowed.includes(shiftCode)) reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
-        const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff, dateStr);
+        const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff.id, dateStr);
         if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
         if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) reasons.push('懷孕標記人員不可排 N / 夜8-8');
         return { allowed: reasons.length === 0, reasons };
       };
 
       const getWorkCountFromSnapshot = (snapshot, staffId) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
-        return daysInMonth.reduce((sum, d) => sum + (isShiftCode(getScheduleCode(snapshot, staffRef, d.date)) ? 1 : 0), 0);
+        return daysInMonth.reduce((sum, d) => sum + (isShiftCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
       };
 
       const getShiftCountFromSnapshot = (snapshot, staffId, shiftCode) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
-        return daysInMonth.reduce((sum, d) => sum + (getScheduleCode(snapshot, staffRef, d.date) === shiftCode ? 1 : 0), 0);
+        return daysInMonth.reduce((sum, d) => sum + (getScheduleCode(snapshot, staffId, d.date) === shiftCode ? 1 : 0), 0);
       };
 
       const getLeaveCountFromSnapshot = (snapshot, staffId) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
-        return daysInMonth.reduce((sum, d) => sum + (isConfiguredLeaveCode(getScheduleCode(snapshot, staffRef, d.date)) ? 1 : 0), 0);
+        return daysInMonth.reduce((sum, d) => sum + (isConfiguredLeaveCode(getScheduleCode(snapshot, staffId, d.date)) ? 1 : 0), 0);
       };
 
       const getBlankCountFromSnapshot = (snapshot, staffId) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
-        return daysInMonth.reduce((sum, d) => sum + (!getScheduleCode(snapshot, staffRef, d.date) ? 1 : 0), 0);
+        return daysInMonth.reduce((sum, d) => sum + (!getScheduleCode(snapshot, staffId, d.date) ? 1 : 0), 0);
       };
 
       const canStillMeetRequiredLeavesAfterAssign = (snapshot, staffId) => {
@@ -3898,11 +1603,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       };
 
       const getRecentWorkPressure = (snapshot, staffId, dateStr, lookback = 3) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
         let count = 0;
         let cursor = addDays(parseDateKey(dateStr), -1);
         for (let i = 0; i < lookback; i += 1) {
-          const code = getScheduleCode(snapshot, staffRef, formatDateKey(cursor));
+          const code = getScheduleCode(snapshot, staffId, formatDateKey(cursor));
           if (isShiftCode(code)) count += 1;
           cursor = addDays(cursor, -1);
         }
@@ -3910,11 +1614,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       };
 
       const getRecentLeavePressure = (snapshot, staffId, dateStr, lookback = 4) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
         let count = 0;
         let cursor = addDays(parseDateKey(dateStr), -1);
         for (let i = 0; i < lookback; i += 1) {
-          const code = getScheduleCode(snapshot, staffRef, formatDateKey(cursor));
+          const code = getScheduleCode(snapshot, staffId, formatDateKey(cursor));
           if (isLeaveCode(code)) count += 1;
           cursor = addDays(cursor, -1);
         }
@@ -3922,23 +1625,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       };
 
       const getNearbyLeavePressure = (snapshot, staffId, dateStr, radius = 2) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
         let count = 0;
         const center = parseDateKey(dateStr);
         for (let offset = -radius; offset <= radius; offset += 1) {
           if (offset === 0) continue;
           const key = formatDateKey(addDays(center, offset));
-          const code = getScheduleCode(snapshot, staffRef, key);
+          const code = getScheduleCode(snapshot, staffId, key);
           if (isLeaveCode(code)) count += 1;
         }
         return count;
       };
 
       const getDaysSinceLastLeave = (snapshot, staffId, dateStr, maxLookback = 10) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
         let cursor = addDays(parseDateKey(dateStr), -1);
         for (let i = 1; i <= maxLookback; i += 1) {
-          const code = getScheduleCode(snapshot, staffRef, formatDateKey(cursor));
+          const code = getScheduleCode(snapshot, staffId, formatDateKey(cursor));
           if (isLeaveCode(code)) return i;
           cursor = addDays(cursor, -1);
         }
@@ -3947,15 +1648,14 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
       const getGroupLeaveLoad = (snapshot, dateStr, group) => {
         return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
-          const code = getScheduleCode(snapshot, s, dateStr);
+          const code = getScheduleCode(snapshot, s.id, dateStr);
           return sum + (isLeaveCode(code) ? 1 : 0);
         }, 0);
       };
 
       const getConsecutiveLeavePattern = (snapshot, staffId, dateStr) => {
-        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
-        const prevCode = getScheduleCode(snapshot, staffRef, formatDateKey(addDays(parseDateKey(dateStr), -1)));
-        const nextCode = getScheduleCode(snapshot, staffRef, formatDateKey(addDays(parseDateKey(dateStr), 1)));
+        const prevCode = getScheduleCode(snapshot, staffId, formatDateKey(addDays(parseDateKey(dateStr), -1)));
+        const nextCode = getScheduleCode(snapshot, staffId, formatDateKey(addDays(parseDateKey(dateStr), 1)));
         const prevIsLeave = isLeaveCode(prevCode);
         const nextIsLeave = isLeaveCode(nextCode);
         return {
@@ -4015,7 +1715,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           for (let slot = 0; slot < needed; slot += 1) {
             const assignableCandidates = groupStaffs
               .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
-              .filter(staff => !getVisiblePreScheduleCode(staff.id, day.date))
               .map(staff => {
                 const result = canAssignWithSnapshot(mergedSchedule, staff, day.date, shiftCode);
                 const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesIfAssignShift(mergedSchedule, staff.id) : false;
@@ -4041,10 +1740,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           // 需求已滿後，只替休假不足者補 off；其他空白保留
           const leaveCandidates = groupStaffs
             .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
-            .filter(staff => {
-              const preScheduleCode = getVisiblePreScheduleCode(staff.id, day.date);
-              return !preScheduleCode;
-            })
             .filter(staff => getLeaveCountFromSnapshot(mergedSchedule, staff.id) < requiredLeaves)
             .map(staff => ({ staff, score: scoreLeaveCandidateWithSnapshot(mergedSchedule, staff, day.date) }))
             .sort((a, b) => b.score - a.score);
@@ -4063,19 +1758,9 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
       }
 
-      const ruleFillChangedEntries = buildEntriesFromSnapshotDiff(mergedSchedule);
-      if (ruleFillChangedEntries.length > 0) {
-        applyRuleFillEntries(ruleFillChangedEntries, {
-          preserveSelection: true,
-          selectionCells: ruleFillChangedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
-          activeCell: ruleFillChangedEntries.length > 0 ? { staffId: ruleFillChangedEntries[ruleFillChangedEntries.length - 1].staffId, dateStr: ruleFillChangedEntries[ruleFillChangedEntries.length - 1].dateStr } : null,
-          clearAssist: false,
-          resetBuffer: true
-        });
-      }
+      setSchedule(mergedSchedule);
       saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
-      const changedCount = ruleFillChangedEntries.length;
-      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格${changedCount > 0 ? `，實際寫入 ${changedCount} 格` : '，沒有可寫入的新格'}`);
+      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格`);
     } catch (error) {
       console.error(error);
       setRuleFillFeedback("❌ 規則補空失敗，請檢查設定。");
@@ -4102,7 +1787,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
 
-      if (getAllShiftCodes().includes(code)) stats.work += 1;
+      if (DICT.SHIFTS.includes(code)) stats.work += 1;
       if (isConfiguredLeaveCode(code)) {
         stats.totalLeave += 1;
         if (stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
@@ -4120,12 +1805,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
       if (!code) return;
 
-      const shiftGroup = getShiftGroupByCode(code);
-      if (shiftGroup === '白班') {
+      if (['D', '白8-8', '8-12', '12-16'].includes(code)) {
         stats.D += 1;
-      } else if (shiftGroup === '小夜') {
+      } else if (['E', '夜8-8'].includes(code)) {
         stats.E += 1;
-      } else if (shiftGroup === '大夜') {
+      } else if (code === 'N') {
         stats.N += 1;
       } else if (isConfiguredLeaveCode(code)) {
         stats.totalLeave += 1;
@@ -4138,7 +1822,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   const getRequiredCountForDate = (dateStr, rowKey) => {
     const dayInfo = daysInMonth.find(d => d.date === dateStr);
     if (!dayInfo) return null;
-    const bucket = getRequiredStaffingBucketByDay(dayInfo);
+    const bucket = (dayInfo.isWeekend || dayInfo.isHoliday) ? 'holiday' : 'weekday';
     if (rowKey === 'D') return Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0);
     if (rowKey === 'E') return Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0);
     if (rowKey === 'N') return Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0);
@@ -4154,52 +1838,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const saveToHistory = (label, currentSchedule = schedule) => {
-    const currentMonthKey = buildMonthKey(year, month);
-    const normalizedMonthStaffs = normalizeStaffGroup(staffs);
-    const mergedMonthlySchedules = {
-      ...(monthlySchedules || {}),
-      [currentMonthKey]: {
-        ...(monthlySchedules?.[currentMonthKey] || {}),
-        year,
-        month,
-        staffs: normalizedMonthStaffs,
-        scheduleData: currentSchedule,
-        customColumnValues: customColumnValues || {},
-        schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
-        importMeta: {
-          ...(monthlySchedules?.[currentMonthKey]?.importMeta || {}),
-          sourceType: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceType || 'manual',
-          sourceFiles: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceFiles || [],
-          sourceSheets: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceSheets || [],
-          importedAt: monthlySchedules?.[currentMonthKey]?.importMeta?.importedAt || new Date().toISOString(),
-          lastUpdatedAt: new Date().toISOString()
-        }
-      }
-    };
-
     const newRecord = {
       id: Date.now(),
       label,
       timestamp: new Date().toLocaleString(),
-      state: {
-        year,
-        month,
-        staffs: normalizedMonthStaffs,
-        schedule: currentSchedule,
-        monthlySchedules: mergedMonthlySchedules,
-        preScheduleMonthlySchedules: preScheduleMonthlySchedules || {},
-        colors,
-        customHolidays,
-        specialWorkdays,
-        medicalCalendarAdjustments,
-        staffingConfig,
-        uiSettings,
-        customLeaveCodes,
-        customWorkShifts,
-        customColumns,
-        customColumnValues,
-        schedulingRulesText
-      }
+      state: { year, month, staffs, schedule: currentSchedule, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText }
     };
 
     setHistoryList(prev => {
@@ -4211,13 +1854,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const loadHistory = (record) => {
     const { state } = record;
-    const nextMonthlySchedules = state.monthlySchedules || {};
-    const nextPreScheduleMonthlySchedules = state.preScheduleMonthlySchedules || {};
-    const targetMonthKey = buildMonthKey(state.year, state.month);
-    const currentMonthState = nextMonthlySchedules?.[targetMonthKey] || null;
-
-    setMonthlySchedules(nextMonthlySchedules);
-    setPreScheduleMonthlySchedules(nextPreScheduleMonthlySchedules);
     setYear(state.year);
     setMonth(state.month);
     setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
@@ -4226,165 +1862,41 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     if (state.staffingConfig) setStaffingConfig(state.staffingConfig);
     if (state.uiSettings) setUiSettings(state.uiSettings);
     if (Array.isArray(state.customLeaveCodes)) setCustomLeaveCodes(state.customLeaveCodes);
-    if (Array.isArray(state.customWorkShifts)) setCustomWorkShifts(state.customWorkShifts);
     if (Array.isArray(state.customColumns)) setCustomColumns(state.customColumns);
-    setCustomColumnValues(currentMonthState?.customColumnValues || state.customColumnValues || {});
-    if (typeof (currentMonthState?.schedulingRulesText ?? state.schedulingRulesText) === 'string') {
-      setSchedulingRulesText(currentMonthState?.schedulingRulesText ?? state.schedulingRulesText);
-    }
-    setStaffs(normalizeStaffGroup(currentMonthState?.staffs || state.staffs));
-    setSchedule(currentMonthState?.scheduleData || state.schedule);
+    if (state.customColumnValues) setCustomColumnValues(state.customColumnValues);
+    if (typeof state.schedulingRulesText === 'string') setSchedulingRulesText(state.schedulingRulesText);
+    setStaffs(normalizeStaffGroup(state.staffs));
+    setSchedule(state.schedule);
     if (state.colors) setColors(state.colors);
     setShowHistoryModal(false);
     setShowDraftPrompt(false);
   };
 
   const clearHistory = () => {
-    if (window.confirm("確定要清空所有本機暫存紀錄嗎？")) {
+    if (window.confirm("確定要清空所有歷史紀錄嗎？")) {
       localStorage.removeItem(STORAGE_KEY);
       setHistoryList([]);
     }
   };
 
-
-  const canAssignWithManualOverride = (staff, dateStr, shiftCode) => {
-    const reasons = [];
-
-    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-    const prevCode = getContextCellCode(staff, prevKey);
-    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-    if (disallowed.includes(shiftCode)) {
-      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
-    }
-
-    const existingCode = getContextCellCode(staff, dateStr);
-    const existingIsShift = isShiftCode(existingCode);
-    const consecutiveBefore = countConsecutiveWorkDaysBefore(staff.id, dateStr);
-    const effectiveConsecutive = consecutiveBefore + (existingIsShift ? 0 : 1);
-    if (effectiveConsecutive > SMART_RULES.maxConsecutiveWorkDays) {
-      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
-    }
-
-    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
-      reasons.push('懷孕標記人員不可排 N / 夜8-8');
-    }
-
-    return { allowed: reasons.length === 0, reasons };
+  const handleCellChange = (staffId, dateStr, value) => {
+    setSchedule(prev => ({
+      ...prev,
+      [staffId]: { ...prev[staffId], [dateStr]: value ? { value, source: 'manual' } : null }
+    }));
   };
 
-  const validateManualEntries = (entries = [], options = {}) => {
-    const allowedEntries = [];
-    const warningEntries = [];
-    const showFeedback = options.showFeedback !== false;
-    const workingSnapshot = JSON.parse(JSON.stringify(schedule || {}));
-
-    (Array.isArray(entries) ? entries : []).forEach((entry) => {
-      const normalizedValue = String(entry?.value || '').trim();
-      const normalizedEntry = { ...entry, value: normalizedValue, source: entry?.source || 'manual' };
-      if (!normalizedEntry.staffId || !normalizedEntry.dateStr) return;
-
-      if (!workingSnapshot[normalizedEntry.staffId]) workingSnapshot[normalizedEntry.staffId] = {};
-      const existingCell = workingSnapshot[normalizedEntry.staffId]?.[normalizedEntry.dateStr];
-      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
-      workingSnapshot[normalizedEntry.staffId][normalizedEntry.dateStr] = normalizedValue
-        ? { ...existingMeta, value: normalizedValue, source: normalizedEntry.source }
-        : null;
-
-      if (!normalizedValue || isConfiguredLeaveCode(normalizedValue) || !isShiftCode(normalizedValue)) {
-        allowedEntries.push(normalizedEntry);
-        return;
-      }
-
-      const staff = staffs.find((item) => item.id === normalizedEntry.staffId);
-      if (!staff) {
-        allowedEntries.push(normalizedEntry);
-        return;
-      }
-
-      const reasons = evaluateRuleWarningForCellInSnapshot(workingSnapshot, staff, normalizedEntry.dateStr);
-      allowedEntries.push(normalizedEntry);
-      if (reasons.length > 0) {
-        warningEntries.push({ ...normalizedEntry, reasons });
-      }
-    });
-
-    if (warningEntries.length > 0 && showFeedback) {
-      setRuleWarningsForEntries(warningEntries);
-      showInputAssist(`已寫入，但有 ${warningEntries.length} 格違反規則`, 'warning', 2200);
-    }
-
-    return { allowedEntries, warningEntries };
+  const getCellCode = (staffId, dateStr) => {
+    const cellData = schedule[staffId]?.[dateStr];
+    return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
   };
 
-  const handleCellChange = (staffId, dateStr, value, options = {}) => {
-    const source = options.source || 'manual';
-    const rawEntries = [{ staffId, dateStr, value, source }];
-    const { allowedEntries, warningEntries } = source === 'manual'
-      ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
-      : { allowedEntries: rawEntries, warningEntries: [] };
-    if (allowedEntries.length === 0) return false;
-    const nonWarningCells = rawEntries.filter(({ staffId, dateStr }) => !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr));
-    if (source === 'manual') clearRuleWarningCells(nonWarningCells);
-    if (!options.allowWarningAssistClear && warningEntries.length > 0) options = { ...options, clearAssist: false };
-    return applyScheduleEntries(
-      allowedEntries,
-      {
-        clearAssist: options.clearAssist !== false,
-        resetBuffer: options.resetBuffer !== false,
-        preserveSelection: options.preserveSelection === true || warningEntries.length > 0,
-        selectionCells: options.selectionCells || [{ staffId, dateStr }],
-        activeCell: options.activeCell || { staffId, dateStr }
-      }
-    );
-  };
-
-  const applyCellTextColor = (staffId, dateStr, textColor = '') => {
-    const currentCell = getContextCellData(staffId, dateStr);
-    const normalizedValue = typeof currentCell === 'object' && currentCell !== null ? (currentCell.value || '') : (currentCell || '');
-    const normalizedSource = typeof currentCell === 'object' && currentCell !== null ? (currentCell.source || 'manual') : 'manual';
-    const nextColor = String(textColor || '').trim();
-
-    if (!normalizedValue) {
-      showInputAssist('請先在此格填入班別或假別，再設定字色', 'info', 1800);
-      return false;
-    }
-
-    setSchedule(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      if (!next[staffId]) next[staffId] = {};
-      const existingCell = next[staffId]?.[dateStr];
-      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
-      next[staffId][dateStr] = {
-        ...existingMeta,
-        value: normalizedValue,
-        source: normalizedSource,
-        ...(nextColor ? { textColor: nextColor } : {})
-      };
-      if (!nextColor) delete next[staffId][dateStr].textColor;
-      return next;
-    });
-
-    setSelectionRangeFromCells([{ staffId, dateStr }], { activeCell: { staffId, dateStr } });
-    // 單格字色更新不顯示提示條
-    return true;
-  };
-
-  function getCellCode(staffId, dateStr) {
-    return getContextCellCode(staffId, dateStr);
-  }
-
-  function getCellSource(staffId, dateStr) {
-    const cellData = getContextCellData(staffId, dateStr);
+  const getCellSource = (staffId, dateStr) => {
+    const cellData = schedule[staffId]?.[dateStr];
     if (!cellData) return '';
     if (typeof cellData === 'object' && cellData !== null) return cellData.source || 'manual';
     return 'manual';
-  }
-
-  function getCellTextColor(staffId, dateStr) {
-    const cellData = getContextCellData(staffId, dateStr);
-    if (!cellData || typeof cellData !== 'object') return '';
-    return String(cellData.textColor || '').trim();
-  }
+  };
 
   const countConsecutiveWorkDaysBefore = (staffId, dateStr) => {
     let count = 0;
@@ -4467,7 +1979,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const group = staff.group || '白班';
     const shiftCode = DEFAULT_SHIFT_BY_GROUP[group];
     const dayInfo = daysInMonth.find(d => d.date === dateStr);
-    const demand = dayInfo ? Number(staffingConfig?.requiredStaffing?.[getRequiredStaffingBucketByDay(dayInfo)]?.[GROUP_TO_DEMAND_KEY[group]] || 0) : 0;
+    const demand = dayInfo ? Number(staffingConfig?.requiredStaffing?.[(dayInfo.isWeekend || dayInfo.isHoliday) ? 'holiday' : 'weekday']?.[GROUP_TO_DEMAND_KEY[group]] || 0) : 0;
     const alreadyAssigned = staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
       const code = getCellCode(s.id, dateStr);
       return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
@@ -4546,22 +2058,12 @@ const openSelectedCellFillModal = () => {
     if (!currentCode) return;
     if (!window.confirm(`確定清除此格內容？\n${staff.name}｜${dateStr}｜${currentCode}`)) return;
 
-    handleCellChange(staff.id, dateStr, '', { preserveSelection: true, selectionCells: [{ staffId: staff.id, dateStr }], activeCell: { staffId: staff.id, dateStr } });
+    setSchedule(prev => ({
+      ...prev,
+      [staff.id]: { ...prev[staff.id], [dateStr]: null }
+    }));
     setSelectedGridCell(null);
-
-  };
-
-  const clearSelectedPreScheduleCell = () => {
-    if (!selectedGridCell) return;
-    const { staff, dateStr } = selectedGridCell;
-    const preScheduleCode = getVisiblePreScheduleCode(staff.id, dateStr);
-    if (!preScheduleCode) return;
-    if (!window.confirm(`確定清除此格預班？\n${staff.name}｜${dateStr}｜${preScheduleCode}`)) return;
-
-    const changedCount = updatePreScheduleEntries([{ staffId: staff.id, dateStr, value: '' }]);
-    if (changedCount > 0) {
-
-    }
+    setRuleFillFeedback(`🧹 已清除 ${staff.name} 在 ${dateStr} 的內容`);
   };
 
   const clearRangeCells = () => {
@@ -4570,69 +2072,36 @@ const openSelectedCellFillModal = () => {
       return;
     }
 
-    const startDay = Number(ruleFillConfig.dateRange.start || 1);
-    const endDay = Number(ruleFillConfig.dateRange.end || 31);
+    const start = Number(ruleFillConfig.dateRange.start || 1);
+    const end = Number(ruleFillConfig.dateRange.end || 31);
     const targetStaffIds = new Set(ruleFillConfig.selectedStaffs);
 
-    if (rangeClearMode === 'preScheduleOnly') {
-      const clearEntries = [];
-      staffs.forEach((staff) => {
+    let cleared = 0;
+    setSchedule(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      staffs.forEach(staff => {
         if (!targetStaffIds.has(staff.id)) return;
-        daysInMonth.forEach((day) => {
-          if (day.day < startDay || day.day > endDay) return;
-          const preScheduleCode = getVisiblePreScheduleCode(staff.id, day.date);
-          if (!preScheduleCode) return;
-          clearEntries.push({ staffId: staff.id, dateStr: day.date, value: '' });
+        daysInMonth.forEach(day => {
+          if (day.day < start || day.day > end) return;
+          const cellData = next[staff.id]?.[day.date];
+          if (!cellData) return;
+
+          const source = typeof cellData === 'object' && cellData !== null ? (cellData.source || 'manual') : 'manual';
+          if (rangeClearMode === 'autoOnly' && source !== 'auto') return;
+
+          next[staff.id][day.date] = null;
+          cleared += 1;
         });
       });
-
-      if (clearEntries.length === 0) {
-        setRuleFillFeedback('ℹ️ 指定範圍內沒有可清除的預班');
-        return;
-      }
-
-      const changedCount = updatePreScheduleEntries(clearEntries);
-      if (changedCount > 0) {
-
-      }
-      return;
-    }
-
-    const clearEntries = [];
-
-    staffs.forEach(staff => {
-      if (!targetStaffIds.has(staff.id)) return;
-      daysInMonth.forEach(day => {
-        if (day.day < startDay || day.day > endDay) return;
-        const cellData = schedule[staff.id]?.[day.date];
-        if (!cellData) return;
-
-        const source = typeof cellData === 'object' && cellData !== null ? (cellData.source || 'manual') : 'manual';
-        if (rangeClearMode === 'autoOnly' && source !== 'auto') return;
-
-        clearEntries.push({ staffId: staff.id, dateStr: day.date, value: '', source: 'auto' });
-      });
+      return next;
     });
 
-    if (clearEntries.length === 0) {
-      setRuleFillFeedback('ℹ️ 指定範圍內沒有可清除的內容');
-      return;
-    }
-
-    applyRuleFillEntries(clearEntries, {
-      preserveSelection: true,
-      selectionCells: clearEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
-      activeCell: clearEntries.length > 0 ? { staffId: clearEntries[clearEntries.length - 1].staffId, dateStr: clearEntries[clearEntries.length - 1].dateStr } : null,
-      clearAssist: false,
-      resetBuffer: true
-    });
-
-
+    setRuleFillFeedback(cleared > 0 ? `🧹 已清除 ${cleared} 格內容` : 'ℹ️ 指定範圍內沒有可清除的內容');
   };
 
   const applyFillCandidate = (candidate) => {
     if (!selectedFillCell) return;
-    handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode, { source: 'auto', preserveSelection: true, selectionCells: [{ staffId: candidate.staffId, dateStr: selectedFillCell.dateStr }], activeCell: { staffId: candidate.staffId, dateStr: selectedFillCell.dateStr } });
+    handleCellChange(candidate.staffId, selectedFillCell.dateStr, candidate.shiftCode);
     setShowFillModal(false);
     setSelectedFillCell(null);
     setFillCandidates([]);
@@ -4643,11 +2112,6 @@ const openSelectedCellFillModal = () => {
     const newId = 's' + Date.now();
     setStaffs(prev => [...prev, { id: newId, name: '新成員', group }]);
     setSchedule(prev => ({ ...prev, [newId]: {} }));
-    setSelectedGridCell(null);
-    setRangeSelection(null);
-    setSelectionAnchor(null);
-    setIsRangeDragging(false);
-    resetKeyInputBuffer();
   };
 
   const removeStaff = (staffId) => {
@@ -4658,222 +2122,41 @@ const openSelectedCellFillModal = () => {
       delete next[staffId];
       return next;
     });
-    setSelectedGridCell(null);
-    setRangeSelection(null);
-    setSelectionAnchor(null);
-    setIsRangeDragging(false);
-    resetKeyInputBuffer();
   };
 
+  const moveStaffInGroup = (staffId, direction) => {
+    const newStaffs = [...staffs];
+    const currentIndex = newStaffs.findIndex(s => s.id === staffId);
+    if (currentIndex === -1) return;
 
-  const moveStaffWithinGroupByDrag = (draggedStaffId, targetStaffId, position = 'before') => {
-    if (!draggedStaffId || !targetStaffId || draggedStaffId === targetStaffId) return;
+    const currentGroup = newStaffs[currentIndex].group;
+    const groupIndexes = newStaffs
+      .map((staff, index) => ({ staff, index }))
+      .filter(item => item.staff.group === currentGroup)
+      .map(item => item.index);
 
-    const draggedStaff = staffs.find(staff => staff.id === draggedStaffId);
-    const targetStaff = staffs.find(staff => staff.id === targetStaffId);
-    if (!draggedStaff || !targetStaff) return;
-    if ((draggedStaff.group || '白班') !== (targetStaff.group || '白班')) return;
+    const currentGroupPos = groupIndexes.indexOf(currentIndex);
+    const targetGroupPos = direction === 'up' ? currentGroupPos - 1 : currentGroupPos + 1;
+    if (targetGroupPos < 0 || targetGroupPos >= groupIndexes.length) return;
 
-    const nextStaffs = [...staffs];
-    const draggedIndex = nextStaffs.findIndex(staff => staff.id === draggedStaffId);
-    const targetIndex = nextStaffs.findIndex(staff => staff.id === targetStaffId);
-    if (draggedIndex === -1 || targetIndex === -1) return;
-
-    const [draggedItem] = nextStaffs.splice(draggedIndex, 1);
-    const targetIndexAfterRemoval = nextStaffs.findIndex(staff => staff.id === targetStaffId);
-    let insertIndex = position === 'after' ? targetIndexAfterRemoval + 1 : targetIndexAfterRemoval;
-    if (insertIndex < 0) insertIndex = nextStaffs.length;
-    nextStaffs.splice(insertIndex, 0, draggedItem);
-
-    setStaffs(nextStaffs);
-    setSelectedGridCell(null);
-    setRangeSelection(null);
-    setSelectionAnchor(null);
-    setIsRangeDragging(false);
-    resetKeyInputBuffer();
-  };
-
-  const warnGroupMismatchIfNeeded = (staff, nextGroup) => {
-    if (!staff || !nextGroup) return;
-    const mismatchCodes = daysInMonth
-      .map(day => getCellCode(staff.id, day.date))
-      .filter(code => code && isShiftCode(code) && getShiftGroupByCode(code) && getShiftGroupByCode(code) !== nextGroup);
-    if (mismatchCodes.length > 0) {
-      const uniqueCodes = Array.from(new Set(mismatchCodes));
-      setRuleFillFeedback(`⚠️ 已將 ${staff.name} 移到${nextGroup}，但此人仍包含不屬於新群組的班別：${uniqueCodes.join('、')}`);
-    }
-  };
-
-  const moveStaffAcrossGroupsByDrag = (draggedStaffId, targetGroup, targetStaffId = '', position = 'before') => {
-    if (!draggedStaffId || !targetGroup) return;
-    const draggedStaff = staffs.find(staff => staff.id === draggedStaffId);
-    if (!draggedStaff) return;
-
-    const nextStaffs = [...staffs];
-    const draggedIndex = nextStaffs.findIndex(staff => staff.id === draggedStaffId);
-    if (draggedIndex === -1) return;
-
-    const [draggedItem] = nextStaffs.splice(draggedIndex, 1);
-    const updatedDraggedItem = { ...draggedItem, group: targetGroup };
-
-    let insertIndex = nextStaffs.length;
-    if (targetStaffId) {
-      const targetIndex = nextStaffs.findIndex(staff => staff.id === targetStaffId);
-      if (targetIndex !== -1) {
-        insertIndex = position === 'after' ? targetIndex + 1 : targetIndex;
-      }
-    } else {
-      const groupIndexes = nextStaffs
-        .map((staff, index) => ({ staff, index }))
-        .filter(item => (item.staff.group || '白班') === targetGroup)
-        .map(item => item.index);
-      insertIndex = groupIndexes.length > 0 ? groupIndexes[groupIndexes.length - 1] + 1 : nextStaffs.length;
-    }
-
-    nextStaffs.splice(insertIndex, 0, updatedDraggedItem);
-    setStaffs(nextStaffs);
-    setSelectedGridCell(null);
-    setRangeSelection(null);
-    setSelectionAnchor(null);
-    setIsRangeDragging(false);
-    resetKeyInputBuffer();
-    warnGroupMismatchIfNeeded(updatedDraggedItem, targetGroup);
-  };
-
-  const handleStaffDragStart = (event, staff) => {
-    if (!staff?.id) return;
-    event.stopPropagation();
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', staff.id);
-    setDraggingStaffId(staff.id);
-    setDragOverTarget(null);
-    setDragOverGroup(staff.group || '白班');
-  };
-
-  const handleStaffDragOver = (event, targetStaff) => {
-    if (!draggingStaffId || !targetStaff?.id || draggingStaffId === targetStaff.id) return;
-    const draggingStaff = staffs.find(staff => staff.id === draggingStaffId);
-    if (!draggingStaff) return;
-
-    event.preventDefault();
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const nextPosition = (event.clientY - bounds.top) < (bounds.height / 2) ? 'before' : 'after';
-    setDragOverTarget({ staffId: targetStaff.id, position: nextPosition, group: targetStaff.group || '白班' });
-    setDragOverGroup(targetStaff.group || '白班');
-  };
-
-  const handleTableContainerDragOver = (event) => {
-    if (!draggingStaffId) return;
-    const container = tableScrollContainerRef.current;
-    if (!container) return;
-
-    const rect = container.getBoundingClientRect();
-    const verticalThreshold = 72;
-    const horizontalThreshold = 56;
-    const maxStep = 26;
-
-    let nextScrollTop = container.scrollTop;
-    let nextScrollLeft = container.scrollLeft;
-
-    if (event.clientY < rect.top + verticalThreshold) {
-      const ratio = (rect.top + verticalThreshold - event.clientY) / verticalThreshold;
-      nextScrollTop -= Math.max(8, ratio * maxStep);
-    } else if (event.clientY > rect.bottom - verticalThreshold) {
-      const ratio = (event.clientY - (rect.bottom - verticalThreshold)) / verticalThreshold;
-      nextScrollTop += Math.max(8, ratio * maxStep);
-    }
-
-    if (event.clientX < rect.left + horizontalThreshold) {
-      const ratio = (rect.left + horizontalThreshold - event.clientX) / horizontalThreshold;
-      nextScrollLeft -= Math.max(6, ratio * 20);
-    } else if (event.clientX > rect.right - horizontalThreshold) {
-      const ratio = (event.clientX - (rect.right - horizontalThreshold)) / horizontalThreshold;
-      nextScrollLeft += Math.max(6, ratio * 20);
-    }
-
-    if (nextScrollTop !== container.scrollTop) container.scrollTop = nextScrollTop;
-    if (nextScrollLeft !== container.scrollLeft) container.scrollLeft = nextScrollLeft;
-  };
-
-  const handleStaffDrop = (event, targetStaff) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!draggingStaffId || !targetStaff?.id) return;
-    const draggingStaff = staffs.find(staff => staff.id === draggingStaffId);
-    if (!draggingStaff) return;
-
-    const targetGroup = targetStaff.group || '白班';
-    const dropPosition = dragOverTarget?.staffId === targetStaff.id ? dragOverTarget.position : 'before';
-
-    if ((draggingStaff.group || '白班') === targetGroup) {
-      moveStaffWithinGroupByDrag(draggingStaffId, targetStaff.id, dropPosition);
-    } else {
-      moveStaffAcrossGroupsByDrag(draggingStaffId, targetGroup, targetStaff.id, dropPosition);
-    }
-    setDraggingStaffId(null);
-    setDragOverTarget(null);
-    setDragOverGroup('');
-  };
-
-  const handleGroupDragOver = (event, group) => {
-    if (!draggingStaffId) return;
-    event.preventDefault();
-    setDragOverTarget({ staffId: '', position: 'after', group });
-    setDragOverGroup(group);
-  };
-
-  const handleGroupDrop = (event, group) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!draggingStaffId) return;
-    const draggingStaff = staffs.find(staff => staff.id === draggingStaffId);
-    if (!draggingStaff) return;
-    moveStaffAcrossGroupsByDrag(draggingStaffId, group);
-    setDraggingStaffId(null);
-    setDragOverTarget(null);
-    setDragOverGroup('');
-  };
-
-  const handleStaffDragEnd = () => {
-    setDraggingStaffId(null);
-    setDragOverTarget(null);
-    setDragOverGroup('');
-  };
-
-  const commitEditingStaffName = (staffId, nextName) => {
-    const trimmedName = String(nextName ?? '').trim();
-    setStaffs(prev => {
-      const next = [...prev];
-      const currentIndex = next.findIndex(s => s.id === staffId);
-      if (currentIndex !== -1) next[currentIndex].name = trimmedName || '新成員';
-      return next;
-    });
-    setEditingStaffId(null);
-    setEditingNameDraft('');
+    const targetIndex = groupIndexes[targetGroupPos];
+    [newStaffs[currentIndex], newStaffs[targetIndex]] = [newStaffs[targetIndex], newStaffs[currentIndex]];
+    setStaffs(newStaffs);
   };
 
   const groupedStaffs = useMemo(() => {
-    return SHIFT_GROUPS.map(group => ({
-      group,
-      staffs: staffs.filter(staff => (staff.group || '白班') === group)
-    }));
+    return SHIFT_GROUPS.map((group) => {
+      const groupStaffs = staffs.filter((staff) => (staff.group || '白班') === group);
+      return {
+        group,
+        staffs: groupStaffs,
+        staffIndexMap: Object.fromEntries(groupStaffs.map((staff, index) => [staff.id, index]))
+      };
+    });
   }, [staffs]);
 
-  useEffect(() => {
-    setSelectedGridCell(null);
-    setRangeSelection(null);
-    setSelectionAnchor(null);
-    setIsRangeDragging(false);
-    setEditingStaffId(null);
-    setEditingNameDraft('');
-    setDraggingStaffId(null);
-    setDragOverTarget(null);
-    setDragOverGroup('');
-    resetKeyInputBuffer();
-  }, [staffs.length]);
-
   return (
-    <div className="min-h-screen text-slate-900 p-3 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
+    <div className="min-h-screen text-slate-900 p-4 font-sans overflow-x-hidden relative" style={{ backgroundColor: pageBackgroundColor }}>
       <style>{`
         @keyframes pulse-once { 0% { transform: translateY(-10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
         @keyframes fade-in-down { 0% { opacity: 0; transform: translateY(-5px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -4881,39 +2164,39 @@ const openSelectedCellFillModal = () => {
         .animate-fade-in-down { animation: fade-in-down 0.3s ease-out forwards; }
       `}</style>
 
-      <div className="max-w-[98vw] mx-auto mb-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+      {showDraftPrompt && (
+        <div className="max-w-[95vw] mx-auto mb-4 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
+          <div className="flex items-center gap-1.5">
+            <Clock size={18} className="text-amber-600" />
+            <span className="text-sm font-bold">偵測到先前暫存紀錄。</span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => loadHistory(historyList[0])} className="text-sm bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition font-bold">載入最新</button>
+            <button onClick={() => setShowDraftPrompt(false)} className="text-sm text-amber-700 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition">忽略</button>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-[95vw] mx-auto mb-6">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
+            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
               智慧補班系統｜開發版
-              <span className="text-blue-500 text-xs font-normal px-2 py-0.5 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
+              <span className="text-blue-500 text-sm font-normal px-2 py-1 bg-blue-50 rounded-lg border border-blue-100">PRO v1.6.0</span>
             </h1>
             <p className="text-slate-500 text-xs mt-1 italic">開發測試使用</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={draftImportInputRef}
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={onImportDraftFileChange}
-            />
-            <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+            <button onClick={() => saveToHistory('手動暫存')} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
               <Save size={16} /> 暫存
             </button>
-            <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Clock size={16} /> 本機暫存紀錄
-            </button>
-            <button onClick={onDownloadDraftFile} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Download size={16} /> 下載工作檔
-            </button>
-            <button onClick={onImportDraftFileClick} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
-              <Database size={16} /> 匯入工作檔
+            <button onClick={() => setShowHistoryModal(true)} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+              <Clock size={16} /> 歷史
             </button>
 
             <div className="relative">
-              <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-1.5 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm">
+              <button onClick={() => setShowExportMenu(!showExportMenu)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-2 rounded-xl font-bold hover:bg-slate-900 transition-all text-sm">
                 <Download size={16} /> 匯出
               </button>
               {showExportMenu && (
@@ -4931,87 +2214,54 @@ const openSelectedCellFillModal = () => {
             <div className="w-px h-8 bg-slate-200 mx-2 hidden sm:block"></div>
 
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
-              <button onClick={() => handleRuleBasedAutoSchedule(false)} disabled={isRuleFillLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
+              <button onClick={() => handleRuleBasedAutoSchedule(false)} disabled={isRuleFillLoading} className="flex items-center gap-2 bg-white text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-50 transition-all disabled:opacity-50 text-xs">
                 {isRuleFillLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 規則全月補空
               </button>
-              <button onClick={() => setShowRuleFillControl(!showRuleFillControl)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${showRuleFillControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
+              <button onClick={() => setShowRuleFillControl(!showRuleFillControl)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${showRuleFillControl ? 'bg-blue-600 text-white shadow-inner' : 'text-slate-600 hover:bg-slate-200'}`}>
                 <Calendar size={14} /> 規則指定補空
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreScheduleEditMode(prev => !prev)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${preScheduleEditMode ? 'bg-cyan-600 text-white shadow-inner' : 'text-cyan-700 hover:bg-cyan-50'}`}
-                title="開啟後，點格或鍵盤輸入只會寫入預班，不會改正式班表"
-              >
-                <CalendarDays size={14} /> 預班模式
               </button>
               <button
                 type="button"
                 onClick={openSelectedCellFillModal}
                 disabled={!selectedGridCell}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-slate-700 hover:bg-slate-200' : 'text-slate-400 cursor-not-allowed'}`}
               >
                 <Check size={14} /> 補此格
               </button>
               <button
                 type="button"
-                onClick={clearSelectedPreScheduleCell}
-                disabled={!selectedCellHasPreSchedule}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedCellHasPreSchedule ? 'text-amber-700 hover:bg-amber-50' : 'text-slate-400 cursor-not-allowed'}`}
-              >
-                <Trash2 size={14} /> 清預班
-              </button>
-              <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border ${selectedCellHasFormalValue ? 'border-slate-200 text-slate-700 bg-white' : 'border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed'}`} title={selectedCellHasFormalValue ? '修改目前選取格子的字體顏色' : '請先選取已有班別或假別的正式班表格子'}>
-                <span>字色</span>
-                <input
-                  type="color"
-                  value={selectedCellTextColor || tableFontColor}
-                  disabled={!selectedCellHasFormalValue}
-                  onChange={(e) => {
-                    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return;
-                    applyCellTextColor(selectedGridCell.staff.id, selectedGridCell.dateStr, e.target.value);
-                  }}
-                  className="w-8 h-6 rounded border border-slate-200 bg-transparent cursor-pointer disabled:cursor-not-allowed"
-                />
-                <button
-                  type="button"
-                  disabled={!selectedCellHasFormalValue || !selectedCellTextColor}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return;
-                    applyCellTextColor(selectedGridCell.staff.id, selectedGridCell.dateStr, '');
-                  }}
-                  className={`px-2 py-0.5 rounded-md border ${selectedCellHasFormalValue && selectedCellTextColor ? 'border-slate-200 text-slate-600 hover:bg-slate-50' : 'border-slate-200 text-slate-300 cursor-not-allowed'}`}
-                >
-                  清除
-                </button>
-              </label>
-              <button
-                type="button"
-                onClick={clearSelectionContents}
-                disabled={selectedRangeCells.length === 0}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedRangeCells.length > 0 ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
-                title={selectedRangeCells.length > 1 ? '清除目前選取範圍（等同 Del）' : '清除目前選取格（等同 Del）'}
-              >
-                <Trash2 size={14} /> Del清除
-              </button>
-              <button
-                type="button"
                 onClick={clearSelectedCell}
                 disabled={!selectedGridCell}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all text-xs ${selectedGridCell ? 'text-red-600 hover:bg-red-50' : 'text-slate-400 cursor-not-allowed'}`}
               >
                 <Trash2 size={14} /> 清除此格
               </button>
             </div>
           </div>
         </div>
+        {ruleFillFeedback && (
+          <div className="mt-4 bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-indigo-900 text-sm animate-pulse-once flex items-center gap-2">
+            <Check size={16} className="text-green-600" />
+            {ruleFillFeedback}
+          </div>
+        )}
+        {selectedGridCell && (
+          <div className="mt-4 bg-blue-50 border border-blue-200 p-3 rounded-xl text-blue-900 text-sm flex items-center justify-between gap-3">
+            <div>已選取儲存格：<span className="font-bold">{selectedGridCell.staff.name}</span>｜{selectedGridCell.dateStr}</div>
+            <button
+              type="button"
+              onClick={() => setSelectedGridCell(null)}
+              className="px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
+            >
+              取消選取
+            </button>
+          </div>
+        )}
       </div>
 
       {showRuleFillControl && (
-        <div className="max-w-[98vw] mx-auto mb-4 rounded-3xl border border-slate-200 bg-slate-100/90 px-4 py-4 shadow-sm animate-fade-in-down lg:px-5">
-          <div className="mb-3 flex items-center gap-2 text-slate-800">
+        <div className="max-w-[95vw] mx-auto mb-6 rounded-3xl border border-slate-200 bg-slate-100/90 px-5 py-5 shadow-sm animate-fade-in-down lg:px-6">
+          <div className="mb-4 flex items-center gap-2 text-slate-800">
             <Sparkles size={18} className="text-blue-600" />
             <h3 className="font-black">規則指定補空設定</h3>
           </div>
@@ -5074,7 +2324,7 @@ const openSelectedCellFillModal = () => {
                   max="31"
                   value={ruleFillConfig.dateRange.start}
                   onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, dateRange: { ...ruleFillConfig.dateRange, start: parseInt(e.target.value, 10) || 1 } })}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-center text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
                 />
                 <span className="shrink-0 text-sm font-bold text-slate-500">至</span>
                 <input
@@ -5083,7 +2333,7 @@ const openSelectedCellFillModal = () => {
                   max="31"
                   value={ruleFillConfig.dateRange.end}
                   onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, dateRange: { ...ruleFillConfig.dateRange, end: parseInt(e.target.value, 10) || 31 } })}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-center text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-800"
                 />
               </div>
             </div>
@@ -5093,7 +2343,7 @@ const openSelectedCellFillModal = () => {
               <select
                 value={ruleFillConfig.targetShift}
                 onChange={(e) => setRuleFillConfig({ ...ruleFillConfig, targetShift: e.target.value })}
-                className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-sm font-bold text-slate-800"
+                className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
               >
                 <option value="">依群組需求自動補空</option>
                 {RULE_FILL_MAIN_SHIFTS.map(s => <option key={s} value={s}>{s} 班</option>)}
@@ -5106,11 +2356,10 @@ const openSelectedCellFillModal = () => {
                 <select
                   value={rangeClearMode}
                   onChange={(e) => setRangeClearMode(e.target.value)}
-                  className="w-full rounded-xl border border-blue-200 bg-white px-2 py-2 text-sm font-bold text-slate-800"
+                  className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800"
                 >
-                  <option value="preScheduleOnly">只清除預班</option>
                   <option value="autoOnly">只清除自動補入內容</option>
-                  <option value="all">清除範圍內全部正式內容</option>
+                  <option value="all">清除範圍內全部內容</option>
                 </select>
               </div>
 
@@ -5136,15 +2385,15 @@ const openSelectedCellFillModal = () => {
         </div>
       )}
 
-      <div className="max-w-[98vw] mx-auto mb-4 grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <div className="lg:col-span-7 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+      <div className="max-w-[95vw] mx-auto mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-7 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-5">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-3 text-sm font-bold text-slate-700">
               <input
                 type="number"
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())}
-                className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-center font-bold bg-white text-slate-800"
+                className="w-24 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
               />
               <span className="shrink-0">年</span>
 
@@ -5159,7 +2408,7 @@ const openSelectedCellFillModal = () => {
                   if (!Number.isFinite(nextMonth)) return;
                   setMonth(Math.min(12, Math.max(1, nextMonth)));
                 }}
-                className="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-center font-bold bg-white text-slate-800"
+                className="w-20 border border-slate-300 rounded-lg px-3 py-2 text-center font-bold bg-white text-slate-800"
               />
               <span className="shrink-0">月</span>
 
@@ -5173,31 +2422,27 @@ const openSelectedCellFillModal = () => {
         </div>
 
         <div className="lg:col-span-5 flex items-center justify-end gap-2">
-          <button onClick={() => changeScreen('entry')} className="bg-white border px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+          <button onClick={() => changeScreen('entry')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <ArrowLeft size={18} className="text-slate-600" /> 回入口頁
           </button>
-          <button onClick={() => changeScreen('settings')} className="bg-white border px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
+          <button onClick={() => changeScreen('settings')} className="bg-white border px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors text-sm font-bold text-slate-700 flex items-center gap-2">
             <Settings size={18} className="text-slate-600" /> 系統設定
           </button>
         </div>
       </div>
 
-      <div className="max-w-[98vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
-        <div ref={tableScrollContainerRef} onDragOver={handleTableContainerDragOver} className="overflow-auto rounded-2xl max-h-[calc(100vh-150px)]">
-          <table className="w-max min-w-full border-collapse select-none">
+      <div className="max-w-[95vw] mx-auto rounded-2xl shadow-xl border border-slate-200 bg-white">
+        <div className="overflow-auto rounded-2xl max-h-[calc(100vh-220px)]">
+          <table className="w-max min-w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-200 shadow-sm">
                 <th className={`sticky left-0 top-0 z-50 border-r font-black shadow-sm ${shiftColumnFontSizeClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, color: shiftColumnFontColor }}>班別</th>
-                <th className={`sticky top-0 z-50 border-r font-black shadow-sm ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
+                <th className={`sticky top-0 z-50 border-r font-black shadow-sm ${nameDateColumnFontSizeClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>姓名/日期</th>
                 {daysInMonth.map(d => (
                   <th
                     key={d.day}
                     className={`sticky top-0 z-40 ${densityConfig.dayHeaderClass} border-r text-center shadow-sm`}
-                    style={{
-                      minWidth: densityConfig.dayMinWidth,
-                      backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9'),
-                      ...getFourWeekDividerStyle(d.date)
-                    }}
+                    style={{ minWidth: densityConfig.dayMinWidth, backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : '#f1f5f9') }}
                   >
                     <div className={`${tableFontSizeClass} opacity-60 uppercase`} style={{ color: tableFontColor }}>{d.weekStr}</div>
                     <div className={`${tableFontSizeClass} font-black`} style={{ color: tableFontColor }}>{d.day}</div>
@@ -5205,47 +2450,32 @@ const openSelectedCellFillModal = () => {
                 ))}
                 {showRightStats && (
                 <>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-blue-50 text-blue-700 font-bold shadow-sm`}>上班</th>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-green-50 text-green-700 font-bold shadow-sm`}>假日休</th>
-                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[52px] bg-red-50 text-red-700 font-bold shadow-sm`}>總休</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-blue-50 text-blue-700 font-bold shadow-sm`}>上班</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-green-50 text-green-700 font-bold shadow-sm`}>假日休</th>
+                <th className={`sticky top-0 z-40 ${densityConfig.statHeaderClass} border-r min-w-[60px] bg-red-50 text-red-700 font-bold shadow-sm`}>總休</th>
                 </>
                 )}
                 {showLeaveStats && mergedLeaveCodes.map(l => (
-                  <th key={l} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[34px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold shadow-sm`}>{l}</th>
+                  <th key={l} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[40px] bg-slate-50 text-[10px] uppercase text-slate-500 font-bold shadow-sm`}>{l}</th>
                 ))}
                 {(customColumns || []).map(col => (
-                  <th key={col} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[60px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold shadow-sm`}>{col}</th>
+                  <th key={col} className={`sticky top-0 z-40 ${densityConfig.leaveHeaderClass} border-r min-w-[70px] bg-violet-50 text-[10px] uppercase text-violet-600 font-bold shadow-sm`}>{col}</th>
                 ))}
               </tr>
             </thead>
 
             <tbody>
-              {groupedStaffs.map(({ group, staffs: groupStaffList }) => {
-                const isCollapsed = Boolean(collapsedGroups[group]);
-                const visibleGroupStaffList = isCollapsed ? [] : groupStaffList;
-                const isGroupDropActive = Boolean(draggingStaffId) && dragOverGroup === group;
-                return (
+              {groupedStaffs.map(({ group, staffs: groupStaffList, staffIndexMap }) => (
                 <React.Fragment key={group}>
-                  {visibleGroupStaffList.map((staff, index) => {
+                  {groupStaffList.map((staff, index) => {
                     const stats = getStaffStats(staff.id);
-                    const groupCount = visibleGroupStaffList.length + 1;
-
-                    const isDraggingRow = draggingStaffId === staff.id;
-                    const isDragOverBefore = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'before';
-                    const isDragOverAfter = dragOverTarget?.staffId === staff.id && dragOverTarget?.position === 'after';
-                    const rowInsertStyle = isDragOverBefore
-                      ? { boxShadow: 'inset 0 3px 0 #3b82f6' }
-                      : isDragOverAfter
-                        ? { boxShadow: 'inset 0 -3px 0 #10b981' }
-                        : null;
+                    const groupCount = groupStaffList.length + 1;
+                    const groupIndex = staffIndexMap?.[staff.id] ?? index;
 
                     return (
-                      <tr
-                        key={staff.id}
-                        className={`relative border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${isDraggingRow ? 'opacity-45 bg-blue-50/40' : ''} ${isDragOverBefore ? 'drag-insert-before' : ''} ${isDragOverAfter ? 'drag-insert-after' : ''}`}
-                      >
+                      <tr key={staff.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                         {index === 0 && (
-                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, ...(rowInsertStyle || {}) }}>
+                          <td rowSpan={groupCount} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
                             <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
                               {showShiftLabels && (
                                 <span
@@ -5259,231 +2489,89 @@ const openSelectedCellFillModal = () => {
                           </td>
                         )}
 
-                        <td
-                          className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5 relative`}
-                          style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, ...(rowInsertStyle || {}) }}
-                          onDragOver={(e) => handleStaffDragOver(e, staff)}
-                          onDrop={(e) => handleStaffDrop(e, staff)}
-                        >
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              draggable
-                              onDragStart={(e) => handleStaffDragStart(e, staff)}
-                              onDragEnd={handleStaffDragEnd}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => e.stopPropagation()}
-                              className="shrink-0 w-4 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-grab active:cursor-grabbing"
-                              aria-label={`拖曳排序 ${staff.name}`}
-                            >
-                              <GripVertical size={14} />
-                            </button>
-                            {editingStaffId === staff.id ? (
-                            <div
-                              contentEditable
-                              suppressContentEditableWarning
-                              ref={(node) => {
-                                if (node && editingStaffId === staff.id) {
-                                  requestAnimationFrame(() => {
-                                    node.focus();
-                                    const selection = window.getSelection();
-                                    const range = document.createRange();
-                                    range.selectNodeContents(node);
-                                    range.collapse(false);
-                                    selection.removeAllRanges();
-                                    selection.addRange(range);
-                                  });
-                                }
-                              }}
-                              onInput={(e) => setEditingNameDraft(e.currentTarget.textContent || '')}
-                              onBlur={(e) => commitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft)}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  commitEditingStaffName(staff.id, e.currentTarget.textContent || editingNameDraft);
-                                } else if (e.key === 'Escape') {
-                                  e.preventDefault();
-                                  setEditingStaffId(null);
-                                  setEditingNameDraft('');
-                                }
-                              }}
-                              className={`flex-1 min-w-0 text-center py-0 px-0.5 font-bold bg-transparent whitespace-nowrap outline-none ${nameDateColumnFontSizeClass}`}
-                              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em", maxWidth: '100%' }}
-                            >
-                              {editingNameDraft}
+                        <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-col items-center justify-center shrink-0 w-5">
+                              <button
+                                onClick={() => moveStaffInGroup(staff.id, 'up')}
+                                disabled={groupIndex === 0}
+                                className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
+                              >
+                                <ArrowUp size={14} />
+                              </button>
+                              <button
+                                onClick={() => moveStaffInGroup(staff.id, 'down')}
+                                disabled={groupIndex === groupStaffList.length - 1}
+                                className="text-slate-400 hover:text-blue-500 disabled:opacity-10 leading-none"
+                              >
+                                <ArrowDown size={14} />
+                              </button>
                             </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingStaffId(staff.id);
-                                setEditingNameDraft(staff.name || '');
+
+                            <input
+                              type="text"
+                              value={staff.name}
+                              onChange={(e) => {
+                                const next = [...staffs];
+                                const currentIndex = next.findIndex(s => s.id === staff.id);
+                                if (currentIndex !== -1) next[currentIndex].name = e.target.value;
+                                setStaffs(next);
                               }}
-                              className={`flex-1 min-w-0 bg-transparent border-none text-center font-bold whitespace-nowrap px-0.5 py-0 ${nameDateColumnFontSizeClass}`}
-                              style={{ color: nameDateColumnFontColor, letterSpacing: "-0.02em" }}
-                              title="點擊編輯姓名"
-                            >
-                              <span className="block truncate">{staff.name}</span>
-                            </button>
-                          )}
+                              className={`flex-1 min-w-0 text-center py-1.5 font-bold border-none rounded-lg focus:ring-2 focus:ring-blue-400 bg-transparent ${nameDateColumnFontSizeClass}`} style={{ color: nameDateColumnFontColor }}
+                            />
 
                             <button
                               onClick={() => removeStaff(staff.id)}
-                              className="text-slate-400 hover:text-red-500 shrink-0 w-3 flex items-center justify-center"
+                              className="text-slate-400 hover:text-red-500 shrink-0 w-6 flex items-center justify-center"
                             >
                               <Minus size={14} />
                             </button>
                           </div>
                         </td>
 
-                        {daysInMonth.map(d => {
-                          const cellData = schedule[staff.id]?.[d.date];
-                          const val = typeof cellData === 'object' && cellData !== null ? (cellData?.value || '') : (cellData || '');
-                          const cellTextColor = typeof cellData === 'object' && cellData !== null ? String(cellData?.textColor || '').trim() : '';
-                          const cellKey = makeCellKey(staff.id, d.date);
-                          const draftValue = cellDrafts[cellKey];
-                          const displayValue = draftValue !== undefined ? draftValue : val;
-                          const preScheduleCode = getVisiblePreScheduleCode(staff, d.date);
-                          const hasFormalValue = Boolean(displayValue);
-                          const hasSameVisibleCode = hasFormalValue && Boolean(preScheduleCode) && String(displayValue).trim() === String(preScheduleCode).trim();
-                          const showPreScheduleAsMain = !hasFormalValue && Boolean(preScheduleCode);
-                          const showPreScheduleAsHint = hasFormalValue && Boolean(preScheduleCode) && !hasSameVisibleCode;
-                          const baseCellBackgroundColor = d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent');
-                          const cellBackgroundColor = showPreScheduleAsMain
-                            ? getPreScheduleBackgroundColor(baseCellBackgroundColor, false)
-                            : baseCellBackgroundColor;
-                          const effectiveSelection = rangeSelection?.start && rangeSelection?.end ? rangeSelection : (selectedGridCell?.staff?.id && selectedGridCell?.dateStr ? {
-                            start: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr },
-                            end: { staffId: selectedGridCell.staff.id, dateStr: selectedGridCell.dateStr }
-                          } : null);
-                          const inRangeSelection = isCellInSelectionRect(effectiveSelection, staffs, daysInMonth, staff.id, d.date);
-                          const isPrimarySelected = selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date;
-                          const isInvalid = Boolean(invalidCellKeys[cellKey]);
-                          const ruleWarningMessage = cellRuleWarnings[cellKey] || '';
-                          const isRuleWarning = Boolean(ruleWarningMessage) && !isInvalid;
-
+                        {daysInMonth.map((d) => {
+                          const rowSchedule = schedule[staff.id] || EMPTY_OBJ;
+                          const cellData = rowSchedule[d.date];
+                          const val = typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
                           return (
-                            <td
+                            <ScheduleGridCell
                               key={d.date}
-                              className={`border-r p-0 relative overflow-hidden ${inRangeSelection ? 'ring-2 ring-violet-400 ring-inset' : isPrimarySelected ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
-                              style={{
-                                backgroundColor: cellBackgroundColor,
-                                opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                                boxShadow: `${inRangeSelection ? 'inset 0 0 0 2px #a78bfa' : isPrimarySelected ? 'inset 0 0 0 2px #3b82f6' : ''}${isInvalid ? `${inRangeSelection || isPrimarySelected ? ', ' : ''}inset 0 0 0 2px ${dangerTintColor}` : ''}${isRuleWarning ? `${inRangeSelection || isPrimarySelected || isInvalid ? ', ' : ''}inset 0 0 0 2px ${warningTintColor}` : ''}${showPreScheduleAsMain ? `${inRangeSelection || isPrimarySelected || isInvalid || isRuleWarning ? ', ' : ''}inset 0 0 0 1px ${preScheduleHintBorderColor}` : ''}` || undefined,
-                                ...getFourWeekDividerStyle(d.date),
-                                ...(rowInsertStyle || {})
-                              }}
-                              onMouseDown={(e) => {
-                                if (e.button !== 0) return;
-                                e.preventDefault();
-                                setIsRangeDragging(true);
-                                startRangeSelection(staff, d.date, e);
-                              }}
-                              onMouseEnter={() => updateRangeSelection(staff, d.date)}
-                              onClick={() => {
-                                startRangeSelection(staff, d.date);
-                              }}
-                            >
-                              <div className="relative">
-                                <div
-                                  className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
-                                  style={{ color: showPreScheduleAsMain ? preScheduleTextColor : (cellTextColor || tableFontColor), pointerEvents: 'none' }}
-                                >
-                                  {showPreScheduleAsMain ? preScheduleCode : displayValue}
-                                </div>
-                                {showPreScheduleAsHint && (
-                                  <div
-                                    className="absolute left-0 top-0 w-0 h-0 z-20 pointer-events-none border-r-[9px] border-r-transparent border-b-[9px] border-b-transparent"
-                                    style={{ borderTop: `9px solid ${preScheduleHintBorderColor}` }}
-                                    title={`預班：${preScheduleCode}`}
-                                  />
-                                )}
-                                {isRuleWarning && (
-                                  <div
-                                    className="absolute top-0 right-0 w-0 h-0 border-l-[10px] border-l-transparent z-20"
-                                    style={{ borderTop: `10px solid ${warningTintColor}` }}
-                                    title={ruleWarningMessage}
-                                  ></div>
-                                )}
-                                <div
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 z-0 w-3.5 h-3.5 flex items-center justify-center"
-                                  title={showPreScheduleAsHint ? `選擇班別/假別｜預班 ${preScheduleCode}` : '選擇班別/假別'}
-                                >
-                                  <select
-                                    value={preScheduleEditMode ? preScheduleCode : val}
-                                    onChange={(e) => {
-                                      startRangeSelection(staff, d.date);
-                                      const targetCells = [{ staffId: staff.id, dateStr: d.date }];
-                                      if (preScheduleEditMode) {
-                                        applyPreScheduleValueToCells(targetCells, e.target.value, {
-                                          advance: Boolean(e.target.value),
-                                          direction: 1,
-                                          preserveSelection: false,
-                                          activeCell: targetCells[targetCells.length - 1],
-                                          showFeedback: true
-                                        });
-                                      } else {
-                                        applySelectionValue(targetCells, e.target.value, {
-                                          advance: Boolean(e.target.value),
-                                          direction: 1,
-                                          source: 'manual'
-                                        });
-                                      }
-                                      e.currentTarget.blur();
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startRangeSelection(staff, d.date);
-                                    }}
-                                    onMouseDown={(e) => {
-                                      if (e.button !== 0) return;
-                                      e.stopPropagation();
-                                      startRangeSelection(staff, d.date, e);
-                                    }}
-                                    className="absolute inset-0 w-full h-full border-none bg-transparent cursor-pointer opacity-0"
-                                    style={{ color: tableFontColor }}
-                                    aria-label={`選擇 ${staff.name} ${d.date} 班別/假別`}
-                                  >
-                                    <option value=""></option>
-                                    {!preScheduleEditMode && (
-                                      <>
-                                        <optgroup label="上班">
-                                          {mergedShiftCodes.map(s => <option key={s} value={s}>{s}</option>)}
-                                        </optgroup>
-                                      </>
-                                    )}
-                                    <optgroup label={preScheduleEditMode ? "預班／預假" : "休假"}>
-                                      {mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>)}
-                                    </optgroup>
-                                  </select>
-
-                                  {showBlueDots && (
-                                    <span
-                                      className={`${densityConfig.selectorDotClass} rounded-full transition-all pointer-events-none ${inRangeSelection ? 'bg-violet-600 scale-110' : isPrimarySelected ? 'bg-blue-700 scale-110' : 'bg-blue-300/90'}`}
-                                    ></span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
+                              staffId={staff.id}
+                              staffName={staff.name}
+                              dateStr={d.date}
+                              value={val}
+                              isSelected={selectedGridCell?.staff?.id === staff.id && selectedGridCell?.dateStr === d.date}
+                              isHoliday={d.isHoliday}
+                              isWeekend={d.isWeekend}
+                              holidayColor={colors.holiday}
+                              weekendColor={colors.weekend}
+                              selectionMode={selectionMode}
+                              showBlueDots={showBlueDots}
+                              densityConfig={densityConfig}
+                              tableFontSizeClass={tableFontSizeClass}
+                              tableFontColor={tableFontColor}
+                              shiftCodes={shiftCodes}
+                              leaveCodes={mergedLeaveCodes}
+                              onValueChange={handleCellChange}
+                              onSelectCell={selectCell}
+                            />
                           );
                         })}
 
                         {showRightStats && (
                         <>
-                        <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.work}</td>
-                        <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.holidayLeave}</td>
-                        <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>{stats.totalLeave}</td>
+                        <td className={`border-r text-center font-black bg-blue-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.work}</td>
+                        <td className={`border-r text-center font-black bg-green-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.holidayLeave}</td>
+                        <td className={`border-r text-center font-black bg-red-50/30 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>{stats.totalLeave}</td>
                         </>
                         )}
                         {showLeaveStats && mergedLeaveCodes.map(l => (
-                          <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>
+                          <td key={l} className={`border-r text-center bg-slate-50/20 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
                             {stats.leaveDetails[l] || ''}
                           </td>
                         ))}
                         {(customColumns || []).map(col => (
-                          <td key={col} className={`border-r bg-violet-50/10 ${tableFontSizeClass}`} style={{ color: tableFontColor, ...(rowInsertStyle || {}) }}>
+                          <td key={col} className={`border-r bg-violet-50/10 ${tableFontSizeClass}`} style={{ color: tableFontColor }}>
                             <input
                               type="text"
                               value={customColumnValues?.[staff.id]?.[col] || ''}
@@ -5497,29 +2585,14 @@ const openSelectedCellFillModal = () => {
                     );
                   })}
 
-                  {!isCollapsed && (
-                  <tr className={`border-b border-slate-200 transition-colors ${isGroupDropActive ? 'bg-blue-50/90 shadow-[inset_0_0_0_2px_rgba(59,130,246,0.28)]' : 'bg-slate-50/70'}`} onDragOver={(e) => handleGroupDragOver(e, group)} onDrop={(e) => handleGroupDrop(e, group)}>
-                    {visibleGroupStaffList.length === 0 && (
-                      <td rowSpan={2} className="sticky left-0 z-20 border-r text-center shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)]" style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}>
-                        <div className="flex items-center justify-center h-full" style={{ minHeight: densityConfig.rowMinHeight }}>
-                          {showShiftLabels && (
-                            <span
-                              className={`${shiftColumnFontSizeClass} font-black leading-none tracking-0 [writing-mode:vertical-rl]`}
-                              style={{ color: shiftColumnFontColor, fontSize: shiftCellLabelFontSize }}
-                            >
-                              {group}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                    <td className="sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] px-0.5 py-0.5" style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
+                  <tr className="border-b border-slate-200 bg-slate-50/70">
+                    <td className={`sticky z-30 border-r shadow-[4px_0_10px_-5px_rgba(0,0,0,0.1)] ${densityConfig.nameCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor }}>
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => addStaff(group)}
                           className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 font-bold text-sm"
                         >
-                          <Plus size={16} /> 新增
+                          <Plus size={16} /> 新增人員
                         </button>
                       </div>
                     </td>
@@ -5528,125 +2601,45 @@ const openSelectedCellFillModal = () => {
                       <td
                         key={d.date}
                         className="border-r"
-                        style={{
-                          backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'),
-                          opacity: d.isHoliday || d.isWeekend ? 0.9 : 1,
-                          ...getFourWeekDividerStyle(d.date)
-                        }}
-                      />
+                        style={{ backgroundColor: d.isHoliday ? colors.holiday : (d.isWeekend ? colors.weekend : 'transparent'), opacity: d.isHoliday || d.isWeekend ? 0.9 : 1 }}
+                      ></td>
                     ))}
 
                     <td colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}></td>
                   </tr>
-                  )}
-
-                  <tr className={`border-b border-slate-200 transition-colors ${isGroupDropActive ? 'bg-blue-100/80 shadow-[inset_0_0_0_2px_rgba(59,130,246,0.28)]' : 'bg-amber-50/95'}`} onDragOver={(e) => handleGroupDragOver(e, group)} onDrop={(e) => handleGroupDrop(e, group)}>
-                    {visibleGroupStaffList.length > 0 || isCollapsed ? (
-                    <td className={`sticky left-0 z-30 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
-                      <div className="flex items-center justify-center">
-                        <button
-                          type="button"
-                          onClick={() => setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }))}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
-                          title={isCollapsed ? `展開${group}` : `收合${group}`}
-                          aria-label={isCollapsed ? `展開${group}` : `收合${group}`}
-                        >
-                          <span className="text-base font-black leading-none">{isCollapsed ? '+' : '−'}</span>
-                        </button>
-                      </div>
-                    </td>
-                    ) : null}
-                    <td className={`sticky z-30 border-r text-center font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}>
-                      {group === '白班' ? '白班上班' : group === '小夜' ? '小夜上班' : '大夜上班'}
-                    </td>
-                    {daysInMonth.map(d => {
-                      const count = buildExportDailyStats(d.date)[group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N'];
-                      const rowKey = group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N';
-                      return (
-                        <td
-                          key={d.date}
-                          className={`sticky z-20 border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                          style={{ backgroundColor: groupSummaryRowBgColor, color: tableFontColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow, ...getDemandHighlightStyle(d.date, rowKey, count), ...getFourWeekDividerStyle(d.date) }}
-                        >
-                          {count || ''}
-                        </td>
-                      );
-                    })}
-                    <td
-                      colSpan={(showRightStats ? 3 : 0) + (showLeaveStats ? mergedLeaveCodes.length : 0) + (customColumns?.length || 0)}
-                      className="sticky z-20"
-                      style={{ backgroundColor: groupSummaryRowBgColor, top: stickyGroupSummaryTop, boxShadow: stickyGroupSummaryShadow }}
-                    ></td>
-                  </tr>
                 </React.Fragment>
-              )})}
+              ))}
             </tbody>
 
             {showBottomStats && (
             <tfoot className="bg-slate-100 border-t-2 border-slate-200">
-              <tr>
-                <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
-                <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: effectiveDensityConfig.nameWidth, minWidth: effectiveDensityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
-                  休假人數
-                </td>
-                {daysInMonth.map(d => {
-                  const count = buildExportDailyStats(d.date).totalLeave;
-                  return (
-                    <td
-                      key={d.date}
-                      className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
-                      style={{ color: tableFontColor, ...getFourWeekDividerStyle(d.date) }}
-                    >
-                      {count || ''}
-                    </td>
-                  );
-                })}
-                <td colSpan={3 + mergedLeaveCodes.length + (customColumns?.length || 0)}></td>
-              </tr>
+              {['D', 'E', 'N', 'totalLeave'].map((rowKey) => (
+                <tr key={rowKey}>
+                  <td className={`sticky left-0 z-10 border-r ${densityConfig.footCellPaddingClass}`} style={{ width: densityConfig.shiftWidth, minWidth: densityConfig.shiftWidth, backgroundColor: shiftColumnBgColor }}></td>
+                  <td className={`sticky z-10 border-r text-right font-bold ${nameDateColumnFontSizeClass} ${densityConfig.footCellPaddingClass}`} style={{ left: densityConfig.shiftWidth, width: densityConfig.nameWidth, minWidth: densityConfig.nameWidth, backgroundColor: nameDateColumnBgColor, color: nameDateColumnFontColor }}>
+                    {rowKey === 'totalLeave' ? '當日休假' : `${rowKey} 班人數`}
+                  </td>
+                  {daysInMonth.map(d => {
+                    const count = getDailyStats(d.date)[rowKey];
+                    return (
+                      <td
+                        key={d.date}
+                        className={`border-r p-2 text-center font-black ${tableFontSizeClass}`}
+                        style={{ color: tableFontColor, ...getDemandHighlightStyle(d.date, rowKey, count) }}
+                      >
+                        {count || ''}
+                      </td>
+                    );
+                  })}
+                  <td colSpan={3 + mergedLeaveCodes.length + (customColumns?.length || 0)}></td>
+                </tr>
+              ))}
             </tfoot>
             )}
           </table>
         </div>
       </div>
 
-
-      {showImportViolationList && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[115] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl animate-pulse-once">
-            <div className="p-5 border-b flex justify-between items-center bg-slate-50">
-              <div>
-                <h3 className="font-black text-slate-800">匯入規則衝突清單</h3>
-                <p className="text-sm text-slate-500 mt-1">共 {importRuleViolations.length} 筆，僅提示，不影響匯入。</p>
-              </div>
-              <button onClick={() => { setShowImportViolationList(false); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                <X />
-              </button>
-            </div>
-            <div className="max-h-[65vh] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-slate-700">
-                  <tr>
-                    <th className="text-left px-4 py-3">人員</th>
-                    <th className="text-left px-4 py-3">日期</th>
-                    <th className="text-left px-4 py-3">代碼</th>
-                    <th className="text-left px-4 py-3">原因</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {importRuleViolations.map((item, index) => (
-                    <tr key={`${item.staffName}-${item.dateStr}-${item.code}-${index}`} className="border-t border-slate-200">
-                      <td className="px-4 py-3">{item.staffName}</td>
-                      <td className="px-4 py-3">{item.dateStr}</td>
-                      <td className="px-4 py-3 font-bold">{item.code}</td>
-                      <td className="px-4 py-3" style={{ color: warningTextColor }}>{item.reason}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showFillModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
@@ -5686,7 +2679,7 @@ const openSelectedCellFillModal = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-pulse-once">
             <div className="p-6 border-b flex justify-between items-center bg-slate-50">
-              <h3 className="font-black text-slate-800 flex items-center gap-2"><Clock /> 本機暫存紀錄</h3>
+              <h3 className="font-black text-slate-800 flex items-center gap-2"><Clock /> 歷史存檔紀錄</h3>
               <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                 <X />
               </button>
@@ -5731,7 +2724,7 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
         <div className="px-6 py-6 bg-gray-50/80 border-b lg:border-b-0 lg:border-r border-gray-200">
           <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-xl ${iconBg}`}><Icon className={`w-4 h-5 ${iconColor}`} /></div>
+            <div className={`p-2 rounded-xl ${iconBg}`}><Icon className={`w-5 h-5 ${iconColor}`} /></div>
             <div><h3 className="font-bold text-gray-800">{title}</h3><p className="text-sm text-gray-500 mt-1 leading-relaxed">{desc}</p></div>
           </div>
         </div>
@@ -5741,37 +2734,8 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
   );
 }
 
-function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
+function SettingsView({ changeScreen, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
-  const systemToday = useMemo(() => new Date(), []);
-  const systemYear = String(systemToday.getFullYear());
-  const systemMonth = String(systemToday.getMonth() + 1).padStart(2, '0');
-  const systemDay = String(systemToday.getDate()).padStart(2, '0');
-  const sanitizeHolidayPart = (field, rawValue = '') => {
-    const digits = String(rawValue || '').replace(/\D/g, '');
-    if (field === 'year') {
-      if (!digits) return '';
-      if (digits.length > 4) return systemYear;
-      const parsedYear = Number(digits);
-      if (digits.length === 4 && parsedYear > Number(systemYear)) return systemYear;
-      return digits.slice(0, 4);
-    }
-    if (!digits) return '';
-    if (digits.length > 2) return field === 'month' ? systemMonth : systemDay;
-    const numeric = Number(digits);
-    if (field === 'month' && numeric > 12) return systemMonth;
-    if (field === 'day' && numeric > 31) return systemDay;
-    return digits.slice(0, 2);
-  };
-  const updateHolidayInput = (field, rawValue) => {
-    setHolidayInput((prev) => ({ ...prev, [field]: sanitizeHolidayPart(field, rawValue) }));
-  };
-  const getHolidayInputClassName = (field) => {
-    const value = String(holidayInput?.[field] || '');
-    const hasValue = value.length > 0;
-    const isYearInvalid = field === 'year' && hasValue && value.length < 4;
-    return `w-full px-2.5 py-1.5 text-sm border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 ${isYearInvalid ? 'border-red-400 ring-1 ring-red-100 focus:ring-red-100' : 'border-gray-200 focus:ring-blue-100'}`;
-  };
   const mergedLeaveCodes = useMemo(() => Array.from(new Set([...(DICT.LEAVES || []), ...((customLeaveCodes || []))])), [customLeaveCodes]);
   const addCustomLeaveCode = () => {
     const raw = window.prompt('請輸入自訂休假代碼');
@@ -5781,14 +2745,6 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
     setCustomLeaveCodes(prev => [...prev, code]);
   };
   const removeCustomLeaveCode = (code) => setCustomLeaveCodes(prev => prev.filter(item => item !== code));
-  const addCustomWorkShift = (group) => {
-    const raw = window.prompt(`請輸入${group}自訂上班代碼`);
-    const code = String(raw || "").trim();
-    if (!code) return;
-    if (getAllShiftCodes().includes(code) || (customWorkShifts || []).some(item => String(item?.code || '').trim() === code)) return;
-    setCustomWorkShifts(prev => [...(prev || []), { group, code }]);
-  };
-  const removeCustomWorkShift = (group, code) => setCustomWorkShifts(prev => (prev || []).filter(item => !(item.group === group && item.code === code)));
   const addCustomColumn = () => {
     const raw = window.prompt('請輸入自訂欄位名稱');
     const name = String(raw || "").trim();
@@ -5797,23 +2753,12 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
     setCustomColumns(prev => [...prev, name]);
   };
   const removeCustomColumn = (name) => setCustomColumns(prev => prev.filter(item => item !== name));
-  const customWorkShiftGroups = [
-    { group: '白班', hint: '例如：0800-1600、0700-1500' },
-    { group: '小夜', hint: '例如：1600-2400、0700-1600' },
-    { group: '大夜', hint: '例如：2400-0800' }
-  ];
   const addCustomHoliday = () => {
     const y = holidayInput.year.trim();
     const m = holidayInput.month.trim();
     const d = holidayInput.day.trim();
-    if (y.length !== 4 || !m || !d) return;
-    const monthNumber = Number(m);
-    const dayNumber = Number(d);
-    if (!Number.isInteger(monthNumber) || !Number.isInteger(dayNumber)) return;
-    if (monthNumber < 1 || monthNumber > 12 || dayNumber < 1 || dayNumber > 31) return;
-    const normalizedMonth = String(monthNumber).padStart(2, '0');
-    const normalizedDay = String(dayNumber).padStart(2, '0');
-    const dateStr = `${y}-${normalizedMonth}-${normalizedDay}`;
+    if (!y || !m || !d) return;
+    const dateStr = `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
     if (customHolidays.includes(dateStr)) return;
     setCustomHolidays(prev => [...prev, dateStr].sort());
     setHolidayInput({ year: '', month: '', day: '' });
@@ -5826,7 +2771,7 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
         <div className="flex items-center gap-3">
           <button onClick={() => changeScreen('entry')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="w-4 h-4" />返回入口頁</button>
           <button onClick={() => changeScreen('schedule')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"><Calendar className="w-4 h-4" />返回排班頁</button>
-          <button onClick={onSaveSettings} className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md shadow-blue-100"><Save className="w-4 h-4" />儲存設定</button>
+          <button onClick={() => changeScreen('schedule')} className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md shadow-blue-100"><Save className="w-4 h-4" />儲存設定</button>
         </div>
       </header>
       <main className="max-w-7xl mx-auto p-8 space-y-10">
@@ -5834,48 +2779,46 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
           <div className="flex items-center gap-2"><div className="w-1 h-6 bg-blue-600 rounded-full"></div><h2 className="text-lg font-bold text-gray-800">使用者偏好設定</h2></div>
           <div className="space-y-5">
             <SettingRow icon={Monitor} title="外觀與顯示" desc="調整班表顏色、顯示大小與統計欄位呈現。">
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">色彩標示</label>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">週末顏色</span><input type="color" value={colors.weekend} onChange={(e) => setColors(prev => ({ ...prev, weekend: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">國定假日</span><input type="color" value={colors.holiday} onChange={(e) => setColors(prev => ({ ...prev, holiday: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">主頁背景色</span><input type="color" value={uiSettings.pageBackgroundColor} onChange={(e) => setUiSettings(prev => ({ ...prev, pageBackgroundColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">表格字體色(全體)</span><input type="color" value={uiSettings.tableFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄背景顏色</span><input type="color" value={uiSettings.shiftColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnBgColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄字體顏色</span><input type="color" value={uiSettings.shiftColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄背景顏色</span><input type="color" value={uiSettings.nameDateColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnBgColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">人力需求超標色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">各班別統計色</span><input type="color" value={uiSettings.groupSummaryRowBgColor || '#fef3c7'} onChange={(e) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">預班/假色</span><input type="color" value={uiSettings.infoTintColor || '#38bdf8'} onChange={(e) => setUiSettings(prev => ({ ...prev, infoTintColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">色彩標示</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">週末顏色</span><input type="color" value={colors.weekend} onChange={(e) => setColors(prev => ({ ...prev, weekend: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">假日顏色</span><input type="color" value={colors.holiday} onChange={(e) => setColors(prev => ({ ...prev, holiday: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">主頁背景顏色</span><input type="color" value={uiSettings.pageBackgroundColor} onChange={(e) => setUiSettings(prev => ({ ...prev, pageBackgroundColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">表格字體顏色</span><input type="color" value={uiSettings.tableFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄背景顏色</span><input type="color" value={uiSettings.shiftColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnBgColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄背景顏色</span><input type="color" value={uiSettings.nameDateColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnBgColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
-                  <div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">表格顯示大小</span><select value={uiSettings.tableDensity} onChange={(e) => setUiSettings(prev => ({ ...prev, tableDensity: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-1.5"><option value="standard">標準 (預設)</option><option value="compact">緊湊</option><option value="relaxed">寬鬆</option></select></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">表格字體大小</span><select value={uiSettings.tableFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-1.5"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">班別欄字體大小</span><select value={uiSettings.shiftColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-1.5"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">姓名/日期欄字體大小</span><select value={uiSettings.nameDateColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-1.5"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">快速切換全部統計</span><button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showStats: !prev.showStats, showRightStats: !prev.showStats, showLeaveStats: !prev.showStats, showBottomStats: !prev.showStats }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showStats ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showStats ? 'right-1' : 'left-1'}`}></div></button></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">表格顯示大小</span><select value={uiSettings.tableDensity} onChange={(e) => setUiSettings(prev => ({ ...prev, tableDensity: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="standard">標準 (預設)</option><option value="compact">緊湊</option><option value="relaxed">寬鬆</option></select></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">表格字體大小</span><select value={uiSettings.tableFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">班別欄字體大小</span><select value={uiSettings.shiftColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">班別欄字體顏色</span><input type="color" value={uiSettings.shiftColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體大小</span><select value={uiSettings.nameDateColumnFontSize} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontSize: e.target.value }))} className="text-sm border-none bg-gray-100 rounded-md px-3 py-2"><option value="small">小</option><option value="medium">標準</option><option value="large">大</option></select></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                  <div className="flex items-center justify-between"><span className="text-sm font-medium">快速切換全部統計</span><button type="button" onClick={() => setUiSettings(prev => ({ ...prev, showStats: !prev.showStats, showRightStats: !prev.showStats, showLeaveStats: !prev.showStats, showBottomStats: !prev.showStats }))} className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings.showStats ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings.showStats ? 'right-1' : 'left-1'}`}></div></button></div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">需求警示顯示</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">需求超編顏色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-10 h-8 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                  </div>
                 </div>
               </div>
+
             </SettingRow>
             <SettingRow icon={Settings} title="使用偏好" desc="快速切換主題、欄位顯示、操作方式與預設補休代碼。" iconBg="bg-violet-50" iconColor="text-violet-600">
               <div className="space-y-6">
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">主題預設</label>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">主題預設</label>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     {[
                       ['classic','經典藍白'],
                       ['soft','柔和綠灰'],
                       ['warm','米色護理站'],
                       ['dark','深色模式'],
-                      ['sky','晨霧藍'],
-                      ['lavender','石墨灰'],
-                      ['forest','森林綠'],
-                      ['sakura','櫻花粉白'],
-                      ['sand','暖杏橘'],
                       ['custom','自訂主題']
                     ].map(([key,label]) => (
                       <button
@@ -5887,7 +2830,6 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
                             return;
                           }
                           const preset = UI_THEME_PRESETS[key];
-                          if (!preset) return;
                           setColors(prev => ({ ...prev, weekend: preset.weekendColor, holiday: preset.holidayColor }));
                           setUiSettings(prev => ({
                             ...prev,
@@ -5897,18 +2839,10 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
                             shiftColumnBgColor: preset.shiftColumnBgColor,
                             nameDateColumnBgColor: preset.nameDateColumnBgColor,
                             shiftColumnFontColor: preset.shiftColumnFontColor,
-                            nameDateColumnFontColor: preset.nameDateColumnFontColor,
-                            demandOverColor: preset.demandOverColor,
-                            groupSummaryRowBgColor: preset.groupSummaryRowBgColor,
-                            warningTintColor: preset.warningTintColor,
-                            warningTextColor: preset.warningTextColor,
-                            infoTintColor: preset.infoTintColor,
-                            infoTextColor: preset.infoTextColor,
-                            dangerTintColor: preset.dangerTintColor,
-                            dangerTextColor: preset.dangerTextColor
+                            nameDateColumnFontColor: preset.nameDateColumnFontColor
                           }));
                         }}
-                        className={`px-2.5 py-1.5 rounded-lg border text-[13px] font-medium transition leading-5 ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
+                        className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
                       >
                         {label}
                       </button>
@@ -5917,20 +2851,21 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">欄位顯示</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄位顯示</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[
-                      ['showRightStats','上班總休統計'],
-                      ['showLeaveStats','休假統計'],
-                      ['showBottomStats','下方每日統計'],
-                      ['showBlueDots','藍點提示']
+                      ['showRightStats','顯示右側統計'],
+                      ['showLeaveStats','顯示休假別統計'],
+                      ['showBottomStats','顯示下方每日統計'],
+                      ['showBlueDots','顯示藍點提示'],
+                      ['showShiftLabels','顯示班別群組大字']
                     ].map(([key,label]) => (
-                      <div key={key} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+                      <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
                         <span className="text-sm font-medium">{label}</span>
                         <button
                           type="button"
                           onClick={() => setUiSettings(prev => ({ ...prev, [key]: !prev[key] }))}
-                          className={`w-9 h-5 rounded-full relative transition-colors ${uiSettings[key] ? 'bg-violet-600' : 'bg-gray-300'}`}
+                          className={`w-10 h-5 rounded-full relative transition-colors ${uiSettings[key] ? 'bg-violet-600' : 'bg-gray-300'}`}
                         >
                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${uiSettings[key] ? 'right-1' : 'left-1'}`}></div>
                         </button>
@@ -5940,198 +2875,124 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">寬與高度</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">班別欄寬</span><select value={uiSettings.shiftColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, shiftColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">姓名/日期欄寬</span><select value={uiSettings.nameDateColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, nameDateColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">日期欄寬</span><select value={uiSettings.dayColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, dayColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">儲存格高度</span><select value={uiSettings.cellHeightMode} onChange={(e)=>setUiSettings(prev=>({...prev, cellHeightMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="compact">緊湊</option><option value="standard">標準</option><option value="roomy">寬鬆</option></select></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">預設補休代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5">{mergedLeaveCodes.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 gap-3"><span className="text-sm font-medium">選取方式</span><select value={uiSettings.selectionMode} onChange={(e)=>setUiSettings(prev=>({...prev, selectionMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-2.5 py-1.5"><option value="dot">點藍點選格</option><option value="cell">點格選取</option></select></div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">欄寬與高度</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄寬</span><select value={uiSettings.shiftColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, shiftColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄寬</span><select value={uiSettings.nameDateColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, nameDateColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">日期欄寬</span><select value={uiSettings.dayColumnWidthMode} onChange={(e)=>setUiSettings(prev=>({...prev, dayColumnWidthMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="narrow">窄</option><option value="standard">標準</option><option value="wide">寬</option></select></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">儲存格高度</span><select value={uiSettings.cellHeightMode} onChange={(e)=>setUiSettings(prev=>({...prev, cellHeightMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="compact">緊湊</option><option value="standard">標準</option><option value="roomy">寬鬆</option></select></div>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">系統補休預設代碼</span><select value={uiSettings.defaultAutoLeaveCode} onChange={(e)=>setUiSettings(prev=>({...prev, defaultAutoLeaveCode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2">{mergedLeaveCodes.filter(code => ['off','休','例'].includes(code)).map(code => <option key={code} value={code}>{code}</option>)}</select></div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">選格操作模式</span><select value={uiSettings.selectionMode} onChange={(e)=>setUiSettings(prev=>({...prev, selectionMode:e.target.value}))} className="text-sm border-none bg-white rounded-md px-3 py-2"><option value="dot">點藍點選格</option><option value="cell">點格選取</option></select></div>
                 </div>
               </div>
             </SettingRow>
-            <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假、上班代碼與備註欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
-              <div className="space-y-4">
-                <div className="space-y-2">
+            <SettingRow icon={Layout} title="班表內容自訂" desc="設定自訂休假代碼與延伸欄位。" iconBg="bg-indigo-50" iconColor="text-indigo-600">
+              <div className="space-y-5">
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">自訂休假代碼</label>
                   <div className="flex flex-wrap items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mr-2">自訂休假</label>
-                    <button type="button" onClick={addCustomLeaveCode} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <button type="button" onClick={addCustomLeaveCode} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <Plus className="w-3.5 h-3.5" /> 新增
                     </button>
-                    {(customLeaveCodes || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂休假</div> : (customLeaveCodes || []).map(code => (
-                      <span key={code} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}<button type="button" onClick={() => removeCustomLeaveCode(code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
+                    {(customLeaveCodes || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂休假代碼</div> : (customLeaveCodes || []).map(code => (
+                      <span key={code} className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md border border-gray-200">{code}<button type="button" onClick={() => removeCustomLeaveCode(code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                     ))}
                   </div>
-                  <div className="text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
+                  <div className="mt-2 text-xs text-gray-500">新增後會同步出現在主頁休假下拉選單，並視為休假類代碼。</div>
                 </div>
                 <div className="pt-3 border-t border-gray-100 space-y-3">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">自訂上班</label>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-                    {customWorkShiftGroups.map(({ group, hint }) => {
-                      const groupItems = (customWorkShifts || []).filter(item => item.group === group);
-                      return (
-                        <div key={group} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-gray-700 leading-5">{group}</div>
-                              <div className="text-[11px] text-gray-400 leading-4 mt-0.5">{hint}</div>
-                            </div>
-                            <button type="button" onClick={() => addCustomWorkShift(group)} className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 whitespace-nowrap">
-                              <Plus className="w-3.5 h-3.5" /> 新增
-                            </button>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {groupItems.length === 0 ? <div className="text-xs text-gray-400">尚未新增{group}自訂上班</div> : groupItems.map(item => (
-                              <span key={`${item.group}-${item.code}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-md border border-indigo-200">{item.code}<button type="button" onClick={() => removeCustomWorkShift(item.group, item.code)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="text-xs text-gray-500">新增後可視為上班代碼使用，並會依白班／小夜／大夜歸入各班別統計。</div>
-                </div>
-                <div className="pt-3 border-t border-gray-100 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mr-2">備註欄</label>
-                    <button type="button" onClick={addCustomColumn} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                      <Plus className="w-3.5 h-3.5" /> 新增
+                  <div>
+                    <button type="button" onClick={addCustomColumn} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <Plus className="w-3.5 h-3.5" /> 新增自訂欄位
                     </button>
-                    {(customColumns || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增備註欄</div> : (customColumns || []).map(col => (
-                      <span key={col} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-violet-50 text-violet-700 text-xs font-bold rounded-md border border-violet-200">{col}<button type="button" onClick={() => removeCustomColumn(col)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(customColumns || []).length === 0 ? <div className="text-xs text-gray-400">尚未新增自訂欄位</div> : (customColumns || []).map(col => (
+                      <span key={col} className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 text-violet-700 text-xs font-bold rounded-md border border-violet-200">{col}<button type="button" onClick={() => removeCustomColumn(col)} className="text-red-500 hover:text-red-600"><Minus className="w-3.5 h-3.5" /></button></span>
                     ))}
                   </div>
                   <div className="text-xs text-gray-500">新增後會同步出現在主頁右側，作為延伸紀錄欄位。可用來記錄如門診、支援、教學、行政或其他單位自訂資訊。</div>
                 </div>
-                <div className="pt-3 border-t border-gray-100 space-y-2">
+                <div className="pt-3 border-t border-gray-100 space-y-3">
                   <div>
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">匯出用排班規則</label>
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">匯出用排班規則</label>
                     <textarea
                       value={schedulingRulesText}
                       onChange={(e) => setSchedulingRulesText(e.target.value)}
-                      rows={4}
-                      placeholder={`請逐行輸入排班規則
-例如：
-白班每日至少 6 人
-小夜不跨白班支援`}
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      rows={6}
+                      placeholder={`請逐行輸入排班規則\n例如：\n白班每日至少 6 人\n小夜不跨白班支援`}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                     />
                   </div>
                   <div className="text-xs text-gray-500">這裡輸入的內容不會同步到主頁顯示，但會在匯出 Word 時顯示於最下方，格式為：排班規則：1.XXX 2.XXX。</div>
                 </div>
               </div>
             </SettingRow>
-            <SettingRow icon={UserCheck} title="規則補空需求設定" desc="設定平日、週六、週日各班需求，作為規則全月補空與規則指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-                  <div className="rounded-xl border border-gray-200 p-3 bg-gray-50/50 space-y-2.5">
-                    <h4 className="font-bold text-gray-800">平日需求</h4>
-                    <div className="grid grid-cols-3 gap-2">
+            <SettingRow icon={UserCheck} title="規則補空需求設定" desc="設定平日 / 假日各班需求，作為規則全月補空與規則指定補空的直接依據。" iconBg="bg-sky-50" iconColor="text-sky-600">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
+                    <h4 className="font-bold text-gray-800 mb-4">平日需求</h4>
+                    <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">白班</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.white}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">小夜</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.evening}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">大夜</label>
+                        <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
                         <input type="number" min="0" value={staffingConfig.requiredStaffing.weekday.night}
                           onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, weekday: { ...prev.requiredStaffing.weekday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-gray-200 p-3 bg-gray-50/50 space-y-2.5">
-                    <h4 className="font-bold text-gray-800">週六需求</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50/50">
+                    <h4 className="font-bold text-gray-800 mb-4">假日需求</h4>
+                    <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">白班</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.saturday.white}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, saturday: { ...prev.requiredStaffing.saturday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                        <label className="text-xs font-bold text-gray-400 block mb-2">白班</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.white}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, white: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">小夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.saturday.evening}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, saturday: { ...prev.requiredStaffing.saturday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                        <label className="text-xs font-bold text-gray-400 block mb-2">小夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.evening}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, evening: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">大夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.saturday.night}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, saturday: { ...prev.requiredStaffing.saturday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-gray-200 p-3 bg-gray-50/50 space-y-2.5">
-                    <h4 className="font-bold text-gray-800">週日需求</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">白班</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.sunday.white}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, sunday: { ...prev.requiredStaffing.sunday, white: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">小夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.sunday.evening}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, sunday: { ...prev.requiredStaffing.sunday, evening: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-400 block mb-1.5">大夜</label>
-                        <input type="number" min="0" value={staffingConfig.requiredStaffing.sunday.night}
-                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, sunday: { ...prev.requiredStaffing.sunday, night: parseInt(e.target.value, 10) || 0 } } }))}
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white" />
+                        <label className="text-xs font-bold text-gray-400 block mb-2">大夜</label>
+                        <input type="number" min="0" value={staffingConfig.requiredStaffing.holiday.night}
+                          onChange={(e) => setStaffingConfig(prev => ({ ...prev, requiredStaffing: { ...prev.requiredStaffing, holiday: { ...prev.requiredStaffing.holiday, night: parseInt(e.target.value, 10) || 0 } } }))}
+                          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-white" />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-600 space-y-1">
-                  <div className="font-semibold text-gray-800">目前補空依據</div>
+                <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                  <div className="font-semibold text-gray-800 mb-1">目前補空依據</div>
                   <div>平日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.weekday.night}</span> 人</div>
-                  <div>週六：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.saturday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.saturday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.saturday.night}</span> 人</div>
-                  <div>週日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.sunday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.sunday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.sunday.night}</span> 人</div>
+                  <div>假日：白班 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.white}</span> 人、小夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.evening}</span> 人、大夜 <span className="font-bold text-sky-700">{staffingConfig.requiredStaffing.holiday.night}</span> 人</div>
                 </div>
               </div>
             </SettingRow>
             <SettingRow icon={Calendar} title="假期新增" desc="使用西曆年月日新增自訂假期，並可個別刪除。">
-              <div className="space-y-3.5">
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">西曆年月日</label>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5 items-start">
-                    <input type="text" inputMode="numeric" placeholder="年" value={holidayInput.year} onChange={(e) => updateHolidayInput('year', e.target.value)} className={getHolidayInputClassName('year')} />
-                    <input type="text" inputMode="numeric" placeholder="月" value={holidayInput.month} onChange={(e) => updateHolidayInput('month', e.target.value)} className={getHolidayInputClassName('month')} />
-                    <input type="text" inputMode="numeric" placeholder="日" value={holidayInput.day} onChange={(e) => updateHolidayInput('day', e.target.value)} className={getHolidayInputClassName('day')} />
-                    <button onClick={addCustomHoliday} className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button>
-                  </div>
-                </div>
-                <div className="pt-2.5 border-t border-gray-100">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">已新增假期</label>
-                  <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                    {customHolidays.length === 0 ? (
-                      <div className="text-xs text-gray-400 p-3 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center">尚未新增自訂假期</div>
-                    ) : customHolidays.map(dateStr => (
-                      <div key={dateStr} className="flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                        <span className="text-sm text-gray-700 font-medium">{dateStr}</span>
-                        <button onClick={() => removeCustomHoliday(dateStr)} className="w-7 h-7 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <div className="space-y-5"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">西曆年月日</label><div className="grid grid-cols-1 md:grid-cols-3 gap-3"><input type="number" placeholder="年" value={holidayInput.year} onChange={(e)=>setHolidayInput({ ...holidayInput, year: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="月" value={holidayInput.month} onChange={(e)=>setHolidayInput({ ...holidayInput, month: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /><input type="number" placeholder="日" value={holidayInput.day} onChange={(e)=>setHolidayInput({ ...holidayInput, day: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100" /></div></div><button onClick={addCustomHoliday} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> 新增假期</button><div className="pt-3 border-t border-gray-100"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-3">已新增假期</label><div className="space-y-2 max-h-52 overflow-y-auto pr-1">{customHolidays.length === 0 ? <div className="text-xs text-gray-400 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-center">尚未新增自訂假期</div> : customHolidays.map(dateStr => <div key={dateStr} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl"><span className="text-sm text-gray-700 font-medium">{dateStr}</span><button onClick={() => removeCustomHoliday(dateStr)} className="w-8 h-8 flex items-center justify-center rounded-full border border-red-200 text-red-500 hover:bg-red-50 font-bold">-</button></div>)}</div></div></div>
             </SettingRow>
           </div>
         </section>
@@ -6141,16 +3002,14 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
   );
 }
 
-function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onImportPreScheduleFiles, hasActiveDraft, activeDraftMeta, restoreActiveDraft, discardActiveDraft }) {
-  const scheduleImportInputRef = useRef(null);
-  const preScheduleImportInputRef = useRef(null);
+function EntryView({ changeScreen, goToLatestHistory, onImportFiles, hasActiveDraft, activeDraftMeta, restoreActiveDraft, discardActiveDraft }) {
+  const importInputRef = useRef(null);
 
-  const handleImportButtonClick = (mode = 'schedule') => {
-    if (mode === 'preSchedule') preScheduleImportInputRef.current?.click();
-    else scheduleImportInputRef.current?.click();
+  const handleImportButtonClick = () => {
+    importInputRef.current?.click();
   };
 
-  const handleImportInputChange = async (event, mode = 'schedule') => {
+  const handleImportInputChange = async (event) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
     if (files.length === 0) return;
@@ -6165,8 +3024,7 @@ function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onI
     }
 
     try {
-      if (mode === 'preSchedule') await onImportPreScheduleFiles?.(files);
-      else await onImportScheduleFiles?.(files);
+      await onImportFiles?.(files);
     } catch (error) {
       console.error('匯入檔案失敗:', error);
       window.alert(error?.message || '匯入檔案失敗，請確認是否使用系統範本。');
@@ -6184,42 +3042,27 @@ function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onI
       const dayHeaders = Array.from({ length: 31 }, (_, i) => `${i + 1}日`);
       const headers = ['姓名', '班別群組', ...dayHeaders];
 
-      const templateTheme = {
-        titleBg: '#EFF6FF',
-        titleFont: '#1F2937',
-        shiftBg: '#F8FAFC',
-        shiftFont: '#1E293B',
-        nameBg: '#FFFFFF',
-        nameFont: '#1E293B',
-        dayBg: '#F8FAFC'
-      };
-
       dataSheet.addRow([`${templateMonth}月班表匯入範本`]);
       dataSheet.mergeCells(1, 1, 1, headers.length);
       const titleCell = dataSheet.getCell(1, 1);
+      titleCell.font = { bold: true, size: 14 };
       titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(templateTheme.titleBg, '#EFF6FF') } };
-      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(templateTheme.titleFont, '#1F2937') } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
       dataSheet.getRow(1).height = 24;
 
       const headerRow = dataSheet.addRow(headers);
       headerRow.height = 24;
       headerRow.eachCell((cell, colNumber) => {
-        cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(templateTheme.titleFont, '#1F2937') } };
+        cell.font = { bold: true, size: 10 };
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' },
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
-
-        if (colNumber === 1) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(templateTheme.shiftBg, '#F8FAFC') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(templateTheme.shiftFont, '#1E293B') } };
-        } else if (colNumber === 2) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(templateTheme.nameBg, '#FFFFFF') } };
-          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(templateTheme.nameFont, '#1E293B') } };
+        if (colNumber === 1 || colNumber === 2) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
         } else {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(templateTheme.dayBg, '#F8FAFC') } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
         }
       });
 
@@ -6289,6 +3132,35 @@ function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onI
 
       <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.03)] border border-slate-200/60 overflow-hidden">
         <div className="p-10">
+          {hasActiveDraft && (
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-2">
+                <Clock className="mt-0.5 h-4 w-4 text-amber-600" />
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-amber-800">偵測到上次未完成工作</div>
+                  <div className="mt-1 text-xs leading-relaxed text-amber-700">
+                    {activeDraftMeta?.savedAtText ? `上次自動暫存：${activeDraftMeta.savedAtText}` : '可恢復上次未完成的排班進度。'}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={restoreActiveDraft}
+                  className="flex-1 rounded-xl bg-amber-600 px-3 py-2 text-sm font-bold text-white hover:bg-amber-700"
+                >
+                  恢復未完成進度
+                </button>
+                <button
+                  type="button"
+                  onClick={discardActiveDraft}
+                  className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100"
+                >
+                  捨棄
+                </button>
+              </div>
+            </div>
+          )}
           <div className="mb-8 text-center">
             <h2 className="text-xl font-bold text-slate-900 mb-2">系統入口</h2>
             <p className="text-sm text-slate-500 leading-relaxed">
@@ -6297,20 +3169,12 @@ function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onI
           </div>
 
           <input
-            ref={scheduleImportInputRef}
+            ref={importInputRef}
             type="file"
             multiple
             accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
-            onChange={(event) => handleImportInputChange(event, 'schedule')}
-          />
-          <input
-            ref={preScheduleImportInputRef}
-            type="file"
-            multiple
-            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-            className="hidden"
-            onChange={(event) => handleImportInputChange(event, 'preSchedule')}
+            onChange={handleImportInputChange}
           />
 
           <div className="space-y-4">
@@ -6325,20 +3189,20 @@ function EntryView({ changeScreen, goToLatestHistory, onImportScheduleFiles, onI
 
             <button
               type="button"
-              onClick={() => handleImportButtonClick('schedule')}
+              onClick={goToLatestHistory}
               className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
             >
-              <Database className="w-4 h-4 text-slate-500" />
-              匯入檔案
+              <Clock className="w-4 h-4 text-slate-500" />
+              開啟最近班表
             </button>
 
             <button
               type="button"
-              onClick={() => handleImportButtonClick('preSchedule')}
+              onClick={handleImportButtonClick}
               className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50"
             >
-              <CalendarDays className="w-4 h-4 text-slate-500" />
-              匯入預班表
+              <Database className="w-4 h-4 text-slate-500" />
+              匯入檔案
             </button>
 
             <button
@@ -6399,25 +3263,24 @@ export default function App() {
     nameDateColumnWidthMode: 'standard',
     dayColumnWidthMode: 'standard',
     cellHeightMode: 'standard',
-    demandOverColor: '#fde68a',
-    groupSummaryRowBgColor: '#fef3c7'
+    demandOverColor: '#fde68a'
   });
   const [staffingConfig, setStaffingConfig] = useState({
     hospitalLevel: 'regional',
     totalBeds: 60,
     totalNurses: 20,
-    requiredStaffing: normalizeRequiredStaffingConfig()
+    requiredStaffing: {
+      weekday: { white: 6, evening: 3, night: 2 },
+      holiday: { white: 4, evening: 2, night: 2 }
+    }
   });
   const [customLeaveCodes, setCustomLeaveCodes] = useState([]);
-  const [customWorkShifts, setCustomWorkShifts] = useState([]);
   const [customColumns, setCustomColumns] = useState([]);
   const [customColumnValues, setCustomColumnValues] = useState({});
   const [schedulingRulesText, setSchedulingRulesText] = useState('');
   const [loadLatestOnEnter, setLoadLatestOnEnter] = useState(false);
   const [importedSchedulePayload, setImportedSchedulePayload] = useState(null);
-  const [importedPreSchedulePayload, setImportedPreSchedulePayload] = useState(null);
   const [monthlySchedules, setMonthlySchedules] = useState({});
-  const [preScheduleMonthlySchedules, setPreScheduleMonthlySchedules] = useState({});
   const [pendingOpenMonthKey, setPendingOpenMonthKey] = useState('');
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(3);
@@ -6427,16 +3290,6 @@ export default function App() {
   const [activeDraftMeta, setActiveDraftMeta] = useState(null);
   const activeDraftHydratedRef = useRef(false);
   const activeDraftSaveReadyRef = useRef(false);
-  const draftImportInputRef = useRef(null);
-
-  useEffect(() => {
-    setCustomShiftDefsRegistry(customWorkShifts);
-  }, [customWorkShifts]);
-
-  useEffect(() => {
-    const initialWorkspace = createInitialWorkspaceState();
-    applyWorkspaceState(initialWorkspace);
-  }, []);
 
   const formatDraftSavedAt = (isoString) => {
     if (!isoString) return '';
@@ -6445,12 +3298,12 @@ export default function App() {
     return date.toLocaleString();
   };
 
-  const createDefaultSettingsState = () => ({
-    colors: { weekend: '#dcfce7', holiday: '#fca5a5' },
-    customHolidays: [],
-    specialWorkdays: [],
-    medicalCalendarAdjustments: { holidays: [], workdays: [] },
-    uiSettings: {
+  const applyWorkspaceState = (state = {}) => {
+    setColors(state.colors || { weekend: '#dcfce7', holiday: '#fca5a5' });
+    setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
+    setSpecialWorkdays(Array.isArray(state.specialWorkdays) ? state.specialWorkdays : []);
+    setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
+    setUiSettings(state.uiSettings || {
       pageBackgroundColor: '#f8fafc',
       tableFontSize: 'medium',
       tableFontColor: '#1f2937',
@@ -6474,163 +3327,27 @@ export default function App() {
       nameDateColumnWidthMode: 'standard',
       dayColumnWidthMode: 'standard',
       cellHeightMode: 'standard',
-      demandOverColor: '#fde68a',
-      groupSummaryRowBgColor: '#fef3c7',
-      warningTintColor: '#f59e0b',
-      warningTextColor: '#92400e',
-      infoTintColor: '#38bdf8',
-      infoTextColor: '#075985',
-      dangerTintColor: '#ef4444',
-      dangerTextColor: '#9f1239'
-    },
-    staffingConfig: {
+      demandOverColor: '#fde68a'
+    });
+    setStaffingConfig(state.staffingConfig || {
       hospitalLevel: 'regional',
       totalBeds: 60,
       totalNurses: 20,
-      requiredStaffing: normalizeRequiredStaffingConfig()
-    },
-    customLeaveCodes: [],
-    customWorkShifts: [],
-    customColumns: [],
-    schedulingRulesText: ''
-  });
-
-  const buildLocalSettingsPayload = () => ({
-    colors,
-    customHolidays,
-    specialWorkdays,
-    medicalCalendarAdjustments,
-    uiSettings,
-    staffingConfig,
-    customLeaveCodes,
-    customWorkShifts,
-    customColumns,
-    schedulingRulesText
-  });
-
-  const readLocalSettingsPayload = () => {
-    const defaults = createDefaultSettingsState();
-    try {
-      const stored = localStorage.getItem(LOCAL_SETTINGS_KEY);
-      if (!stored) return defaults;
-      const parsed = JSON.parse(stored);
-      return {
-        colors: parsed?.colors || defaults.colors,
-        customHolidays: Array.isArray(parsed?.customHolidays) ? parsed.customHolidays : defaults.customHolidays,
-        specialWorkdays: Array.isArray(parsed?.specialWorkdays) ? parsed.specialWorkdays : defaults.specialWorkdays,
-        medicalCalendarAdjustments: parsed?.medicalCalendarAdjustments || defaults.medicalCalendarAdjustments,
-        uiSettings: { ...defaults.uiSettings, ...(parsed?.uiSettings || {}) },
-        staffingConfig: {
-          hospitalLevel: parsed?.staffingConfig?.hospitalLevel || defaults.staffingConfig.hospitalLevel,
-          totalBeds: Number(parsed?.staffingConfig?.totalBeds) || defaults.staffingConfig.totalBeds,
-          totalNurses: Number(parsed?.staffingConfig?.totalNurses) || defaults.staffingConfig.totalNurses,
-          requiredStaffing: normalizeRequiredStaffingConfig(parsed?.staffingConfig?.requiredStaffing)
-        },
-        customLeaveCodes: Array.isArray(parsed?.customLeaveCodes) ? parsed.customLeaveCodes : defaults.customLeaveCodes,
-        customWorkShifts: Array.isArray(parsed?.customWorkShifts) ? parsed.customWorkShifts : defaults.customWorkShifts,
-        customColumns: Array.isArray(parsed?.customColumns) ? parsed.customColumns : defaults.customColumns,
-        schedulingRulesText: typeof parsed?.schedulingRulesText === 'string' ? parsed.schedulingRulesText : defaults.schedulingRulesText
-      };
-    } catch (error) {
-      console.error('讀取本機預設設定失敗', error);
-      return defaults;
-    }
-  };
-
-  const applyLocalSettingsPayload = (payload = {}) => {
-    const normalized = { ...createDefaultSettingsState(), ...readLocalSettingsPayload(), ...payload };
-    setColors(normalized.colors || createDefaultSettingsState().colors);
-    setCustomHolidays(Array.isArray(normalized.customHolidays) ? normalized.customHolidays : []);
-    setSpecialWorkdays(Array.isArray(normalized.specialWorkdays) ? normalized.specialWorkdays : []);
-    setMedicalCalendarAdjustments(normalized.medicalCalendarAdjustments || { holidays: [], workdays: [] });
-    setUiSettings(prev => ({ ...createDefaultSettingsState().uiSettings, ...(normalized.uiSettings || {}) }));
-    setStaffingConfig({
-      hospitalLevel: normalized.staffingConfig?.hospitalLevel || 'regional',
-      totalBeds: Number(normalized.staffingConfig?.totalBeds) || 60,
-      totalNurses: Number(normalized.staffingConfig?.totalNurses) || 20,
-      requiredStaffing: normalizeRequiredStaffingConfig(normalized.staffingConfig?.requiredStaffing)
-    });
-    setCustomLeaveCodes(Array.isArray(normalized.customLeaveCodes) ? normalized.customLeaveCodes : []);
-    setCustomWorkShifts(Array.isArray(normalized.customWorkShifts) ? normalized.customWorkShifts : []);
-    setCustomColumns(Array.isArray(normalized.customColumns) ? normalized.customColumns : []);
-    setSchedulingRulesText(typeof normalized.schedulingRulesText === 'string' ? normalized.schedulingRulesText : '');
-  };
-
-  const saveLocalSettingsPayload = () => {
-    try {
-      localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify({
-        savedAt: new Date().toISOString(),
-        ...buildLocalSettingsPayload()
-      }));
-      return true;
-    } catch (error) {
-      console.error('儲存本機預設設定失敗', error);
-      return false;
-    }
-  };
-
-  const createInitialWorkspaceState = () => {
-    const blankYear = 2025;
-    const blankMonth = 3;
-    const blankMonthState = createBlankMonthState(blankYear, blankMonth);
-    const savedSettings = readLocalSettingsPayload();
-    return {
-      ...savedSettings,
-      customColumnValues: {},
-      monthlySchedules: {},
-      preScheduleMonthlySchedules: {},
-      year: blankYear,
-      month: blankMonth,
-      staffs: blankMonthState.staffs,
-      schedule: blankMonthState.schedule
-    };
-  };
-
-  const buildWorkspaceState = () => ({
-    colors,
-    customHolidays,
-    specialWorkdays,
-    medicalCalendarAdjustments,
-    uiSettings,
-    staffingConfig,
-    customLeaveCodes,
-    customWorkShifts,
-    customColumns,
-    customColumnValues,
-    schedulingRulesText,
-    monthlySchedules,
-    preScheduleMonthlySchedules,
-    year,
-    month,
-    staffs,
-    schedule
-  });
-
-  const applyWorkspaceState = (state = {}) => {
-    setColors(state.colors || { weekend: '#dcfce7', holiday: '#fca5a5' });
-    setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
-    setSpecialWorkdays(Array.isArray(state.specialWorkdays) ? state.specialWorkdays : []);
-    setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
-    setUiSettings({ ...createDefaultSettingsState().uiSettings, ...(state.uiSettings || {}) });
-    setStaffingConfig({
-      hospitalLevel: state.staffingConfig?.hospitalLevel || 'regional',
-      totalBeds: Number(state.staffingConfig?.totalBeds) || 60,
-      totalNurses: Number(state.staffingConfig?.totalNurses) || 20,
-      requiredStaffing: normalizeRequiredStaffingConfig(state.staffingConfig?.requiredStaffing)
+      requiredStaffing: {
+        weekday: { white: 6, evening: 3, night: 2 },
+        holiday: { white: 4, evening: 2, night: 2 }
+      }
     });
     setCustomLeaveCodes(Array.isArray(state.customLeaveCodes) ? state.customLeaveCodes : []);
-    setCustomWorkShifts(Array.isArray(state.customWorkShifts) ? state.customWorkShifts : []);
     setCustomColumns(Array.isArray(state.customColumns) ? state.customColumns : []);
     setCustomColumnValues(state.customColumnValues || {});
     setSchedulingRulesText(typeof state.schedulingRulesText === 'string' ? state.schedulingRulesText : '');
     setMonthlySchedules(state.monthlySchedules || {});
-    setPreScheduleMonthlySchedules(state.preScheduleMonthlySchedules || {});
     setYear(Number(state.year) || 2025);
     setMonth(Number(state.month) || 3);
     setStaffs(normalizeStaffGroup(state.staffs || createBlankMonthState(Number(state.year) || 2025, Number(state.month) || 3).staffs));
     setSchedule(state.schedule || createBlankMonthState(Number(state.year) || 2025, Number(state.month) || 3).schedule);
     setImportedSchedulePayload(null);
-    setImportedPreSchedulePayload(null);
     setPendingOpenMonthKey('');
     setLoadLatestOnEnter(false);
   };
@@ -6661,7 +3378,6 @@ export default function App() {
 
   useEffect(() => {
     if (!activeDraftHydratedRef.current) return;
-    if (screen !== 'schedule') return;
     if (!activeDraftSaveReadyRef.current) {
       activeDraftSaveReadyRef.current = true;
       return;
@@ -6678,12 +3394,10 @@ export default function App() {
         uiSettings,
         staffingConfig,
         customLeaveCodes,
-        customWorkShifts,
         customColumns,
         customColumnValues,
         schedulingRulesText,
         monthlySchedules,
-        preScheduleMonthlySchedules,
         year,
         month,
         staffs,
@@ -6698,7 +3412,7 @@ export default function App() {
     } catch (error) {
       console.error('寫入自動暫存失敗', error);
     }
-  }, [screen, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customWorkShifts, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, preScheduleMonthlySchedules, year, month, staffs, schedule]);
+  }, [colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, uiSettings, staffingConfig, customLeaveCodes, customColumns, customColumnValues, schedulingRulesText, monthlySchedules, year, month, staffs, schedule]);
 
   const restoreActiveDraft = () => {
     try {
@@ -6728,136 +3442,9 @@ export default function App() {
     setActiveDraftMeta(null);
   };
 
-  const handleSaveSettings = () => {
-    setCustomShiftDefsRegistry(customWorkShifts);
-    const currentMonthKey = buildMonthKey(year, month);
-    const normalizedCurrentSchedule = reconcileScheduleDataMap(schedule, customLeaveCodes);
-    const normalizedMonthlySchedules = reconcileMonthStateCollections({
-      ...(monthlySchedules || {}),
-      [currentMonthKey]: {
-        ...(monthlySchedules?.[currentMonthKey] || {}),
-        year,
-        month,
-        staffs: normalizeStaffGroup(staffs),
-        scheduleData: normalizedCurrentSchedule,
-        customColumnValues: customColumnValues || {},
-        schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
-        importMeta: {
-          ...(monthlySchedules?.[currentMonthKey]?.importMeta || {}),
-          sourceType: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceType || 'manual',
-          sourceFiles: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceFiles || [],
-          sourceSheets: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceSheets || [],
-          importedAt: monthlySchedules?.[currentMonthKey]?.importMeta?.importedAt || new Date().toISOString(),
-          lastUpdatedAt: new Date().toISOString()
-        }
-      }
-    }, customLeaveCodes);
-    const normalizedPreScheduleMonthlySchedules = reconcileMonthStateCollections(preScheduleMonthlySchedules, customLeaveCodes);
-
-    setSchedule(normalizedCurrentSchedule);
-    setMonthlySchedules(normalizedMonthlySchedules);
-    setPreScheduleMonthlySchedules(normalizedPreScheduleMonthlySchedules);
-
-    const saved = saveLocalSettingsPayload();
-    if (!saved) {
-      window.alert('儲存設定失敗，請稍後再試。');
-      return;
-    }
-    setScreen('schedule');
-  };
-
-  const handleDownloadDraftFile = () => {
-    try {
-      const exportedAt = new Date().toISOString();
-      const payload = {
-        type: 'schedule-draft',
-        version: '1.6.0',
-        exportedAt,
-        state: buildWorkspaceState()
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `排班工作檔_${year}年${String(month).padStart(2, '0')}月.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('下載工作檔失敗', error);
-      window.alert('下載工作檔失敗，請稍後再試。');
-    }
-  };
-
-  const handleImportDraftFileClick = () => {
-    if (draftImportInputRef.current) draftImportInputRef.current.click();
-  };
-
-  const handleImportDraftFileChange = async (event) => {
-    const file = event.target?.files?.[0];
-    if (!file) return;
-
-    try {
-      const rawText = await file.text();
-      const parsed = JSON.parse(rawText);
-      const importedState = parsed?.state || parsed;
-      if (!importedState || typeof importedState !== 'object') {
-        throw new Error('暫存檔格式不正確');
-      }
-
-      applyWorkspaceState(importedState);
-      const savedAt = new Date().toISOString();
-      const payload = { savedAt, state: importedState };
-      localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
-      setHasActiveDraft(true);
-      setActiveDraftMeta({
-        savedAt,
-        savedAtText: formatDraftSavedAt(savedAt),
-        year: importedState.year,
-        month: importedState.month
-      });
-      setScreen('schedule');
-      window.alert('匯入工作檔成功，已載入目前工作內容。');
-    } catch (error) {
-      console.error('匯入工作檔失敗', error);
-      window.alert('匯入工作檔失敗，請確認檔案格式是否正確。');
-    } finally {
-      if (event.target) event.target.value = '';
-    }
-  };
-
   const handleImportFiles = async (files) => {
-    const imported = await parseImportedExcelFiles(files, new Date().getFullYear(), {
-      customLeaveCodes,
-      importMode: 'schedule',
-      existingMonthlySchedules: monthlySchedules
-    });
-    if (Array.isArray(imported.unknownCodes) && imported.unknownCodes.length > 0) {
-      window.alert(`偵測到尚未建立的代碼：${imported.unknownCodes.join('、')}\n\n請先到系統設定補上代碼；本次匯入已先保留這些代碼。`);
-    }
+    const imported = await parseImportedExcelFiles(files, new Date().getFullYear());
     setImportedSchedulePayload(imported);
-    setPendingOpenMonthKey(imported.firstMonthKey || '');
-    setLoadLatestOnEnter(false);
-    setScreen('schedule');
-  };
-
-  const handleImportPreScheduleFiles = async (files) => {
-    const imported = await parseImportedExcelFiles(files, new Date().getFullYear(), {
-      customLeaveCodes,
-      importMode: 'preSchedule',
-      existingMonthlySchedules: monthlySchedules,
-      existingImportedMonthStates: preScheduleMonthlySchedules
-    });
-    if (Array.isArray(imported.unknownCodes) && imported.unknownCodes.length > 0) {
-      window.alert(`偵測到尚未建立的代碼：${imported.unknownCodes.join('、')}\n\n請先到系統設定補上代碼；本次匯入已先保留這些代碼。`);
-    }
-    setPreScheduleMonthlySchedules(prev => {
-      const next = { ...(prev || {}) };
-      Object.entries(imported.monthlySchedules || {}).forEach(([monthKey, monthState]) => {
-        next[monthKey] = mergeImportedMonthStates(next[monthKey], monthState);
-      });
-      return next;
-    });
-    setImportedPreSchedulePayload(imported);
     setPendingOpenMonthKey(imported.firstMonthKey || '');
     setLoadLatestOnEnter(false);
     setScreen('schedule');
@@ -6869,14 +3456,6 @@ export default function App() {
     setScreen('schedule');
   };
 
-  const returnToEntry = () => {
-    applyWorkspaceState(createInitialWorkspaceState());
-    setLoadLatestOnEnter(false);
-    setPendingOpenMonthKey('');
-    activeDraftSaveReadyRef.current = false;
-    setScreen('entry');
-  };
-
   const goToLatestHistory = () => {
     setLoadLatestOnEnter(true);
     setPendingOpenMonthKey('');
@@ -6886,10 +3465,7 @@ export default function App() {
   if (screen === 'schedule') {
     return (
       <ScheduleView
-        changeScreen={(target) => {
-          if (target === 'entry') returnToEntry();
-          else setScreen(target);
-        }}
+        changeScreen={setScreen}
         colors={colors}
         setColors={setColors}
         customHolidays={customHolidays}
@@ -6904,8 +3480,6 @@ export default function App() {
         setUiSettings={setUiSettings}
         customLeaveCodes={customLeaveCodes}
         setCustomLeaveCodes={setCustomLeaveCodes}
-        customWorkShifts={customWorkShifts}
-        setCustomWorkShifts={setCustomWorkShifts}
         customColumns={customColumns}
         setCustomColumns={setCustomColumns}
         customColumnValues={customColumnValues}
@@ -6918,10 +3492,6 @@ export default function App() {
         onImportedScheduleApplied={() => setImportedSchedulePayload(null)}
         monthlySchedules={monthlySchedules}
         setMonthlySchedules={setMonthlySchedules}
-        preScheduleMonthlySchedules={preScheduleMonthlySchedules}
-        setPreScheduleMonthlySchedules={setPreScheduleMonthlySchedules}
-        importedPreSchedulePayload={importedPreSchedulePayload}
-        onImportedPreScheduleApplied={() => setImportedPreSchedulePayload(null)}
         pendingOpenMonthKey={pendingOpenMonthKey}
         onPendingOpenHandled={() => setPendingOpenMonthKey('')}
         year={year}
@@ -6932,10 +3502,6 @@ export default function App() {
         setStaffs={setStaffs}
         schedule={schedule}
         setSchedule={setSchedule}
-        onDownloadDraftFile={handleDownloadDraftFile}
-        onImportDraftFileClick={handleImportDraftFileClick}
-        draftImportInputRef={draftImportInputRef}
-        onImportDraftFileChange={handleImportDraftFileChange}
       />
     );
   }
@@ -6943,10 +3509,7 @@ export default function App() {
   if (screen === 'settings') {
     return (
       <SettingsView
-        changeScreen={(target) => {
-          if (target === 'entry') returnToEntry();
-          else setScreen(target);
-        }}
+        changeScreen={setScreen}
         colors={colors}
         setColors={setColors}
         customHolidays={customHolidays}
@@ -6961,13 +3524,10 @@ export default function App() {
         setUiSettings={setUiSettings}
         customLeaveCodes={customLeaveCodes}
         setCustomLeaveCodes={setCustomLeaveCodes}
-        customWorkShifts={customWorkShifts}
-        setCustomWorkShifts={setCustomWorkShifts}
         customColumns={customColumns}
         setCustomColumns={setCustomColumns}
         schedulingRulesText={schedulingRulesText}
         setSchedulingRulesText={setSchedulingRulesText}
-        onSaveSettings={handleSaveSettings}
       />
     );
   }
@@ -6979,8 +3539,7 @@ export default function App() {
         else setScreen(target);
       }}
       goToLatestHistory={goToLatestHistory}
-      onImportScheduleFiles={handleImportFiles}
-      onImportPreScheduleFiles={handleImportPreScheduleFiles}
+      onImportFiles={handleImportFiles}
       hasActiveDraft={hasActiveDraft}
       activeDraftMeta={activeDraftMeta}
       restoreActiveDraft={restoreActiveDraft}
