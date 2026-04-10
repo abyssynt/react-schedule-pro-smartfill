@@ -1366,8 +1366,6 @@ const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
   };
 };
 
-const EMPTY_OBJ = Object.freeze({});
-
 const clampColorChannel = (value) => Math.max(0, Math.min(255, Math.round(value)));
 
 const normalizeHexColor = (hex, fallback = '#000000') => {
@@ -1800,72 +1798,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     () => daysInMonth.filter(d => d.isWeekend || d.isHoliday).length,
     [daysInMonth]
   );
-
-  const mergedShiftCodeSet = useMemo(() => new Set(mergedShiftCodes), [mergedShiftCodes]);
-  const mergedLeaveCodeSet = useMemo(() => new Set(mergedLeaveCodes), [mergedLeaveCodes]);
-
-  const staffStatsMap = useMemo(() => {
-    const nextMap = {};
-    staffs.forEach((staff) => {
-      const stats = {
-        work: 0,
-        holidayLeave: 0,
-        totalLeave: 0,
-        leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
-      };
-      const rowSchedule = schedule[staff.id] || EMPTY_OBJ;
-      daysInMonth.forEach((day) => {
-        const cellData = rowSchedule[day.date];
-        const code = typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-        if (!code) return;
-        if (mergedShiftCodeSet.has(code)) stats.work += 1;
-        const leavePrefix = getCodePrefix(code);
-        if (mergedLeaveCodeSet.has(code) || mergedLeaveCodeSet.has(leavePrefix)) {
-          stats.totalLeave += 1;
-          if (stats.leaveDetails[code] !== undefined) stats.leaveDetails[code] += 1;
-          else if (stats.leaveDetails[leavePrefix] !== undefined) stats.leaveDetails[leavePrefix] += 1;
-          if (day.isWeekend || day.isHoliday) stats.holidayLeave += 1;
-        }
-      });
-      nextMap[staff.id] = stats;
-    });
-    return nextMap;
-  }, [staffs, schedule, daysInMonth, mergedLeaveCodes, mergedShiftCodeSet, mergedLeaveCodeSet]);
-
-  const dailyStatsMap = useMemo(() => {
-    const nextMap = {};
-    daysInMonth.forEach((day) => {
-      const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
-      staffs.forEach((staff) => {
-        const cellData = schedule[staff.id]?.[day.date];
-        const code = typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-        if (!code) return;
-        const shiftGroup = getShiftGroupByCode(code);
-        if (shiftGroup === '白班') stats.D += 1;
-        else if (shiftGroup === '小夜') stats.E += 1;
-        else if (shiftGroup === '大夜') stats.N += 1;
-        else {
-          const leavePrefix = getCodePrefix(code);
-          if (mergedLeaveCodeSet.has(code) || mergedLeaveCodeSet.has(leavePrefix)) stats.totalLeave += 1;
-        }
-      });
-      nextMap[day.date] = stats;
-    });
-    return nextMap;
-  }, [daysInMonth, staffs, schedule, mergedLeaveCodeSet]);
-
-  const requiredCountMap = useMemo(() => {
-    const nextMap = {};
-    daysInMonth.forEach((day) => {
-      const bucket = getRequiredStaffingBucketByDay(day);
-      nextMap[day.date] = {
-        D: Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0),
-        E: Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0),
-        N: Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0),
-      };
-    });
-    return nextMap;
-  }, [daysInMonth, staffingConfig]);
 
 
   useEffect(() => {
@@ -4156,16 +4088,96 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // ==========================================
   // 6. 輔助統計與操作
   // ==========================================
-  const getStaffStats = (staffId) => staffStatsMap[staffId] || {
-    work: 0,
-    holidayLeave: 0,
-    totalLeave: 0,
-    leaveDetails: Object.fromEntries(mergedLeaveCodes.map(l => [l, 0]))
+  const shiftCodeSet = useMemo(() => new Set(mergedShiftCodes), [mergedShiftCodes]);
+  const dayInfoByDate = useMemo(() => new Map(daysInMonth.map((day) => [day.date, day])), [daysInMonth]);
+
+  const staffStatsMap = useMemo(() => {
+    const nextMap = {};
+    staffs.forEach((staff) => {
+      const stats = {
+        work: 0,
+        holidayLeave: 0,
+        totalLeave: 0,
+        leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
+      };
+
+      const mySchedule = schedule[staff.id] || {};
+      daysInMonth.forEach((day) => {
+        const cellData = mySchedule[day.date];
+        const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
+        if (!code) return;
+
+        if (shiftCodeSet.has(code)) stats.work += 1;
+        if (isConfiguredLeaveCode(code)) {
+          stats.totalLeave += 1;
+          const leavePrefix = getCodePrefix(code);
+          if (stats.leaveDetails[leavePrefix] !== undefined) stats.leaveDetails[leavePrefix] += 1;
+          if (day.isWeekend || day.isHoliday) stats.holidayLeave += 1;
+        }
+      });
+
+      nextMap[staff.id] = stats;
+    });
+    return nextMap;
+  }, [staffs, schedule, daysInMonth, mergedLeaveCodes, shiftCodeSet]);
+
+  const dailyStatsMap = useMemo(() => {
+    const nextMap = {};
+    daysInMonth.forEach((day) => {
+      nextMap[day.date] = { D: 0, E: 0, N: 0, totalLeave: 0 };
+    });
+
+    staffs.forEach((staff) => {
+      const mySchedule = schedule[staff.id] || {};
+      daysInMonth.forEach((day) => {
+        const cellData = mySchedule[day.date];
+        const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
+        if (!code) return;
+
+        const stats = nextMap[day.date];
+        if (!stats) return;
+        const shiftGroup = getShiftGroupByCode(code);
+        if (shiftGroup === '白班') stats.D += 1;
+        else if (shiftGroup === '小夜') stats.E += 1;
+        else if (shiftGroup === '大夜') stats.N += 1;
+        else if (isConfiguredLeaveCode(code)) stats.totalLeave += 1;
+      });
+    });
+
+    return nextMap;
+  }, [staffs, schedule, daysInMonth]);
+
+  const requiredCountMap = useMemo(() => {
+    const nextMap = {};
+    daysInMonth.forEach((day) => {
+      const bucket = getRequiredStaffingBucketByDay(day);
+      nextMap[day.date] = {
+        D: Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0),
+        E: Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0),
+        N: Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0)
+      };
+    });
+    return nextMap;
+  }, [daysInMonth, staffingConfig]);
+
+  const getStaffStats = (staffId) => {
+    return staffStatsMap[staffId] || {
+      work: 0,
+      holidayLeave: 0,
+      totalLeave: 0,
+      leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
+    };
   };
 
-  const getDailyStats = (dateStr) => dailyStatsMap[dateStr] || { D: 0, E: 0, N: 0, totalLeave: 0 };
+  const getDailyStats = (dateStr) => {
+    return dailyStatsMap[dateStr] || { D: 0, E: 0, N: 0, totalLeave: 0 };
+  };
 
-  const getRequiredCountForDate = (dateStr, rowKey) => requiredCountMap[dateStr]?.[rowKey] ?? null;
+  const getRequiredCountForDate = (dateStr, rowKey) => {
+    const counts = requiredCountMap[dateStr];
+    if (!counts || !['D', 'E', 'N'].includes(rowKey)) return null;
+    return counts[rowKey];
+  };
 
   const getDemandHighlightStyle = (dateStr, rowKey, actualCount) => {
     if (!['D', 'E', 'N'].includes(rowKey)) return {};
@@ -4875,9 +4887,16 @@ const openSelectedCellFillModal = () => {
   };
 
   const groupedStaffs = useMemo(() => {
-    return SHIFT_GROUPS.map(group => ({
+    const groupedMap = { 白班: [], 小夜: [], 大夜: [] };
+    staffs.forEach((staff) => {
+      const group = staff.group || '白班';
+      if (!groupedMap[group]) groupedMap[group] = [];
+      groupedMap[group].push(staff);
+    });
+
+    return SHIFT_GROUPS.map((group) => ({
       group,
-      staffs: staffs.filter(staff => (staff.group || '白班') === group)
+      staffs: groupedMap[group] || []
     }));
   }, [staffs]);
 
