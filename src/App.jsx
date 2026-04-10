@@ -2646,29 +2646,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return makeCellKey(selectedGridCell.staff.id, selectedGridCell.dateStr);
   }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr]);
 
-  const currentMonthPreScheduleCodeMap = useMemo(() => {
-    const monthState = preScheduleMonthlySchedules?.[currentMonthKey];
-    const monthSchedule = monthState?.scheduleData || monthState?.schedule || {};
-    const byName = new Map();
-    (monthState?.staffs || []).forEach((staff) => {
-      const nameKey = String(staff?.name || '').trim();
-      if (!nameKey) return;
-      byName.set(`${nameKey}__${staff.group || '白班'}`, staff.id);
-      if (!byName.has(nameKey)) byName.set(nameKey, staff.id);
-    });
-    const next = {};
-    (staffs || []).forEach((staff) => {
-      const nameKey = String(staff?.name || '').trim();
-      const matchedId = byName.get(`${nameKey}__${staff.group || '白班'}`) || byName.get(nameKey) || staff.id;
-      const dateMap = monthSchedule?.[matchedId] || {};
-      Object.entries(dateMap).forEach(([dateStr, cell]) => {
-        const code = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
-        if (code) next[makeCellKey(staff.id, dateStr)] = code;
-      });
-    });
-    return next;
-  }, [preScheduleMonthlySchedules, currentMonthKey, staffs]);
-
   const shiftOptionsNodes = useMemo(() => mergedShiftCodes.map(s => <option key={s} value={s}>{s}</option>), [mergedShiftCodes]);
   const leaveOptionsNodes = useMemo(() => mergedLeaveCodes.map(l => <option key={l} value={l}>{l}</option>), [mergedLeaveCodes]);
 
@@ -5530,7 +5507,7 @@ const openSelectedCellFillModal = () => {
                           const cellKey = makeCellKey(staff.id, d.date);
                           const draftValue = cellDrafts[cellKey];
                           const displayValue = draftValue !== undefined ? draftValue : val;
-                          const preScheduleCode = currentMonthPreScheduleCodeMap[cellKey] || '';
+                          const preScheduleCode = getVisiblePreScheduleCode(staff.id, d.date) || '';
                           const hasFormalValue = Boolean(displayValue);
                           const hasSameVisibleCode = hasFormalValue && Boolean(preScheduleCode) && String(displayValue).trim() === String(preScheduleCode).trim();
                           const showPreScheduleAsMain = !hasFormalValue && Boolean(preScheduleCode);
