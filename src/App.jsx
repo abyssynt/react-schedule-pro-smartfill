@@ -2810,6 +2810,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     );
   };
 
+  const filterChangedScheduleEntries = (entries = [], baseSchedule = schedule) => {
+    return (Array.isArray(entries) ? entries : []).filter((entry) => {
+      const currentCell = baseSchedule?.[entry?.staffId]?.[entry?.dateStr];
+      const currentValue = typeof currentCell === 'object' && currentCell !== null ? (currentCell.value || '') : (currentCell || '');
+      const currentSource = typeof currentCell === 'object' && currentCell !== null ? (currentCell.source || 'manual') : (currentValue ? 'manual' : '');
+      const nextValue = String(entry?.value || '');
+      const nextSource = entry?.source || (nextValue ? 'manual' : '');
+      return currentValue !== nextValue || currentSource !== nextSource;
+    });
+  };
+
   const applyValueToCells = (cells, normalized, options = {}) => {
     if (!cells || cells.length === 0) return false;
     const targetCells = Array.isArray(cells) ? cells : [];
@@ -3944,6 +3955,11 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const normalizedTargetShift = RULE_FILL_MAIN_SHIFTS.includes(ruleFillConfig.targetShift) ? ruleFillConfig.targetShift : '';
       const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
       const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
+      const touchedRuleFillCellMap = new Map();
+      const markRuleFillCellTouched = (staffId, dateStr) => {
+        if (!staffId || !dateStr) return;
+        touchedRuleFillCellMap.set(makeCellKey(staffId, dateStr), { staffId, dateStr });
+      };
 
       const getScheduleCode = (snapshot, staffRef, dateStr) => {
         return getContextCellCode(staffRef, dateStr, { snapshot });
@@ -3952,6 +3968,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const setScheduleCode = (snapshot, staffId, dateStr, value, source = 'auto') => {
         if (!snapshot[staffId]) snapshot[staffId] = {};
         snapshot[staffId][dateStr] = value ? { value, source } : null;
+        markRuleFillCellTouched(staffId, dateStr);
       };
 
       const getDemandType = (day) => getRequiredStaffingBucketByDay(day);
@@ -4202,7 +4219,8 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
         }
       }
 
-      const ruleFillChangedEntries = buildEntriesFromSnapshotDiff(mergedSchedule);
+      const touchedRuleFillCells = Array.from(touchedRuleFillCellMap.values());
+      const ruleFillChangedEntries = buildEntriesFromSnapshotDiff(mergedSchedule, { onlyCells: touchedRuleFillCells });
       if (ruleFillChangedEntries.length > 0) {
         applyRuleFillEntries(ruleFillChangedEntries, {
           preserveSelection: true,
@@ -4709,15 +4727,16 @@ const openSelectedCellFillModal = () => {
       });
     });
 
-    if (clearEntries.length === 0) {
+    const changedClearEntries = filterChangedScheduleEntries(clearEntries);
+    if (changedClearEntries.length === 0) {
       setRuleFillFeedback('ℹ️ 指定範圍內沒有可清除的內容');
       return;
     }
 
-    applyRuleFillEntries(clearEntries, {
+    applyRuleFillEntries(changedClearEntries, {
       preserveSelection: true,
-      selectionCells: clearEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
-      activeCell: clearEntries.length > 0 ? { staffId: clearEntries[clearEntries.length - 1].staffId, dateStr: clearEntries[clearEntries.length - 1].dateStr } : null,
+      selectionCells: changedClearEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
+      activeCell: changedClearEntries.length > 0 ? { staffId: changedClearEntries[changedClearEntries.length - 1].staffId, dateStr: changedClearEntries[changedClearEntries.length - 1].dateStr } : null,
       clearAssist: false,
       resetBuffer: true
     });
