@@ -1487,6 +1487,7 @@ const ScheduleGridCell = React.memo(function ScheduleGridCell({
   warningTintColor,
   preScheduleHintBorderColor,
   preScheduleTextColor,
+  preScheduleDisplayTextColor,
   displayValue,
   cellTextColor,
   showPreScheduleAsMain,
@@ -1534,7 +1535,7 @@ const ScheduleGridCell = React.memo(function ScheduleGridCell({
       <div className="relative">
         <div
           className={`w-full ${densityConfig.cellHeightClass} text-center bg-transparent border-none font-bold flex items-center justify-center ${tableFontSizeClass}`}
-          style={{ color: showPreScheduleAsMain ? preScheduleTextColor : (cellTextColor || tableFontColor), pointerEvents: 'none' }}
+          style={{ color: showPreScheduleAsMain ? (preScheduleDisplayTextColor || preScheduleTextColor || tableFontColor) : (cellTextColor || tableFontColor), pointerEvents: 'none' }}
         >
           {showPreScheduleAsMain ? preScheduleCode : displayValue}
         </div>
@@ -2100,6 +2101,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
   };
 
+  const getPreScheduleCellTextColor = (staffOrId, dateStr) => {
+    const cellData = getPreScheduleCellData(staffOrId, dateStr);
+    if (!cellData || typeof cellData !== 'object') return '';
+    return String(cellData.textColor || '').trim();
+  };
+
+  const getEffectiveCellTextColor = (staffOrId, dateStr) => {
+    const formalTextColor = getCellTextColor(staffOrId, dateStr);
+    if (formalTextColor) return formalTextColor;
+    const preScheduleText = getPreScheduleCellTextColor(staffOrId, dateStr);
+    return preScheduleText || '';
+  };
+
   const getVisiblePreScheduleCode = (staffOrId, dateStr) => {
     const code = getPreScheduleCellCode(staffOrId, dateStr);
     return code || '';
@@ -2226,6 +2240,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const formalCode = getCellCode(staffOrId, dateStr) || '';
     const preScheduleCode = getVisiblePreScheduleCode(staffOrId, dateStr) || '';
     const formalTextColor = getCellTextColor(staffOrId, dateStr) || '';
+    const preScheduleCellTextColor = getPreScheduleCellTextColor(staffOrId, dateStr) || '';
     const baseBackgroundColor = dayInfo?.isHoliday
       ? colors.holiday
       : (dayInfo?.isWeekend ? colors.weekend : pageBackgroundColor);
@@ -2237,7 +2252,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       : baseBackgroundColor;
     const textColor = hasFormalValue
       ? (formalTextColor || tableFontColor)
-      : (hasPreSchedule ? preScheduleTextColor : tableFontColor);
+      : (hasPreSchedule ? (preScheduleCellTextColor || preScheduleTextColor) : tableFontColor);
 
     return {
       formalCode,
@@ -2629,13 +2644,17 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const selectedCellTextColor = useMemo(() => {
     if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return '';
-    return getCellTextColor(selectedGridCell.staff.id, selectedGridCell.dateStr);
-  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, schedule, monthlySchedules, year, month]);
+    return getEffectiveCellTextColor(selectedGridCell.staff.id, selectedGridCell.dateStr);
+  }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, schedule, monthlySchedules, preScheduleMonthlySchedules, staffs, year, month]);
 
   const selectedCellHasFormalValue = useMemo(() => {
     if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return false;
     return Boolean(getCellCode(selectedGridCell.staff.id, selectedGridCell.dateStr));
   }, [selectedGridCell?.staff?.id, selectedGridCell?.dateStr, schedule, monthlySchedules, year, month]);
+
+  const selectedCellSupportsTextColor = useMemo(() => {
+    return selectedCellHasFormalValue || selectedCellHasPreSchedule;
+  }, [selectedCellHasFormalValue, selectedCellHasPreSchedule]);
 
   const selectedRangeCellKeySet = useMemo(() => {
     return new Set(selectedRangeCells.map(({ staffId, dateStr }) => makeCellKey(staffId, dateStr)));
@@ -4454,32 +4473,124 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const currentCell = getContextCellData(staffId, dateStr);
     const normalizedValue = typeof currentCell === 'object' && currentCell !== null ? (currentCell.value || '') : (currentCell || '');
     const normalizedSource = typeof currentCell === 'object' && currentCell !== null ? (currentCell.source || 'manual') : 'manual';
+    const preScheduleCode = getVisiblePreScheduleCode(staffId, dateStr);
     const nextColor = String(textColor || '').trim();
 
-    if (!normalizedValue) {
-      showInputAssist('請先在此格填入班別或假別，再設定字色', 'info', 1800);
+    if (!normalizedValue && !preScheduleCode) {
+      showInputAssist('請先在此格填入班別、假別或預班，再設定字色', 'info', 1800);
       return false;
     }
 
-    setSchedule(prev => {
+    if (normalizedValue) {
+      setSchedule(prev => {
+        const next = { ...(prev || {}) };
+        const currentRow = prev?.[staffId];
+        next[staffId] = currentRow && typeof currentRow === 'object' ? { ...currentRow } : {};
+        const existingCell = next[staffId]?.[dateStr];
+        const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
+        next[staffId][dateStr] = {
+          ...existingMeta,
+          value: normalizedValue,
+          source: normalizedSource,
+          ...(nextColor ? { textColor: nextColor } : {})
+        };
+        if (!nextColor) delete next[staffId][dateStr].textColor;
+        return next;
+      });
+
+      setSelectionRangeFromCells([{ staffId, dateStr }], { activeCell: { staffId, dateStr } });
+      return true;
+    }
+
+    let changed = false;
+    setPreScheduleMonthlySchedules((prev) => {
       const next = { ...(prev || {}) };
-      const currentRow = prev?.[staffId];
-      next[staffId] = currentRow && typeof currentRow === 'object' ? { ...currentRow } : {};
-      const existingCell = next[staffId]?.[dateStr];
-      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
-      next[staffId][dateStr] = {
+      const monthKey = String(dateStr).slice(0, 7);
+      const [targetYear, targetMonth] = String(monthKey).split('-').map(Number);
+      const baseMonthState = next[monthKey] || {
+        year: targetYear,
+        month: targetMonth,
+        staffs: normalizeStaffGroup((staffs || []).map((staff) => ({
+          id: staff.id,
+          name: staff.name,
+          group: staff.group || '白班',
+          pregnant: Boolean(staff.pregnant)
+        }))),
+        scheduleData: {},
+        customColumnValues: {},
+        schedulingRulesText: '',
+        importMeta: {
+          sourceType: 'manualPreSchedule',
+          sourceFiles: [],
+          sourceSheets: [],
+          importedAt: new Date().toISOString(),
+          lastUpdatedAt: new Date().toISOString(),
+          importMode: 'preSchedule'
+        }
+      };
+
+      const monthState = {
+        ...baseMonthState,
+        staffs: Array.isArray(baseMonthState.staffs) && baseMonthState.staffs.length > 0
+          ? [...baseMonthState.staffs]
+          : normalizeStaffGroup((staffs || []).map((staff) => ({
+              id: staff.id,
+              name: staff.name,
+              group: staff.group || '白班',
+              pregnant: Boolean(staff.pregnant)
+            })))
+      };
+
+      const monthSchedule = JSON.parse(JSON.stringify(monthState.scheduleData || monthState.schedule || {}));
+      const matchedStaff = resolvePreScheduleMatchedStaff(staffId, monthState)
+        || monthState.staffs.find((staff) => staff.id === staffId)
+        || (() => {
+          const currentStaff = staffs.find((staff) => staff.id === staffId);
+          if (!currentStaff) return null;
+          const clonedStaff = {
+            id: currentStaff.id,
+            name: currentStaff.name,
+            group: currentStaff.group || '白班',
+            pregnant: Boolean(currentStaff.pregnant)
+          };
+          monthState.staffs = [...(monthState.staffs || []), clonedStaff];
+          return clonedStaff;
+        })();
+
+      if (!matchedStaff) return prev;
+
+      if (!monthSchedule[matchedStaff.id]) monthSchedule[matchedStaff.id] = {};
+      const existingCell = monthSchedule[matchedStaff.id]?.[dateStr];
+      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? { ...existingCell } : {};
+      monthSchedule[matchedStaff.id][dateStr] = {
         ...existingMeta,
-        value: normalizedValue,
-        source: normalizedSource,
+        value: preScheduleCode,
+        source: existingMeta.source || 'manual',
         ...(nextColor ? { textColor: nextColor } : {})
       };
-      if (!nextColor) delete next[staffId][dateStr].textColor;
+      if (!nextColor) delete monthSchedule[matchedStaff.id][dateStr].textColor;
+      changed = true;
+
+      next[monthKey] = {
+        ...monthState,
+        year: targetYear,
+        month: targetMonth,
+        scheduleData: monthSchedule,
+        importMeta: {
+          ...(monthState.importMeta || {}),
+          sourceType: monthState.importMeta?.sourceType || 'manualPreSchedule',
+          importMode: 'preSchedule',
+          lastUpdatedAt: new Date().toISOString()
+        }
+      };
       return next;
     });
 
-    setSelectionRangeFromCells([{ staffId, dateStr }], { activeCell: { staffId, dateStr } });
-    // 單格字色更新不顯示提示條
-    return true;
+    if (changed) {
+      setSelectionRangeFromCells([{ staffId, dateStr }], { activeCell: { staffId, dateStr } });
+      return true;
+    }
+    return false;
   };
 
   function getCellCode(staffId, dateStr) {
@@ -5147,7 +5258,7 @@ const openSelectedCellFillModal = () => {
                 <input
                   type="color"
                   value={selectedCellTextColor || tableFontColor}
-                  disabled={!selectedCellHasFormalValue}
+                  disabled={!selectedCellSupportsTextColor}
                   onChange={(e) => {
                     if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return;
                     applyCellTextColor(selectedGridCell.staff.id, selectedGridCell.dateStr, e.target.value);
@@ -5156,14 +5267,14 @@ const openSelectedCellFillModal = () => {
                 />
                 <button
                   type="button"
-                  disabled={!selectedCellHasFormalValue || !selectedCellTextColor}
+                  disabled={!selectedCellSupportsTextColor || !selectedCellTextColor}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     if (!selectedGridCell?.staff?.id || !selectedGridCell?.dateStr) return;
                     applyCellTextColor(selectedGridCell.staff.id, selectedGridCell.dateStr, '');
                   }}
-                  className={`px-2 py-0.5 rounded-md border ${selectedCellHasFormalValue && selectedCellTextColor ? 'border-slate-200 text-slate-600 hover:bg-slate-50' : 'border-slate-200 text-slate-300 cursor-not-allowed'}`}
+                  className={`px-2 py-0.5 rounded-md border ${selectedCellSupportsTextColor && selectedCellTextColor ? 'border-slate-200 text-slate-600 hover:bg-slate-50' : 'border-slate-200 text-slate-300 cursor-not-allowed'}`}
                 >
                   清除
                 </button>
@@ -5552,6 +5663,7 @@ const openSelectedCellFillModal = () => {
                               warningTintColor={warningTintColor}
                               preScheduleHintBorderColor={preScheduleHintBorderColor}
                               preScheduleTextColor={preScheduleTextColor}
+                              preScheduleDisplayTextColor={showPreScheduleAsMain ? (getPreScheduleCellTextColor(staff.id, d.date) || '') : ''}
                               displayValue={displayValue}
                               cellTextColor={cellTextColor}
                               showPreScheduleAsMain={showPreScheduleAsMain}
