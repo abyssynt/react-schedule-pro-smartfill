@@ -86,6 +86,11 @@ import {
 } from './data/calendarData';
 
 import {
+  loadExcelJS,
+  loadSheetJS
+} from './data/runtimeLoaderData';
+
+import {
   parseImportedExcelFiles as parseImportedExcelFilesData
 } from './data/importMonthData';
 
@@ -125,34 +130,6 @@ const SMART_RULES = {
 };
 
 // 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
-const loadExcelJS = () => {
-  return new Promise((resolve) => {
-    if (window.ExcelJS) return resolve(window.ExcelJS);
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
-    script.onload = () => resolve(window.ExcelJS);
-    document.head.appendChild(script);
-  });
-};
-
-const loadSheetJS = () => {
-  return new Promise((resolve, reject) => {
-    if (window.XLSX) return resolve(window.XLSX);
-    const existing = document.querySelector('script[data-sheetjs-loader="true"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve(window.XLSX), { once: true });
-      existing.addEventListener('error', () => reject(new Error('SheetJS 載入失敗')), { once: true });
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-    script.dataset.sheetjsLoader = 'true';
-    script.onload = () => resolve(window.XLSX);
-    script.onerror = () => reject(new Error('SheetJS 載入失敗'));
-    document.head.appendChild(script);
-  });
-};
-
 const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
 
 const parseClipboardGrid = (text = '') => {
@@ -271,18 +248,6 @@ const getRequiredStaffingBucketByDay = (day) => {
   return 'weekday';
 };
 
-
-const normalizeStoredScheduleCellValue = (rawValue = '', customLeaveCodes = []) => {
-  const trimmedValue = String(rawValue ?? '').trim();
-  if (!trimmedValue) return '';
-  const exactKnownCode = Array.from(new Set([...(getAllShiftCodes() || []), ...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).find((code) => {
-    return normalizeCodeComparisonCompact(code) === normalizeCodeComparisonCompact(trimmedValue)
-      || normalizeCodeComparisonCompactNoHyphen(code) === normalizeCodeComparisonCompactNoHyphen(trimmedValue);
-  });
-  if (exactKnownCode) return exactKnownCode;
-  const { normalized, isValid } = normalizeManualShiftCode(trimmedValue, customLeaveCodes || [], getAllShiftCodes);
-  return isValid ? normalized : normalizeImportedHalfWidth(trimmedValue);
-};
 
 const ScheduleGridCell = React.memo(function ScheduleGridCell({
   dayInfo,
