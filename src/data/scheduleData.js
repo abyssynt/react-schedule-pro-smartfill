@@ -1,8 +1,3 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App />)
 export const DICT = {
   SHIFTS: ['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16'],
   LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
@@ -11,9 +6,9 @@ export const DICT = {
 export const SHIFT_GROUPS = ['白班', '小夜', '大夜'];
 
 export const GROUP_TO_DEMAND_KEY = {
-  '白班': 'white',
-  '小夜': 'evening',
-  '大夜': 'night'
+  白班: 'white',
+  小夜: 'evening',
+  大夜: 'night'
 };
 
 export const DEFAULT_REQUIRED_STAFFING = {
@@ -23,9 +18,9 @@ export const DEFAULT_REQUIRED_STAFFING = {
 };
 
 export const DEFAULT_SHIFT_BY_GROUP = {
-  '白班': 'D',
-  '小夜': 'E',
-  '大夜': 'N'
+  白班: 'D',
+  小夜: 'E',
+  大夜: 'N'
 };
 
 export const RULE_FILL_MAIN_SHIFTS = ['D', 'E', 'N'];
