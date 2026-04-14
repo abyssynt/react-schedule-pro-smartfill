@@ -8,21 +8,14 @@ import {
   Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2, GripVertical, AlertTriangle
 } from 'lucide-react';
 
-import {
-  DICT,
-  SHIFT_GROUPS,
-  GROUP_TO_DEMAND_KEY,
-  DEFAULT_REQUIRED_STAFFING,
-  DEFAULT_SHIFT_BY_GROUP,
-  RULE_FILL_MAIN_SHIFTS,
-  HOSPITAL_LEVEL_LABELS,
-  HOSPITAL_RATIO_HINTS,
-  STORAGE_KEYS.HISTORYS
-} from './data/scheduleData';
-
 // ==========================================
 // 1. 系統代碼字典
 // ==========================================
+const DICT = {
+  SHIFTS: ['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16'],
+  LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
+};
+
 let CUSTOM_SHIFT_DEFS = [];
 const getCustomShiftCodes = () => CUSTOM_SHIFT_DEFS.map((item) => String(item?.code || '').trim()).filter(Boolean);
 const getAllShiftCodes = () => Array.from(new Set([...(DICT.SHIFTS || []), ...getCustomShiftCodes()]));
@@ -54,6 +47,8 @@ const SMART_RULES = {
     sameGroup: 1
   }
 };
+
+const SHIFT_GROUPS = ['白班', '小夜', '大夜'];
 
 const ANNOUNCED_CALENDAR_OVERRIDES = {
   2024: {
@@ -276,7 +271,7 @@ const getSystemHolidayCalendar = (year, options = {}) => {
 
 const readSchedulingRulesTextFromLocalSettings = () => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.HISTORYS.LOCAL_SETTINGS);
+    const stored = localStorage.getItem(LOCAL_SETTINGS_KEY);
     if (!stored) return '';
     const parsed = JSON.parse(stored);
     return typeof parsed?.schedulingRulesText === 'string' ? parsed.schedulingRulesText : '';
@@ -285,6 +280,10 @@ const readSchedulingRulesTextFromLocalSettings = () => {
     return '';
   }
 };
+
+const STORAGE_KEY = 'schedule_app_history';
+const ACTIVE_DRAFT_KEY = 'schedule_app_active_draft';
+const LOCAL_SETTINGS_KEY = 'schedule_app_local_settings';
 
 // 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
 const loadExcelJS = () => {
@@ -1062,6 +1061,18 @@ const getShiftGroupByCode = (code = '') => {
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
 const isShiftCode = (code = '') => getAllShiftCodes().includes(code);
 
+const GROUP_TO_DEMAND_KEY = {
+  '白班': 'white',
+  '小夜': 'evening',
+  '大夜': 'night'
+};
+
+const DEFAULT_REQUIRED_STAFFING = {
+  weekday: { white: 6, evening: 3, night: 2 },
+  saturday: { white: 4, evening: 2, night: 2 },
+  sunday: { white: 4, evening: 2, night: 2 }
+};
+
 const normalizeRequiredStaffingConfig = (requiredStaffing = {}) => {
   const holidayFallback = requiredStaffing?.holiday || {};
   return {
@@ -1091,6 +1102,26 @@ const getRequiredStaffingBucketByDay = (day) => {
   if (weekDay === 6) return 'saturday';
   if (weekDay === 0) return 'sunday';
   return 'weekday';
+};
+
+const DEFAULT_SHIFT_BY_GROUP = {
+  '白班': 'D',
+  '小夜': 'E',
+  '大夜': 'N'
+};
+
+const RULE_FILL_MAIN_SHIFTS = ['D', 'E', 'N'];
+
+const HOSPITAL_LEVEL_LABELS = {
+  medical: '醫學中心',
+  regional: '區域醫院',
+  local: '地區醫院'
+};
+
+const HOSPITAL_RATIO_HINTS = {
+  medical: { white: '1:6', evening: '1:9', night: '1:11' },
+  regional: { white: '1:7', evening: '1:11', night: '1:13' },
+  local: { white: '1:10', evening: '1:13', night: '1:15' }
 };
 
 
@@ -1704,7 +1735,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // 3. 初始載入與自動帶入
   // ==========================================
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEYS.HISTORY);
+    const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -1720,7 +1751,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   useEffect(() => {
     if (!loadLatestOnEnter) return;
 
-    const stored = localStorage.getItem(STORAGE_KEYS.HISTORY);
+    const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
       onLatestLoaded?.();
       return;
@@ -4304,7 +4335,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     setHistoryList(prev => {
       const updated = [newRecord, ...prev].slice(0, 10);
-      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(updated));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
   };
@@ -4341,7 +4372,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const clearHistory = () => {
     if (window.confirm("確定要清空所有本機暫存紀錄嗎？")) {
-      localStorage.removeItem(STORAGE_KEYS.HISTORY);
+      localStorage.removeItem(STORAGE_KEY);
       setHistoryList([]);
     }
   };
@@ -6745,7 +6776,7 @@ export default function App() {
   const readLocalSettingsPayload = () => {
     const defaults = createDefaultSettingsState();
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.HISTORYS.LOCAL_SETTINGS);
+      const stored = localStorage.getItem(LOCAL_SETTINGS_KEY);
       if (!stored) return defaults;
       const parsed = JSON.parse(stored);
       return {
@@ -6792,7 +6823,7 @@ export default function App() {
 
   const saveLocalSettingsPayload = () => {
     try {
-      localStorage.setItem(STORAGE_KEYS.HISTORYS.LOCAL_SETTINGS, JSON.stringify({
+      localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify({
         savedAt: new Date().toISOString(),
         ...buildLocalSettingsPayload()
       }));
@@ -6871,7 +6902,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      const storedDraft = localStorage.getItem(STORAGE_KEYS.HISTORYS.ACTIVE_DRAFT);
+      const storedDraft = localStorage.getItem(ACTIVE_DRAFT_KEY);
       if (!storedDraft) {
         activeDraftHydratedRef.current = true;
         return;
@@ -6926,7 +6957,7 @@ export default function App() {
     };
 
     try {
-      localStorage.setItem(STORAGE_KEYS.HISTORYS.ACTIVE_DRAFT, JSON.stringify(payload));
+      localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
       setHasActiveDraft(true);
       setActiveDraftMeta({ savedAt, savedAtText: formatDraftSavedAt(savedAt), year, month });
     } catch (error) {
@@ -6936,7 +6967,7 @@ export default function App() {
 
   const restoreActiveDraft = () => {
     try {
-      const storedDraft = localStorage.getItem(STORAGE_KEYS.HISTORYS.ACTIVE_DRAFT);
+      const storedDraft = localStorage.getItem(ACTIVE_DRAFT_KEY);
       if (!storedDraft) return;
       const parsed = JSON.parse(storedDraft);
       if (!parsed?.state) return;
@@ -6957,7 +6988,7 @@ export default function App() {
 
   const discardActiveDraft = () => {
     if (!window.confirm('確定要捨棄上次未完成進度嗎？')) return;
-    localStorage.removeItem(STORAGE_KEYS.HISTORYS.ACTIVE_DRAFT);
+    localStorage.removeItem(ACTIVE_DRAFT_KEY);
     setHasActiveDraft(false);
     setActiveDraftMeta(null);
   };
@@ -7041,7 +7072,7 @@ export default function App() {
       applyWorkspaceState(importedState);
       const savedAt = new Date().toISOString();
       const payload = { savedAt, state: importedState };
-      localStorage.setItem(STORAGE_KEYS.HISTORYS.ACTIVE_DRAFT, JSON.stringify(payload));
+      localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
       setHasActiveDraft(true);
       setActiveDraftMeta({
         savedAt,
