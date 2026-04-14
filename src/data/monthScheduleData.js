@@ -43,3 +43,184 @@ export const createBlankMonthState = (targetYear, targetMonth) => {
     schedulingRulesText: ''
   };
 };
+
+export const buildExistingStaffGroupLookup = (monthlySchedules = {}) => {
+  const byMonth = {};
+  const fallback = {};
+
+  Object.entries(monthlySchedules || {}).forEach(([monthKey, monthState]) => {
+    const monthLookup = {};
+    const monthStaffs = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
+    monthStaffs.forEach((staff) => {
+      const nameKey = String(staff?.name || '').trim();
+      const group = staff?.group || '';
+      if (!nameKey || !group) return;
+      if (!monthLookup[nameKey]) monthLookup[nameKey] = group;
+      if (!fallback[nameKey]) fallback[nameKey] = group;
+    });
+    byMonth[monthKey] = monthLookup;
+  });
+
+  return { byMonth, fallback };
+};
+
+export const mergeImportedMonthStates = (baseState = null, incomingState = null) => {
+  if (!baseState) return incomingState;
+  if (!incomingState) return baseState;
+
+  const mergedStaffs = [];
+  const mergedSchedule = {};
+  const staffKeyToId = new Map();
+  const signatureToKey = new Map();
+
+  const registerStaffs = (monthState, priority = 'base') => {
+    const staffList = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
+    const scheduleData = monthState?.scheduleData || monthState?.schedule || {};
+
+    staffList.forEach((staff) => {
+      const name = String(staff?.name || '').trim();
+      const group = staff?.group || '白班';
+      if (!name) return;
+      const signature = `${name}__${group}`;
+      const fallbackSignature = `${name}__*`;
+      const matchedSignature = signatureToKey.has(signature)
+        ? signature
+        : (signatureToKey.has(fallbackSignature) ? signatureToKey.get(fallbackSignature) : null);
+
+      const staffKey = matchedSignature || signature;
+      let existingId = staffKeyToId.get(staffKey);
+
+      if (!existingId) {
+        existingId = staff.id || `${priority}_${mergedStaffs.length + 1}`;
+        staffKeyToId.set(staffKey, existingId);
+        signatureToKey.set(signature, staffKey);
+        signatureToKey.set(fallbackSignature, staffKey);
+        mergedStaffs.push({
+          ...staff,
+          id: existingId,
+          name,
+          group
+        });
+        mergedSchedule[existingId] = { ...(scheduleData?.[staff.id] || {}) };
+        return;
+      }
+
+      const existingIndex = mergedStaffs.findIndex((item) => item.id === existingId);
+      if (existingIndex !== -1 && priority === 'incoming') {
+        mergedStaffs[existingIndex] = {
+          ...mergedStaffs[existingIndex],
+          ...staff,
+          id: existingId,
+          name,
+          group
+        };
+      }
+
+      mergedSchedule[existingId] = {
+        ...(mergedSchedule[existingId] || {}),
+        ...(scheduleData?.[staff.id] || {})
+      };
+    });
+  };
+
+  registerStaffs(baseState, 'base');
+  registerStaffs(incomingState, 'incoming');
+
+  const baseImportMeta = baseState?.importMeta || {};
+  const incomingImportMeta = incomingState?.importMeta || {};
+
+  return {
+    ...baseState,
+    ...incomingState,
+    staffs: mergedStaffs,
+    scheduleData: mergedSchedule,
+    importMeta: {
+      ...baseImportMeta,
+      ...incomingImportMeta,
+      sourceType: incomingImportMeta.sourceType || baseImportMeta.sourceType || 'preScheduleExcel',
+      sourceFiles: Array.from(new Set([...(baseImportMeta.sourceFiles || []), ...(incomingImportMeta.sourceFiles || [])])),
+      sourceSheets: Array.from(new Set([...(baseImportMeta.sourceSheets || []), ...(incomingImportMeta.sourceSheets || [])])),
+      importedAt: baseImportMeta.importedAt || incomingImportMeta.importedAt || new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString()
+    },
+    warnings: [...(baseState?.warnings || []), ...(incomingState?.warnings || [])]
+  };
+};
+
+const normalizeStoredScheduleCellValue = (rawValue = '', customLeaveCodes = [], helpers = {}) => {
+  const {
+    DICT,
+    getAllShiftCodes,
+    normalizeManualShiftCode,
+    normalizeImportedHalfWidth
+  } = helpers;
+
+  const trimmedValue = String(rawValue ?? '').trim();
+  if (!trimmedValue) return '';
+
+  const allShiftCodes = typeof getAllShiftCodes === 'function' ? getAllShiftCodes() : [];
+  const leaveCodes = Array.isArray(DICT?.LEAVES) ? DICT.LEAVES : [];
+  const exactKnownCode = Array.from(new Set([...(allShiftCodes || []), ...leaveCodes, ...(customLeaveCodes || [])])).find((code) => {
+    const normalizedCode = String(code || '').trim().replace(/\s+/g, '');
+    const normalizedValue = String(trimmedValue || '').trim().replace(/\s+/g, '');
+    return normalizedCode === normalizedValue;
+  });
+  if (exactKnownCode) return exactKnownCode;
+
+  if (typeof normalizeManualShiftCode === 'function') {
+    const { normalized, isValid } = normalizeManualShiftCode(trimmedValue, customLeaveCodes || []);
+    if (isValid) return normalized;
+  }
+
+  return typeof normalizeImportedHalfWidth === 'function'
+    ? normalizeImportedHalfWidth(trimmedValue)
+    : trimmedValue;
+};
+
+export const reconcileScheduleDataMap = (scheduleData = {}, customLeaveCodes = [], helpers = {}) => {
+  const nextScheduleData = {};
+  Object.entries(scheduleData || {}).forEach(([staffId, dateMap]) => {
+    if (!dateMap || typeof dateMap !== 'object') {
+      nextScheduleData[staffId] = {};
+      return;
+    }
+    nextScheduleData[staffId] = {};
+    Object.entries(dateMap || {}).forEach(([dateStr, cell]) => {
+      if (!cell) {
+        nextScheduleData[staffId][dateStr] = null;
+        return;
+      }
+      const rawValue = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
+      const normalizedValue = normalizeStoredScheduleCellValue(rawValue, customLeaveCodes, helpers);
+      if (!normalizedValue) {
+        nextScheduleData[staffId][dateStr] = null;
+        return;
+      }
+
+      const allShiftCodes = typeof helpers.getAllShiftCodes === 'function' ? helpers.getAllShiftCodes() : [];
+      const leaveCodes = Array.isArray(helpers.DICT?.LEAVES) ? helpers.DICT.LEAVES : [];
+      const isKnownCode = allShiftCodes.includes(normalizedValue) || leaveCodes.includes(normalizedValue) || (customLeaveCodes || []).includes(normalizedValue);
+
+      const existingMeta = typeof cell === 'object' && cell !== null ? { ...cell } : {};
+      delete existingMeta.value;
+      delete existingMeta.isUnknownCode;
+      nextScheduleData[staffId][dateStr] = {
+        ...existingMeta,
+        value: normalizedValue,
+        ...(isKnownCode ? {} : { isUnknownCode: true })
+      };
+    });
+  });
+  return nextScheduleData;
+};
+
+export const reconcileMonthStateCollections = (collection = {}, customLeaveCodes = [], helpers = {}) => {
+  const nextCollection = {};
+  Object.entries(collection || {}).forEach(([monthKey, monthState]) => {
+    nextCollection[monthKey] = {
+      ...(monthState || {}),
+      scheduleData: reconcileScheduleDataMap(monthState?.scheduleData || monthState?.schedule || {}, customLeaveCodes, helpers)
+    };
+  });
+  return nextCollection;
+};
