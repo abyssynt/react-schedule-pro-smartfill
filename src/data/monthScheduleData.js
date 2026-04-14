@@ -224,3 +224,42 @@ export const reconcileMonthStateCollections = (collection = {}, customLeaveCodes
   });
   return nextCollection;
 };
+
+
+export const createBlankScheduleForStaffs = (staffList = []) => {
+  return (Array.isArray(staffList) ? staffList : []).reduce((acc, staff) => {
+    if (!staff?.id) return acc;
+    acc[staff.id] = {};
+    return acc;
+  }, {});
+};
+
+export const getMonthScheduleData = (monthState = {}, monthKey = '') => {
+  const directScheduleData = monthState?.scheduleData;
+  if (directScheduleData && typeof directScheduleData === 'object') return directScheduleData;
+
+  const legacyScheduleByDay = monthState?.scheduleByDay || {};
+  if (!monthKey) return legacyScheduleByDay;
+
+  return Object.fromEntries(
+    Object.entries(legacyScheduleByDay).map(([staffId, dayMap]) => [
+      staffId,
+      Object.fromEntries(
+        Object.entries(dayMap || {}).map(([day, cell]) => {
+          const dateKey = `${monthKey}-${String(Number(day)).padStart(2, '0')}`;
+          return [dateKey, cell];
+        })
+      )
+    ])
+  );
+};
+
+export const resolveRulesTextCandidates = (...candidates) => {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim() !== '') return candidate;
+  }
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') return candidate;
+  }
+  return '';
+};
