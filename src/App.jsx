@@ -28,7 +28,10 @@ import {
   buildExistingStaffGroupLookup,
   mergeImportedMonthStates,
   reconcileScheduleDataMap,
-  reconcileMonthStateCollections
+  reconcileMonthStateCollections,
+  createBlankScheduleForStaffs,
+  getMonthScheduleData,
+  resolveRulesTextCandidates
 } from './data/monthScheduleData';
 
 // ==========================================
@@ -1731,61 +1734,34 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
   }, [importRuleViolations, year, month, staffs, schedule, daysInMonth]);
 
-  const createBlankScheduleForStaffs = (staffList = []) => {
-    return staffList.reduce((acc, staff) => {
-      acc[staff.id] = {};
-      return acc;
-    }, {});
-  };
-
   const loadMonthState = (targetYear, targetMonth, schedulesSource = monthlySchedules) => {
     const monthKey = buildMonthKey(targetYear, targetMonth);
     const monthData = schedulesSource?.[monthKey];
     const preMonthData = preScheduleMonthlySchedules?.[monthKey];
     const currentRulesText = typeof schedulingRulesText === 'string' ? schedulingRulesText : '';
     const savedLocalRulesText = readSchedulingRulesTextFromLocalSettings();
-    const resolveRulesText = (...candidates) => {
-      for (const candidate of candidates) {
-        if (typeof candidate === 'string' && candidate.trim() !== '') return candidate;
-      }
-      for (const candidate of candidates) {
-        if (typeof candidate === 'string') return candidate;
-      }
-      return '';
-    };
     monthLoadSkipRef.current = true;
 
     if (monthData) {
       const normalizedMonthStaffs = normalizeStaffGroup(monthData.staffs || []);
-      const legacyScheduleByDay = monthData.scheduleByDay || {};
-      const rebuiltScheduleData = monthData.scheduleData || Object.fromEntries(
-        Object.entries(legacyScheduleByDay).map(([staffId, dayMap]) => [
-          staffId,
-          Object.fromEntries(
-            Object.entries(dayMap || {}).map(([day, cell]) => {
-              const dateKey = `${monthKey}-${String(Number(day)).padStart(2, '0')}`;
-              return [dateKey, cell];
-            })
-          )
-        ])
-      );
+      const rebuiltScheduleData = getMonthScheduleData(monthData, monthKey);
 
       setStaffs(normalizedMonthStaffs);
       setSchedule(rebuiltScheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
       setCustomColumnValues(monthData.customColumnValues || {});
-      setSchedulingRulesText(resolveRulesText(monthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
+      setSchedulingRulesText(resolveRulesTextCandidates(monthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
     } else if (preMonthData) {
       const normalizedPreMonthStaffs = normalizeStaffGroup(preMonthData.staffs || []);
       setStaffs(normalizedPreMonthStaffs);
       setSchedule(createBlankScheduleForStaffs(normalizedPreMonthStaffs));
       setCustomColumnValues(preMonthData.customColumnValues || {});
-      setSchedulingRulesText(resolveRulesText(preMonthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
+      setSchedulingRulesText(resolveRulesTextCandidates(preMonthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
     } else {
       const blankMonthState = createBlankMonthState(targetYear, targetMonth);
       setStaffs(blankMonthState.staffs);
       setSchedule(blankMonthState.schedule);
       setCustomColumnValues(blankMonthState.customColumnValues);
-      setSchedulingRulesText(resolveRulesText(currentRulesText, savedLocalRulesText, blankMonthState.schedulingRulesText));
+      setSchedulingRulesText(resolveRulesTextCandidates(currentRulesText, savedLocalRulesText, blankMonthState.schedulingRulesText));
     }
 
     setSelectedGridCell(null);
