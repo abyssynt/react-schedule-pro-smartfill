@@ -91,6 +91,15 @@ import {
 } from './data/runtimeLoaderData';
 
 import {
+  makeCellKey,
+  parseClipboardGrid,
+  getSelectionGroupStaffs,
+  getRectFromSelection,
+  expandSelectionCells,
+  isCellInSelectionRect
+} from './data/gridSelectionData';
+
+import {
   parseImportedExcelFiles as parseImportedExcelFilesData
 } from './data/importMonthData';
 
