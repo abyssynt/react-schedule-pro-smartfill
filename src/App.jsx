@@ -34,6 +34,20 @@ import {
   resolveRulesTextCandidates
 } from './data/monthScheduleData';
 
+import {
+  normalizeImportedHalfWidth,
+  getImportedRawNumberedLeaveValue,
+  normalizeImportedShiftCode,
+  isConfiguredImportedLeaveCode,
+  normalizeCodeComparisonValue,
+  normalizeCodeComparisonCompact,
+  normalizeCodeComparisonCompactNoHyphen,
+  isBuiltInCode,
+  normalizeManualShiftCode,
+  getNormalizedManualCodeCandidates,
+  isPotentialManualShiftPrefix
+} from './data/importCodeData';
+
 // ==========================================
 // 1. 系統代碼字典
 // ==========================================
@@ -329,176 +343,6 @@ const loadSheetJS = () => {
   });
 };
 
-const normalizeImportedHalfWidth = (input = '') => String(input ?? '')
-  .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
-  .replace(/　/g, ' ')
-  .trim();
-
-const getImportedRawNumberedLeaveValue = (rawValue = '') => {
-  const normalized = normalizeImportedHalfWidth(rawValue).replace(/\s+/g, '');
-  const match = normalized.match(/^(例|休)([1-4])$/);
-  if (!match) return '';
-  return `${match[1]}${match[2]}`;
-};
-
-const normalizeImportedShiftCode = (rawValue = '') => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) return '';
-
-  const normalizedWhitespace = normalizeImportedHalfWidth(value).replace(/\s+/g, '');
-  const lower = normalizedWhitespace.toLowerCase();
-  const numberedLeaveValue = getImportedRawNumberedLeaveValue(normalizedWhitespace);
-  if (numberedLeaveValue) return numberedLeaveValue.startsWith('例') ? '例' : '休';
-
-  const directMap = {
-    d: 'D',
-    e: 'E',
-    n: 'N',
-    off: 'off',
-    of: 'off',
-    am: 'AM',
-    pm: 'PM',
-    '8-12': '8-12',
-    '12-16': '12-16',
-    '白8-8': '白8-8',
-    '夜8-8': '夜8-8'
-  };
-
-  if (directMap[lower]) return directMap[lower];
-  if (DICT.LEAVES.includes(normalizedWhitespace) || getAllShiftCodes().includes(normalizedWhitespace)) return normalizedWhitespace;
-  return normalizeImportedHalfWidth(value);
-};
-
-const isConfiguredImportedLeaveCode = (code = '', customLeaveCodes = []) => {
-  const mergedLeaveCodes = Array.from(new Set([...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).filter(Boolean);
-  const prefix = getCodePrefix(code);
-  return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
-};
-
-const normalizeCodeComparisonValue = (input = '') => normalizeImportedHalfWidth(input).trim().replace(/\s+/g, '');
-const normalizeCodeComparisonCompact = (input = '') => normalizeCodeComparisonValue(input).replace(/[－—–~～_]/g, '-');
-const normalizeCodeComparisonCompactNoHyphen = (input = '') => normalizeCodeComparisonCompact(input).replace(/-/g, '');
-const isBuiltInCode = (code = '') => DICT.SHIFTS.includes(code) || DICT.LEAVES.includes(code);
-
-
-const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) return { normalized: '', isValid: true };
-
-  const normalizedBase = normalizeImportedHalfWidth(value).trim();
-  const collapsed = normalizeCodeComparisonValue(normalizedBase);
-  const lower = collapsed.toLowerCase();
-  const compact = lower.replace(/[－—–~～_]/g, '-');
-  const compactNoHyphen = compact.replace(/-/g, '');
-  const exactCompact = normalizeCodeComparisonCompact(normalizedBase);
-  const exactCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(normalizedBase);
-  const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
-
-  const exactAllowed = allowedCodes.find((code) => {
-    const codeCompact = normalizeCodeComparisonCompact(code);
-    const codeCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(code);
-    return codeCompact === exactCompact || codeCompactNoHyphen === exactCompactNoHyphen;
-  });
-  if (exactAllowed) return { normalized: exactAllowed, isValid: true };
-
-  const directMap = {
-    d: 'D',
-    e: 'E',
-    n: 'N',
-    off: 'off',
-    of: 'off',
-    o: 'off',
-    am: 'AM',
-    pm: 'PM',
-    a: 'AM',
-    p: 'PM',
-    '8-12': '8-12',
-    '812': '8-12',
-    '08-12': '8-12',
-    '0812': '8-12',
-    '12-16': '12-16',
-    '1216': '12-16',
-    '白8-8': '白8-8',
-    '白88': '白8-8',
-    '白8-08': '白8-8',
-    '白8to8': '白8-8',
-    '夜8-8': '夜8-8',
-    '夜88': '夜8-8',
-    '夜8to8': '夜8-8'
-  };
-
-  const directCandidate = directMap[compact] || directMap[compactNoHyphen] || directMap[lower];
-  if (directCandidate) return { normalized: directCandidate, isValid: allowedCodes.includes(directCandidate) };
-
-  const directAllowed = allowedCodes.find((code) => {
-    if (!isBuiltInCode(code)) return false;
-    const codeLower = normalizeCodeComparisonValue(code).toLowerCase();
-    const codeCompact = codeLower.replace(/[－—–~～_]/g, '-');
-    const codeCompactNoHyphen = codeCompact.replace(/-/g, '');
-    return codeLower === lower || codeCompact === compact || codeCompactNoHyphen === compactNoHyphen;
-  });
-  if (directAllowed) return { normalized: directAllowed, isValid: true };
-
-  return { normalized: normalizedBase, isValid: false };
-};
-
-const getNormalizedManualCodeCandidates = (rawValue = '', allowedLeaveCodes = []) => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) return [];
-
-  const normalizedBase = normalizeImportedHalfWidth(value).trim();
-  const collapsed = normalizeCodeComparisonValue(normalizedBase);
-  const lower = collapsed.toLowerCase();
-  const compact = lower.replace(/[－—–~～_]/g, '-');
-  const compactNoHyphen = compact.replace(/-/g, '');
-  const aliases = new Set([lower, compact, compactNoHyphen]);
-  const exactCompact = normalizeCodeComparisonCompact(normalizedBase);
-  const exactCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(normalizedBase);
-  const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
-
-  const expandedAliases = new Set(aliases);
-  if (aliases.has('o')) {
-    expandedAliases.add('of');
-    expandedAliases.add('off');
-  }
-  if (aliases.has('of')) expandedAliases.add('off');
-  if (aliases.has('a')) expandedAliases.add('am');
-  if (aliases.has('p')) expandedAliases.add('pm');
-  if (aliases.has('8')) {
-    expandedAliases.add('8-12');
-    expandedAliases.add('812');
-  }
-  if (aliases.has('12')) {
-    expandedAliases.add('12-16');
-    expandedAliases.add('1216');
-  }
-  if (aliases.has('白8')) {
-    expandedAliases.add('白8-8');
-    expandedAliases.add('白88');
-  }
-  if (aliases.has('夜8')) {
-    expandedAliases.add('夜8-8');
-    expandedAliases.add('夜88');
-  }
-
-  return allowedCodes.filter((code) => {
-    const codeCompact = normalizeCodeComparisonCompact(code);
-    const codeCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(code);
-    if (!isBuiltInCode(code)) {
-      return codeCompact.startsWith(exactCompact) || codeCompactNoHyphen.startsWith(exactCompactNoHyphen);
-    }
-    const codeLower = normalizeCodeComparisonValue(code).toLowerCase();
-    const codeLowerCompact = codeLower.replace(/[－—–~～_]/g, '-');
-    const codeLowerCompactNoHyphen = codeLowerCompact.replace(/-/g, '');
-    return Array.from(expandedAliases).some((alias) => codeLower.startsWith(alias) || codeLowerCompact.startsWith(alias) || codeLowerCompactNoHyphen.startsWith(alias));
-  });
-};
-
-const isPotentialManualShiftPrefix = (rawValue = '', allowedLeaveCodes = []) => {
-  if (!String(rawValue ?? '').trim()) return true;
-  return getNormalizedManualCodeCandidates(rawValue, allowedLeaveCodes).length > 0;
-};
-
 const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
 
 const parseClipboardGrid = (text = '') => {
@@ -727,7 +571,7 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       const rawValue = String(row[colNumber] ?? '').trim();
       if (!rawValue) return;
 
-      const normalizedCode = normalizeImportedShiftCode(rawValue);
+      const normalizedCode = normalizeImportedShiftCode(rawValue, getAllShiftCodes);
       const rawImportedValue = getImportedRawNumberedLeaveValue(rawValue);
       const isKnownCode = knownCodes.has(normalizedCode);
 
@@ -747,8 +591,8 @@ const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, custo
       if (!cell) return '';
       return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
     }).filter(Boolean);
-    const hasShiftCode = importedCodes.some(code => !isConfiguredImportedLeaveCode(code, customLeaveCodes));
-    const hasLeaveCode = importedCodes.some(code => isConfiguredImportedLeaveCode(code, customLeaveCodes));
+    const hasShiftCode = importedCodes.some(code => !isConfiguredImportedLeaveCode(code, customLeaveCodes, getCodePrefix));
+    const hasLeaveCode = importedCodes.some(code => isConfiguredImportedLeaveCode(code, customLeaveCodes, getCodePrefix));
 
     let normalizedGroup = '';
     if (rawGroup) {
@@ -1267,7 +1111,7 @@ const normalizeStoredScheduleCellValue = (rawValue = '', customLeaveCodes = []) 
       || normalizeCodeComparisonCompactNoHyphen(code) === normalizeCodeComparisonCompactNoHyphen(trimmedValue);
   });
   if (exactKnownCode) return exactKnownCode;
-  const { normalized, isValid } = normalizeManualShiftCode(trimmedValue, customLeaveCodes || []);
+  const { normalized, isValid } = normalizeManualShiftCode(trimmedValue, customLeaveCodes || [], getAllShiftCodes);
   return isValid ? normalized : normalizeImportedHalfWidth(trimmedValue);
 };
 
@@ -2646,7 +2490,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       };
     }
 
-    const { normalized, isValid } = normalizeManualShiftCode(raw, [...mergedLeaveCodes, ...mergedShiftCodes]);
+    const { normalized, isValid } = normalizeManualShiftCode(raw, [...mergedLeaveCodes, ...mergedShiftCodes], getAllShiftCodes);
     if (!isValid) return { normalized: '', isValid: false };
     return { normalized, isValid: true };
   };
@@ -2719,7 +2563,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const isPotentialPreSchedulePrefix = (rawValue = '') => {
     if (!String(rawValue ?? '').trim()) return true;
-    return getNormalizedManualCodeCandidates(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]).length > 0;
+    return getNormalizedManualCodeCandidates(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes], getAllShiftCodes).length > 0;
   };
 
   const clearSelectedPreScheduleRangeByKeyboard = () => {
@@ -2773,7 +2617,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const applySelectionValue = (cells = [], rawValue = '', options = {}) => {
     if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
-    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
+    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes], getAllShiftCodes);
     if (!isValid) return { applied: false, normalized: '' };
 
     const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
@@ -2875,7 +2719,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const commitCellValue = (staffId, dateStr, rawValue) => {
     const cellKey = makeCellKey(staffId, dateStr);
-    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
+    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes], getAllShiftCodes);
 
     if (!isValid) {
       setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
@@ -3008,7 +2852,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           continue;
         }
 
-        const { normalized, isValid } = normalizeManualShiftCode(rawText, [...mergedLeaveCodes, ...mergedShiftCodes]);
+        const { normalized, isValid } = normalizeManualShiftCode(rawText, [...mergedLeaveCodes, ...mergedShiftCodes], getAllShiftCodes);
         if (!isValid) {
           invalidCount += 1;
           continue;
@@ -3154,7 +2998,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
           }
           setKeyInputBuffer(nextBuffer);
           keepKeyInputBufferAlive();
-          if (!isPotentialManualShiftPrefix(nextBuffer, [...mergedLeaveCodes, ...mergedShiftCodes])) {
+          if (!isPotentialManualShiftPrefix(nextBuffer, [...mergedLeaveCodes, ...mergedShiftCodes], getAllShiftCodes)) {
             flashInvalidSelection(selectedRangeCells);
           } else {
             clearInputAssist();
@@ -3214,7 +3058,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
         const prefixValid = preScheduleEditMode
           ? isPotentialPreSchedulePrefix(nextBuffer)
-          : isPotentialManualShiftPrefix(nextBuffer, [...mergedLeaveCodes, ...mergedShiftCodes]);
+          : isPotentialManualShiftPrefix(nextBuffer, [...mergedLeaveCodes, ...mergedShiftCodes], getAllShiftCodes);
 
         if (!prefixValid) {
           flashInvalidSelection(selectedRangeCells);
