@@ -91,6 +91,13 @@ import {
 } from './data/runtimeLoaderData';
 
 import {
+  loadHistoryListFromStorage,
+  saveHistoryListToStorage,
+  clearHistoryStorage,
+  loadLocalSettingsBlob
+} from './data/storageData';
+
+import {
   buildEmptyStaffStats,
   buildStaffStatsMap,
   buildDailyStatsMap,
@@ -473,39 +480,19 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // 3. 初始載入與自動帶入
   // ==========================================
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEYS.HISTORY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (parsed && parsed.length > 0) {
-          setHistoryList(parsed);
-        }
-      } catch (e) {
-        console.error("本機暫存紀錄解析失敗");
-      }
-    }
+    const parsed = loadHistoryListFromStorage(STORAGE_KEYS.HISTORY);
+    if (parsed.length > 0) setHistoryList(parsed);
   }, []);
 
   useEffect(() => {
     if (!loadLatestOnEnter) return;
 
-    const stored = localStorage.getItem(STORAGE_KEYS.HISTORY);
-    if (!stored) {
-      onLatestLoaded?.();
-      return;
+    const parsed = loadHistoryListFromStorage(STORAGE_KEYS.HISTORY);
+    if (parsed.length > 0) {
+      setHistoryList(parsed);
+      loadHistory(parsed[0]);
     }
-
-    try {
-      const parsed = JSON.parse(stored);
-      if (parsed && parsed.length > 0) {
-        setHistoryList(parsed);
-        loadHistory(parsed[0]);
-      }
-    } catch (e) {
-      console.error("自動載入最新本機暫存紀錄失敗");
-    } finally {
-      onLatestLoaded?.();
-    }
+    onLatestLoaded?.();
   }, [loadLatestOnEnter, onLatestLoaded]);
 
   useEffect(() => {
@@ -2939,7 +2926,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     setHistoryList(prev => {
       const updated = [newRecord, ...prev].slice(0, 10);
-      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(updated));
+      saveHistoryListToStorage(STORAGE_KEYS.HISTORY, updated);
       return updated;
     });
   };
@@ -2976,7 +2963,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
   const clearHistory = () => {
     if (window.confirm("確定要清空所有本機暫存紀錄嗎？")) {
-      localStorage.removeItem(STORAGE_KEYS.HISTORY);
+      clearHistoryStorage(STORAGE_KEYS.HISTORY);
       setHistoryList([]);
     }
   };
