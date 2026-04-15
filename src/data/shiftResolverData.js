@@ -20,3 +20,12 @@ export const getCustomShiftGroup = (code = '') => {
   const matched = CUSTOM_SHIFT_DEFS.find((item) => String(item?.code || '').trim() === normalized);
   return matched?.group || null;
 };
+
+export const getCodePrefix = (rawCode = '', blockedPrefixes = BLOCKED_LEAVE_PREFIXES) => {
+  const code = String(rawCode || '').trim();
+  if (!code) return '';
+  if (code === 'off') return 'off';
+  const direct = blockedPrefixes.find((prefix) => code === prefix || code.startsWith(prefix));
+  if (direct) return direct;
+  return code;
+};
