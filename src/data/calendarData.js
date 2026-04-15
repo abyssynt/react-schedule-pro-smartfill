@@ -230,4 +230,3 @@ export const readSchedulingRulesTextFromLocalSettings = () => {
     return '';
   }
 };
-
