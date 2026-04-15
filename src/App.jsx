@@ -100,6 +100,14 @@ import {
 } from './data/gridSelectionData';
 
 import {
+  buildExportNumberedValueMap,
+  getExportNumberedValue,
+  buildExportStaffStats,
+  buildExportDailyStats,
+  formatWordDayCellValue
+} from './data/exportDataHelpers';
+
+import {
   parseImportedExcelFiles as parseImportedExcelFilesData
 } from './data/importMonthData';
 
@@ -977,101 +985,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     }
 
     return 0;
-  };
-
-  const buildExportNumberedValueMap = (staffOrId) => {
-    const valueMap = {};
-    let leaveCounters = {
-      例: 0,
-      休: 0
-    };
-    let isFirstSegment = true;
-    let firstSegmentSeed = {
-      例: getRawImportedLeaveSeed(staffOrId, '例'),
-      休: getRawImportedLeaveSeed(staffOrId, '休')
-    };
-    let firstSegmentCarryUsed = {
-      例: false,
-      休: false
-    };
-
-    daysInMonth.forEach((dayInfo, index) => {
-      const presentation = getExportCellPresentation(staffOrId, dayInfo);
-      const displayValue = presentation.displayValue || '';
-
-      if (displayValue === '例' || displayValue === '休') {
-        const leaveType = displayValue;
-
-        if (isFirstSegment && Number(firstSegmentSeed[leaveType] || 0) > 0) {
-          if (!firstSegmentCarryUsed[leaveType]) {
-            const continuedCount = Math.min(Number(firstSegmentSeed[leaveType] || 0) + 1, 4);
-            valueMap[dayInfo.date] = `${leaveType}${continuedCount}`;
-            firstSegmentCarryUsed[leaveType] = true;
-          } else {
-            valueMap[dayInfo.date] = leaveType;
-          }
-        } else {
-          const nextCount = Number(leaveCounters[leaveType] || 0) + 1;
-          leaveCounters[leaveType] = nextCount;
-          valueMap[dayInfo.date] = nextCount <= 4 ? `${leaveType}${nextCount}` : leaveType;
-        }
-      } else {
-        valueMap[dayInfo.date] = displayValue;
-      }
-
-      if (isFourWeekCycleEndDate(dayInfo.date, parseDateKey) && index < daysInMonth.length - 1) {
-        leaveCounters = { 例: 0, 休: 0 };
-        isFirstSegment = false;
-        firstSegmentSeed = { 例: 0, 休: 0 };
-        firstSegmentCarryUsed = { 例: false, 休: false };
-      }
-    });
-
-    return valueMap;
-  };
-
-  const getExportNumberedValue = (staffOrId, dateStr) => {
-    if (!dateStr) return '';
-    const valueMap = buildExportNumberedValueMap(staffOrId);
-    return valueMap[dateStr] || '';
-  };
-
-  const buildExportStaffStats = (staffId) => {
-    const stats = {
-      work: 0,
-      holidayLeave: 0,
-      totalLeave: 0,
-      leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
-    };
-
-    daysInMonth.forEach((dayInfo) => {
-      const displayValue = getExportNumberedValue(staffId, dayInfo.date);
-      if (!displayValue) return;
-      if (getAllShiftCodes().includes(displayValue)) stats.work += 1;
-      if (isConfiguredLeaveCode(displayValue)) {
-        stats.totalLeave += 1;
-        const leavePrefix = getCodePrefix(displayValue);
-        if (stats.leaveDetails[leavePrefix] !== undefined) stats.leaveDetails[leavePrefix] += 1;
-        if (dayInfo.isWeekend || dayInfo.isHoliday) stats.holidayLeave += 1;
-      }
-    });
-
-    return stats;
-  };
-
-  const buildExportDailyStats = (dateStr) => {
-    const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
-    staffs.forEach((staff) => {
-      const displayValue = getExportNumberedValue(staff.id, dateStr);
-      if (!displayValue) return;
-
-      const shiftGroup = getShiftGroupByCode(displayValue);
-      if (shiftGroup === '白班') stats.D += 1;
-      else if (shiftGroup === '小夜') stats.E += 1;
-      else if (shiftGroup === '大夜') stats.N += 1;
-      else if (isConfiguredLeaveCode(displayValue)) stats.totalLeave += 1;
-    });
-    return stats;
   };
 
   const clearRuleWarningCells = (cells = []) => {
@@ -2274,10 +2187,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     };
 
     const addStaffRow = (staff) => {
-      const stats = buildExportStaffStats(staff.id);
+      const stats = buildExportStaffStats(staff.id, { mergedLeaveCodes, daysInMonth, getExportNumberedValue: (staffOrId, dateStr) => getExportNumberedValue(staffOrId, dateStr, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }), getAllShiftCodes, isConfiguredLeaveCode, getCodePrefix });
       const rowData = [
         staff.name,
-        ...daysInMonth.map((d) => getExportNumberedValue(staff.id, d.date) || ''),
+        ...daysInMonth.map((d) => getExportNumberedValue(staff.id, d.date, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }) || ''),
         stats.work,
         stats.holidayLeave,
         stats.totalLeave,
@@ -2302,7 +2215,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     const addSummaryRow = (summaryKey, includeRightStats = false) => {
       const rowData = [
         '',
-        ...daysInMonth.map(d => buildExportDailyStats(d.date)[summaryKey] || ''),
+        ...daysInMonth.map(d => buildExportDailyStats(d.date, { staffs, getExportNumberedValue: (staffOrId, dateStr) => getExportNumberedValue(staffOrId, dateStr, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }), getShiftGroupByCode, isConfiguredLeaveCode })[summaryKey] || ''),
         ...(includeRightStats ? Array(statHeaders.length).fill('') : Array(statHeaders.length).fill(''))
       ];
       const row = worksheet.addRow(rowData);
@@ -2328,7 +2241,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
 
     const leaveRowData = [
       '',
-      ...daysInMonth.map(d => buildExportDailyStats(d.date).totalLeave || ''),
+      ...daysInMonth.map(d => buildExportDailyStats(d.date, { staffs, getExportNumberedValue: (staffOrId, dateStr) => getExportNumberedValue(staffOrId, dateStr, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }), getShiftGroupByCode, isConfiguredLeaveCode }).totalLeave || ''),
       ...Array(statHeaders.length).fill('')
     ];
     const leaveRow = worksheet.addRow(leaveRowData);
@@ -2363,14 +2276,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     a.click();
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-  };
-
-  const formatWordDayCellValue = (value = "") => {
-    const text = String(value || '').trim();
-    if (/^(例|休)[1-4]$/.test(text)) {
-      return `<span class="word-numbered-leave">${text}</span>`;
-    }
-    return text;
   };
 
   const exportToWord = () => {
@@ -2423,13 +2328,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
       const groupStaffsForExport = staffs.filter((staff) => (staff.group || '白班') === group);
 
       const staffRowsHtml = groupStaffsForExport.map((staff) => {
-        const stats = buildExportStaffStats(staff.id);
+        const stats = buildExportStaffStats(staff.id, { mergedLeaveCodes, daysInMonth, getExportNumberedValue: (staffOrId, dateStr) => getExportNumberedValue(staffOrId, dateStr, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }), getAllShiftCodes, isConfiguredLeaveCode, getCodePrefix });
         return `
                 <tr>
                   <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
                   ${daysInMonth.map(d => {
                     const presentation = getExportCellPresentation(staff.id, d);
-                    const value = getExportNumberedValue(staff.id, d.date) || '';
+                    const value = getExportNumberedValue(staff.id, d.date, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }) || '';
                     const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
                     const cellBg = presentation.hasPreSchedule
                       ? presentation.backgroundColor
@@ -2447,7 +2352,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
                 <tr>
                   <td class="name-col summary-label-cell" style="background:${summaryConfig.bg}; color:${exportTheme.nameFont}; mso-pattern:auto none;"></td>
                   ${daysInMonth.map(d => {
-                    const count = buildExportDailyStats(d.date)[summaryConfig.key];
+                    const count = buildExportDailyStats(d.date, { staffs, getExportNumberedValue: (staffOrId, dateStr) => getExportNumberedValue(staffOrId, dateStr, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }), getShiftGroupByCode, isConfiguredLeaveCode })[summaryConfig.key];
                     return `<td class="day-col summary-value-cell" style="background:${summaryConfig.bg}; color:${exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${count || ''}</td>`;
                   }).join('')}
                   <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
@@ -4520,7 +4425,7 @@ const openSelectedCellFillModal = () => {
                       {group === '白班' ? '白班上班' : group === '小夜' ? '小夜上班' : '大夜上班'}
                     </td>
                     {daysInMonth.map(d => {
-                      const count = buildExportDailyStats(d.date)[group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N'];
+                      const count = buildExportDailyStats(d.date, { staffs, getExportNumberedValue: (staffOrId, dateStr) => getExportNumberedValue(staffOrId, dateStr, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }), getShiftGroupByCode, isConfiguredLeaveCode })[group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N'];
                       const rowKey = group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N';
                       return (
                         <td
@@ -4550,7 +4455,7 @@ const openSelectedCellFillModal = () => {
                   休假人數
                 </td>
                 {daysInMonth.map(d => {
-                  const count = buildExportDailyStats(d.date).totalLeave;
+                  const count = buildExportDailyStats(d.date, { staffs, getExportNumberedValue: (staffOrId, dateStr) => getExportNumberedValue(staffOrId, dateStr, { buildExportNumberedValueMap, daysInMonth, getExportCellPresentation, requiredLeaves, getRawImportedLeaveSeed, isFourWeekCycleEndDate, parseDateKey }), getShiftGroupByCode, isConfiguredLeaveCode }).totalLeave;
                   return (
                     <td
                       key={d.date}
