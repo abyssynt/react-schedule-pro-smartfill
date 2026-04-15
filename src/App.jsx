@@ -8,20 +8,25 @@ import {
   Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2, GripVertical, AlertTriangle
 } from 'lucide-react';
 
-import {
-  BLOCKED_LEAVE_PREFIXES,
-  getCustomShiftCodes,
-  getAllShiftCodes,
-  setCustomShiftDefsRegistry,
-  getCustomShiftGroup
-} from './data/shiftResolverData';
-
 // ==========================================
 // 1. 系統代碼字典
 // ==========================================
 const DICT = {
   SHIFTS: ['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16'],
   LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
+};
+
+let CUSTOM_SHIFT_DEFS = [];
+const getCustomShiftCodes = () => CUSTOM_SHIFT_DEFS.map((item) => String(item?.code || '').trim()).filter(Boolean);
+const getAllShiftCodes = () => Array.from(new Set([...(DICT.SHIFTS || []), ...getCustomShiftCodes()]));
+const setCustomShiftDefsRegistry = (defs = []) => {
+  CUSTOM_SHIFT_DEFS = Array.isArray(defs) ? defs : [];
+};
+const getCustomShiftGroup = (code = '') => {
+  const normalized = String(code || '').trim();
+  if (!normalized) return null;
+  const matched = CUSTOM_SHIFT_DEFS.find((item) => String(item?.code || '').trim() === normalized);
+  return matched?.group || null;
 };
 
 const SMART_RULES = {
@@ -34,7 +39,7 @@ const SMART_RULES = {
     '白8-8': ['D', 'N'],
     '夜8-8': ['E', 'N']
   },
-  blockedLeavePrefixes: BLOCKED_LEAVE_PREFIXES,
+  blockedLeavePrefixes: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM'],
   pregnancyRestrictedShifts: ['N', '夜8-8'],
   fillPriorityWeights: {
     sameShiftCount: 3,
@@ -1036,15 +1041,6 @@ const createBlankMonthState = (targetYear, targetMonth) => {
   };
 };
 
-
-const getCodePrefix = (rawCode = '') => {
-  const code = String(rawCode || '').trim();
-  if (!code) return '';
-  if (code === 'off') return 'off';
-  const direct = SMART_RULES.blockedLeavePrefixes.find((prefix) => code === prefix || code.startsWith(prefix));
-  if (direct) return direct;
-  return code;
-};
 
 const getShiftGroupByCode = (code = '') => {
   if (['D', '白8-8', '8-12', '12-16'].includes(code)) return '白班';
@@ -6002,33 +5998,6 @@ function SettingRow({ icon: Icon, title, desc, children, iconBg = 'bg-blue-50', 
 }
 
 function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customHolidays, setCustomHolidays, specialWorkdays, setSpecialWorkdays, medicalCalendarAdjustments, setMedicalCalendarAdjustments, staffingConfig, setStaffingConfig, uiSettings, setUiSettings, customLeaveCodes, setCustomLeaveCodes, customWorkShifts, setCustomWorkShifts, customColumns, setCustomColumns, schedulingRulesText, setSchedulingRulesText }) {
-  const activeThemePreset = useMemo(() => {
-    const presetKeys = [
-      'pageBackgroundColor',
-      'tableFontColor',
-      'shiftColumnBgColor',
-      'nameDateColumnBgColor',
-      'shiftColumnFontColor',
-      'nameDateColumnFontColor',
-      'demandOverColor',
-      'groupSummaryRowBgColor',
-      'warningTintColor',
-      'warningTextColor',
-      'infoTintColor',
-      'infoTextColor',
-      'dangerTintColor',
-      'dangerTextColor'
-    ];
-
-    for (const [presetKey, preset] of Object.entries(UI_THEME_PRESETS || {})) {
-      const matchesCalendarColors = (colors?.weekend || '') === (preset?.weekendColor || '')
-        && (colors?.holiday || '') === (preset?.holidayColor || '');
-      const matchesUiSettings = presetKeys.every((key) => (uiSettings?.[key] || '') === (preset?.[key] || ''));
-      if (matchesCalendarColors && matchesUiSettings) return presetKey;
-    }
-    return 'custom';
-  }, [colors, uiSettings]);
-
   const [holidayInput, setHolidayInput] = useState({ year: '', month: '', day: '' });
   const systemToday = useMemo(() => new Date(), []);
   const systemYear = String(systemToday.getFullYear());
@@ -6125,14 +6094,14 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
                 <div>
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">色彩標示</label>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">週末顏色</span><input type="color" value={colors.weekend} onChange={(e) => { const nextColor = e.target.value; setColors(prev => ({ ...prev, weekend: nextColor })); setUiSettings(prev => ({ ...prev, themePreset: 'custom' })); }} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">國定假日</span><input type="color" value={colors.holiday} onChange={(e) => { const nextColor = e.target.value; setColors(prev => ({ ...prev, holiday: nextColor })); setUiSettings(prev => ({ ...prev, themePreset: 'custom' })); }} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">主頁背景色</span><input type="color" value={uiSettings.pageBackgroundColor} onChange={(e) => setUiSettings(prev => ({ ...prev, pageBackgroundColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">表格字體色(全體)</span><input type="color" value={uiSettings.tableFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄背景顏色</span><input type="color" value={uiSettings.shiftColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnBgColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄字體顏色</span><input type="color" value={uiSettings.shiftColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄背景顏色</span><input type="color" value={uiSettings.nameDateColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnBgColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">週末顏色</span><input type="color" value={colors.weekend} onChange={(e) => setColors(prev => ({ ...prev, weekend: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">國定假日</span><input type="color" value={colors.holiday} onChange={(e) => setColors(prev => ({ ...prev, holiday: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">主頁背景色</span><input type="color" value={uiSettings.pageBackgroundColor} onChange={(e) => setUiSettings(prev => ({ ...prev, pageBackgroundColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">表格字體色(全體)</span><input type="color" value={uiSettings.tableFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, tableFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄背景顏色</span><input type="color" value={uiSettings.shiftColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnBgColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">班別欄字體顏色</span><input type="color" value={uiSettings.shiftColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, shiftColumnFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄背景顏色</span><input type="color" value={uiSettings.nameDateColumnBgColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnBgColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">姓名/日期欄字體顏色</span><input type="color" value={uiSettings.nameDateColumnFontColor} onChange={(e) => setUiSettings(prev => ({ ...prev, nameDateColumnFontColor: e.target.value }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">人力需求超標色</span><input type="color" value={uiSettings.demandOverColor} onChange={(e) => setUiSettings(prev => ({ ...prev, demandOverColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">各班別統計色</span><input type="color" value={uiSettings.groupSummaryRowBgColor || '#fef3c7'} onChange={(e) => setUiSettings(prev => ({ ...prev, groupSummaryRowBgColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
                     <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-medium">預班/假色</span><input type="color" value={uiSettings.infoTintColor || '#38bdf8'} onChange={(e) => setUiSettings(prev => ({ ...prev, infoTintColor: e.target.value, themePreset: 'custom' }))} className="w-9 h-7 rounded border border-gray-200 bg-transparent cursor-pointer" /></div>
@@ -6195,7 +6164,7 @@ function SettingsView({ changeScreen, onSaveSettings, colors, setColors, customH
                             dangerTextColor: preset.dangerTextColor
                           }));
                         }}
-                        className={`px-2.5 py-1.5 rounded-lg border text-[13px] font-medium transition leading-5 ${activeThemePreset === key ? 'bg-violet-600 border-violet-600 text-white shadow-sm' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
+                        className={`px-2.5 py-1.5 rounded-lg border text-[13px] font-medium transition leading-5 ${uiSettings.themePreset === key ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}
                       >
                         {label}
                       </button>
