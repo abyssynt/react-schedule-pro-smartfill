@@ -8,6 +8,16 @@ import {
   Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2
 } from 'lucide-react';
 
+import {
+  BLOCKED_LEAVE_PREFIXES,
+  getCustomShiftCodes,
+  getAllShiftCodes,
+  setCustomShiftDefsRegistry,
+  getCustomShiftGroup,
+  getCodePrefix,
+  getShiftGroupByCode
+} from './data/shiftResolverData';
+
 // ==========================================
 // 1. 系統代碼字典
 // ==========================================
@@ -25,7 +35,7 @@ const SMART_RULES = {
     '白8-8': ['D', 'N'],
     '夜8-8': ['E', 'N']
   },
-  blockedLeavePrefixes: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM'],
+  blockedLeavePrefixes: BLOCKED_LEAVE_PREFIXES,
   pregnancyRestrictedShifts: ['N', '夜8-8'],
   fillPriorityWeights: {
     sameShiftCount: 3,
@@ -582,15 +592,6 @@ const createBlankMonthState = (targetYear, targetMonth) => {
   };
 };
 
-
-const getCodePrefix = (rawCode = '') => {
-  const code = String(rawCode || '').trim();
-  if (!code) return '';
-  if (code === 'off') return 'off';
-  const direct = SMART_RULES.blockedLeavePrefixes.find((prefix) => code === prefix || code.startsWith(prefix));
-  if (direct) return direct;
-  return code;
-};
 
 
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
