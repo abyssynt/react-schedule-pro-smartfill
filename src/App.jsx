@@ -592,17 +592,6 @@ const createBlankMonthState = (targetYear, targetMonth) => {
   };
 };
 
-
-import {
-  BLOCKED_LEAVE_PREFIXES,
-  getCustomShiftCodes,
-  getAllShiftCodes,
-  setCustomShiftDefsRegistry,
-  getCustomShiftGroup,
-  getCodePrefix,
-  getShiftGroupByCode
-} from './data/shiftResolverData';
-
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
 const isShiftCode = (code = '') => DICT.SHIFTS.includes(code);
 
