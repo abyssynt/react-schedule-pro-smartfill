@@ -8,25 +8,20 @@ import {
   Database, Cpu, Monitor, ArrowLeft, ChevronRight, CheckCircle2, Trash2, GripVertical, AlertTriangle
 } from 'lucide-react';
 
+import {
+  BLOCKED_LEAVE_PREFIXES,
+  getCustomShiftCodes,
+  getAllShiftCodes,
+  setCustomShiftDefsRegistry,
+  getCustomShiftGroup
+} from './data/shiftRegistryData';
+
 // ==========================================
 // 1. 系統代碼字典
 // ==========================================
 const DICT = {
   SHIFTS: ['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16'],
   LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
-};
-
-let CUSTOM_SHIFT_DEFS = [];
-const getCustomShiftCodes = () => CUSTOM_SHIFT_DEFS.map((item) => String(item?.code || '').trim()).filter(Boolean);
-const getAllShiftCodes = () => Array.from(new Set([...(DICT.SHIFTS || []), ...getCustomShiftCodes()]));
-const setCustomShiftDefsRegistry = (defs = []) => {
-  CUSTOM_SHIFT_DEFS = Array.isArray(defs) ? defs : [];
-};
-const getCustomShiftGroup = (code = '') => {
-  const normalized = String(code || '').trim();
-  if (!normalized) return null;
-  const matched = CUSTOM_SHIFT_DEFS.find((item) => String(item?.code || '').trim() === normalized);
-  return matched?.group || null;
 };
 
 const SMART_RULES = {
@@ -39,7 +34,7 @@ const SMART_RULES = {
     '白8-8': ['D', 'N'],
     '夜8-8': ['E', 'N']
   },
-  blockedLeavePrefixes: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM'],
+  blockedLeavePrefixes: BLOCKED_LEAVE_PREFIXES,
   pregnancyRestrictedShifts: ['N', '夜8-8'],
   fillPriorityWeights: {
     sameShiftCount: 3,
