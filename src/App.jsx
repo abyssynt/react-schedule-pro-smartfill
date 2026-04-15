@@ -14,7 +14,7 @@ import {
   getAllShiftCodes,
   setCustomShiftDefsRegistry,
   getCustomShiftGroup
-} from './data/shiftRegistryData';
+} from './data/shiftResolverData';
 
 // ==========================================
 // 1. 系統代碼字典
