@@ -593,12 +593,15 @@ const createBlankMonthState = (targetYear, targetMonth) => {
 };
 
 
-const getShiftGroupByCode = (code = '') => {
-  if (['D', '白8-8', '8-12', '12-16'].includes(code)) return '白班';
-  if (['E', '夜8-8'].includes(code)) return '小夜';
-  if (['N'].includes(code)) return '大夜';
-  return null;
-};
+import {
+  BLOCKED_LEAVE_PREFIXES,
+  getCustomShiftCodes,
+  getAllShiftCodes,
+  setCustomShiftDefsRegistry,
+  getCustomShiftGroup,
+  getCodePrefix,
+  getShiftGroupByCode
+} from './data/shiftResolverData';
 
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
 const isShiftCode = (code = '') => DICT.SHIFTS.includes(code);
