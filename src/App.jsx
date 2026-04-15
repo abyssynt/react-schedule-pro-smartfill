@@ -21,6 +21,16 @@ import {
 } from './data/scheduleData';
 
 import {
+  BLOCKED_LEAVE_PREFIXES,
+  getCustomShiftCodes,
+  getAllShiftCodes,
+  setCustomShiftDefsRegistry,
+  getCustomShiftGroup,
+  getCodePrefix,
+  getShiftGroupByCode
+} from './data/shiftResolverData';
+
+import {
   UI_FONT_SIZE_OPTIONS,
   getUiFontSizeClass,
   getShiftLabelFontSize,
@@ -106,19 +116,6 @@ import {
 // ==========================================
 // 1. 系統代碼字典
 // ==========================================
-let CUSTOM_SHIFT_DEFS = [];
-const getCustomShiftCodes = () => CUSTOM_SHIFT_DEFS.map((item) => String(item?.code || '').trim()).filter(Boolean);
-const getAllShiftCodes = () => Array.from(new Set([...(DICT.SHIFTS || []), ...getCustomShiftCodes()]));
-const setCustomShiftDefsRegistry = (defs = []) => {
-  CUSTOM_SHIFT_DEFS = Array.isArray(defs) ? defs : [];
-};
-const getCustomShiftGroup = (code = '') => {
-  const normalized = String(code || '').trim();
-  if (!normalized) return null;
-  const matched = CUSTOM_SHIFT_DEFS.find((item) => String(item?.code || '').trim() === normalized);
-  return matched?.group || null;
-};
-
 const SMART_RULES = {
   maxConsecutiveWorkDays: 5,
   allowCrossGroupAssignment: false,
@@ -129,7 +126,7 @@ const SMART_RULES = {
     '白8-8': ['D', 'N'],
     '夜8-8': ['E', 'N']
   },
-  blockedLeavePrefixes: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM'],
+  blockedLeavePrefixes: BLOCKED_LEAVE_PREFIXES,
   pregnancyRestrictedShifts: ['N', '夜8-8'],
   fillPriorityWeights: {
     sameShiftCount: 3,
@@ -148,25 +145,6 @@ const parseImportedExcelFiles = (files = [], fallbackYear = new Date().getFullYe
     getCodePrefix
   });
 };
-
-const getCodePrefix = (rawCode = '') => {
-  const code = String(rawCode || '').trim();
-  if (!code) return '';
-  if (code === 'off') return 'off';
-  const direct = SMART_RULES.blockedLeavePrefixes.find((prefix) => code === prefix || code.startsWith(prefix));
-  if (direct) return direct;
-  return code;
-};
-
-const getShiftGroupByCode = (code = '') => {
-  if (['D', '白8-8', '8-12', '12-16'].includes(code)) return '白班';
-  if (['E', '夜8-8'].includes(code)) return '小夜';
-  if (['N'].includes(code)) return '大夜';
-  return getCustomShiftGroup(code);
-};
-
-const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
-const isShiftCode = (code = '') => getAllShiftCodes().includes(code);
 
 const normalizeRequiredStaffingConfig = (requiredStaffing = {}) => {
   const holidayFallback = requiredStaffing?.holiday || {};
