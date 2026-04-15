@@ -20,19 +20,3 @@ export const getCustomShiftGroup = (code = '') => {
   const matched = CUSTOM_SHIFT_DEFS.find((item) => String(item?.code || '').trim() === normalized);
   return matched?.group || null;
 };
-
-export const getCodePrefix = (rawCode = '', blockedPrefixes = BLOCKED_LEAVE_PREFIXES) => {
-  const code = String(rawCode || '').trim();
-  if (!code) return '';
-  if (code === 'off') return 'off';
-  const direct = blockedPrefixes.find((prefix) => code === prefix || code.startsWith(prefix));
-  if (direct) return direct;
-  return code;
-};
-
-export const getShiftGroupByCode = (code = '') => {
-  if (['D', '白8-8', '8-12', '12-16'].includes(code)) return '白班';
-  if (['E', '夜8-8'].includes(code)) return '小夜';
-  if (['N'].includes(code)) return '大夜';
-  return getCustomShiftGroup(code);
-};
