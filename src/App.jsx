@@ -18,14 +18,85 @@ import {
   getShiftGroupByCode
 } from './data/shiftResolverData';
 
-// ==========================================
-// 1. 系統代碼字典
-// ==========================================
-const DICT = {
-  SHIFTS: ['D', 'E', 'N', '白8-8', '夜8-8', '8-12', '12-16'],
-  LEAVES: ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM']
-};
+import {
+  DICT,
+  SHIFT_GROUPS,
+  GROUP_TO_DEMAND_KEY,
+  DEFAULT_REQUIRED_STAFFING,
+  DEFAULT_SHIFT_BY_GROUP,
+  RULE_FILL_MAIN_SHIFTS,
+  HOSPITAL_LEVEL_LABELS,
+  HOSPITAL_RATIO_HINTS,
+  STORAGE_KEYS
+} from './data/scheduleData';
+import {
+  formatDateKey,
+  parseDateKey,
+  addDays,
+  isWeekendDate,
+  uniqueSortedDates,
+  getSystemHolidayCalendar
+} from './data/calendarData';
+import {
+  loadExcelJS,
+  loadSheetJS
+} from './data/runtimeLoaderData';
+import {
+  normalizeImportedHalfWidth,
+  getImportedRawNumberedLeaveValue,
+  normalizeImportedShiftCode as normalizeImportedShiftCodeCore,
+  isConfiguredImportedLeaveCode as isConfiguredImportedLeaveCodeCore,
+  normalizeCodeComparisonValue,
+  normalizeCodeComparisonCompact,
+  normalizeCodeComparisonCompactNoHyphen,
+  isBuiltInCode,
+  normalizeManualShiftCode as normalizeManualShiftCodeCore,
+  getNormalizedManualCodeCandidates as getNormalizedManualCodeCandidatesCore
+} from './data/importCodeData';
+import {
+  extractYearMonthCandidates,
+  detectImportedDayNumber,
+  inferImportedGroupFromCodes as inferImportedGroupFromCodesCore,
+  parseImportedWorksheet as parseImportedWorksheetCore,
+  parseImportedExcelFiles as parseImportedExcelFilesCore
+} from './data/importMonthData';
+import {
+  buildMonthKey,
+  normalizeStaffGroup,
+  createBlankMonthState,
+  buildExistingStaffGroupLookup,
+  mergeImportedMonthStates,
+  reconcileScheduleDataMap as reconcileScheduleDataMapCore,
+  reconcileMonthStateCollections as reconcileMonthStateCollectionsCore
+} from './data/monthScheduleData';
+import {
+  getUiFontSizeClass,
+  getShiftLabelFontSize,
+  getShiftCellLabelFontSize,
+  getUiDensityConfig,
+  UI_THEME_PRESETS,
+  getAdjustedDensityConfig
+} from './data/uiConfigData';
+import {
+  blendHexColors,
+  hexToExcelArgb,
+  isFourWeekCycleEndDate as isFourWeekCycleEndDateCore
+} from './data/colorCycleData';
+import {
+  makeCellKey,
+  parseClipboardGrid,
+  getSelectionGroupStaffs,
+  getRectFromSelection,
+  expandSelectionCells,
+  isCellInSelectionRect
+} from './data/gridSelectionData';
+import {
+  loadLocalSettingsBlob
+} from './data/storageData';
 
+// ==========================================
+// 1. 系統資料層入口
+// ==========================================
 const SMART_RULES = {
   maxConsecutiveWorkDays: 5,
   allowCrossGroupAssignment: false,
@@ -45,1015 +116,70 @@ const SMART_RULES = {
   }
 };
 
-const SHIFT_GROUPS = ['白班', '小夜', '大夜'];
-
-const ANNOUNCED_CALENDAR_OVERRIDES = {
-  2024: {
-    holidays: ['2024-01-01', '2024-02-08', '2024-02-09', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-28', '2024-04-04', '2024-04-05', '2024-06-10', '2024-09-17', '2024-10-10'],
-    workdays: []
-  },
-  2025: {
-    holidays: ['2025-01-01', '2025-01-27', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-28', '2025-04-03', '2025-04-04', '2025-05-31', '2025-10-06', '2025-10-10'],
-    workdays: []
-  },
-  2026: {
-    holidays: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-28', '2026-04-04', '2026-04-05', '2026-06-19', '2026-09-25', '2026-10-10'],
-    workdays: []
-  }
-};
-
-const CHINESE_MONTH_MAP = {
-  '正月': 1, '一月': 1, '二月': 2, '三月': 3, '四月': 4, '五月': 5, '六月': 6,
-  '七月': 7, '八月': 8, '九月': 9, '十月': 10, '十一月': 11, '十二月': 12,
-  '臘月': 12
-};
-
-const CHINESE_DAY_MAP = {
-  '初一': 1, '初二': 2, '初三': 3, '初四': 4, '初五': 5, '初六': 6, '初七': 7, '初八': 8, '初九': 9, '初十': 10,
-  '十一': 11, '十二': 12, '十三': 13, '十四': 14, '十五': 15, '十六': 16, '十七': 17, '十八': 18, '十九': 19, '二十': 20,
-  '廿一': 21, '廿二': 22, '廿三': 23, '廿四': 24, '廿五': 25, '廿六': 26, '廿七': 27, '廿八': 28, '廿九': 29, '三十': 30
-};
-
-const normalizeLunarMonth = (label = '') => {
-  const cleaned = String(label).trim().replace(/^閏/, '').replace(/月$/, '');
-  if (CHINESE_MONTH_MAP[String(label).trim().replace(/^閏/, '')]) {
-    return CHINESE_MONTH_MAP[String(label).trim().replace(/^閏/, '')];
-  }
-  if (/^\d+$/.test(cleaned)) return Number(cleaned);
-  if (CHINESE_MONTH_MAP[`${cleaned}月`]) return CHINESE_MONTH_MAP[`${cleaned}月`];
-  return null;
-};
-
-const normalizeLunarDay = (label = '') => {
-  const cleaned = String(label).trim();
-  if (CHINESE_DAY_MAP[cleaned]) return CHINESE_DAY_MAP[cleaned];
-  if (/^\d+$/.test(cleaned)) return Number(cleaned);
-  return null;
-};
-
-const formatDateKey = (date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const parseDateKey = (dateKey) => {
-  const [y, m, d] = dateKey.split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
-
-const addDays = (date, amount) => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
-};
-
-const isWeekendDate = (date) => date.getDay() === 0 || date.getDay() === 6;
-
-const uniqueSortedDates = (dates = []) => Array.from(new Set(dates)).sort();
-
-const getChineseCalendarInfo = (date) => {
-  const formatter = new Intl.DateTimeFormat('zh-TW-u-ca-chinese', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-  const parts = formatter.formatToParts(date);
-  const yearPart = parts.find((part) => part.type === 'relatedYear');
-  const monthPart = parts.find((part) => part.type === 'month');
-  const dayPart = parts.find((part) => part.type === 'day');
-  const rawMonth = String(monthPart?.value || '').trim();
-  const rawDay = String(dayPart?.value || '').trim();
-
-  return {
-    relatedYear: Number(yearPart?.value || date.getFullYear()),
-    leapMonth: rawMonth.startsWith('閏'),
-    monthLabel: rawMonth.replace(/^閏/, ''),
-    dayLabel: rawDay,
-    monthNumber: normalizeLunarMonth(rawMonth),
-    dayNumber: normalizeLunarDay(rawDay)
-  };
-};
-
-const matchesLunarDate = (date, lunarMonth, lunarDay, options = {}) => {
-  const info = getChineseCalendarInfo(date);
-  return info.monthNumber === lunarMonth && info.dayNumber === lunarDay && Boolean(info.leapMonth) === Boolean(options.leap);
-};
-
-const findGregorianDateByLunarInYear = (year, lunarMonth, lunarDay, options = {}) => {
-  const start = new Date(year, 0, 1);
-  const end = new Date(year, 11, 31);
-  for (let cursor = new Date(start); cursor <= end; cursor = addDays(cursor, 1)) {
-    if (matchesLunarDate(cursor, lunarMonth, lunarDay, options)) return new Date(cursor);
-  }
-  return null;
-};
-
-const getQingmingDate = (year) => {
-  if (year >= 2000 && year <= 2099) {
-    const y = year % 100;
-    const day = Math.floor(y * 0.2422 + 4.81) - Math.floor((y - 1) / 4);
-    return new Date(year, 3, day);
-  }
-  return new Date(year, 3, 4);
-};
-
-const getFixedSolarHolidayDates = (year) => {
-  const fixed = [
-    [1, 1],   // 開國紀念日
-    [2, 28],  // 和平紀念日
-    [4, 4],   // 兒童節
-    [5, 1],   // 勞動節
-    [9, 28],  // 孔子誕辰紀念日 / 教師節
-    [10, 10], // 國慶日
-    [10, 25], // 臺灣光復暨金門古寧頭大捷紀念日
-    [12, 25], // 行憲紀念日
-  ];
-  return fixed.map(([month, day]) => formatDateKey(new Date(year, month - 1, day)));
-};
-
-const getRuleBasedHolidayDates = (year) => {
-  const holidaySet = new Set(getFixedSolarHolidayDates(year));
-
-  const qingming = getQingmingDate(year);
-  holidaySet.add(formatDateKey(qingming));
-
-  const dragonBoat = findGregorianDateByLunarInYear(year, 5, 5);
-  if (dragonBoat) holidaySet.add(formatDateKey(dragonBoat));
-
-  const midAutumn = findGregorianDateByLunarInYear(year, 8, 15);
-  if (midAutumn) holidaySet.add(formatDateKey(midAutumn));
-
-  const lunarNewYearDay = findGregorianDateByLunarInYear(year, 1, 1);
-  if (lunarNewYearDay) {
-    const springHoliday = [
-      addDays(lunarNewYearDay, -2),
-      addDays(lunarNewYearDay, -1),
-      lunarNewYearDay,
-      addDays(lunarNewYearDay, 1),
-      addDays(lunarNewYearDay, 2)
-    ];
-    springHoliday
-      .filter((date) => date.getFullYear() === year)
-      .forEach((date) => holidaySet.add(formatDateKey(date)));
-  }
-
-  const childrensDayKey = formatDateKey(new Date(year, 3, 4));
-  const qingmingKey = formatDateKey(qingming);
-  if (childrensDayKey === qingmingKey) {
-    const qingmingWeekday = qingming.getDay();
-    const extraHoliday = qingmingWeekday === 4 ? addDays(qingming, 1) : addDays(qingming, -1);
-    holidaySet.add(formatDateKey(extraHoliday));
-  }
-
-  return uniqueSortedDates([...holidaySet]);
-};
-
-const findNearestWorkday = (startDate, direction, occupiedHolidays, workdayOverrides) => {
-  let cursor = addDays(startDate, direction);
-  while (true) {
-    const key = formatDateKey(cursor);
-    const weekend = isWeekendDate(cursor);
-    const isWorkday = (!weekend || workdayOverrides.has(key)) && !occupiedHolidays.has(key);
-    if (isWorkday) return key;
-    cursor = addDays(cursor, direction);
-  }
-};
-
-const applyCompensatoryHolidays = (holidayDates, workdayDates = []) => {
-  const holidaySet = new Set(uniqueSortedDates(holidayDates));
-  const workdaySet = new Set(uniqueSortedDates(workdayDates));
-
-  const baseDates = [...holidaySet].sort();
-  baseDates.forEach((dateKey) => {
-    const date = parseDateKey(dateKey);
-    if (date.getDay() === 6) {
-      holidaySet.add(findNearestWorkday(date, -1, holidaySet, workdaySet));
-    } else if (date.getDay() === 0) {
-      holidaySet.add(findNearestWorkday(date, 1, holidaySet, workdaySet));
-    }
-  });
-
-  return uniqueSortedDates([...holidaySet]);
-};
-
-const getSystemHolidayCalendar = (year, options = {}) => {
-  const {
-    customHolidays = [],
-    announcedOverrides = ANNOUNCED_CALENDAR_OVERRIDES,
-    specialWorkdays = [],
-    unitAdjustments = { holidays: [], workdays: [] }
-  } = options;
-
-  const announced = announcedOverrides[year];
-  const overrideHolidays = announced?.holidays || [];
-  const overrideWorkdays = announced?.workdays || [];
-
-  const unitHolidayDates = (unitAdjustments.holidays || []).filter((date) => date.startsWith(`${year}-`));
-  const unitWorkdayDates = (unitAdjustments.workdays || []).filter((date) => date.startsWith(`${year}-`));
-  const customHolidayDates = customHolidays.filter((date) => date.startsWith(`${year}-`));
-  const specialWorkdayDates = specialWorkdays.filter((date) => date.startsWith(`${year}-`));
-
-  let holidayDates = overrideHolidays.length > 0 ? overrideHolidays : applyCompensatoryHolidays(getRuleBasedHolidayDates(year), [...overrideWorkdays, ...specialWorkdayDates, ...unitWorkdayDates]);
-  let workdayDates = uniqueSortedDates([...overrideWorkdays, ...specialWorkdayDates, ...unitWorkdayDates]);
-
-  holidayDates = uniqueSortedDates([...holidayDates, ...customHolidayDates, ...unitHolidayDates]).filter((date) => !workdayDates.includes(date));
-
-  return {
-    holidays: holidayDates,
-    workdays: workdayDates
-  };
-};
+const STORAGE_KEY = STORAGE_KEYS.HISTORY;
+const ACTIVE_DRAFT_KEY = STORAGE_KEYS.ACTIVE_DRAFT;
 
 const readSchedulingRulesTextFromLocalSettings = () => {
-  try {
-    const stored = localStorage.getItem(LOCAL_SETTINGS_KEY);
-    if (!stored) return '';
-    const parsed = JSON.parse(stored);
-    return typeof parsed?.schedulingRulesText === 'string' ? parsed.schedulingRulesText : '';
-  } catch (error) {
-    console.error('讀取本機排班規則設定失敗', error);
-    return '';
-  }
+  const parsed = loadLocalSettingsBlob(STORAGE_KEYS.LOCAL_SETTINGS);
+  return typeof parsed?.schedulingRulesText === 'string' ? parsed.schedulingRulesText : '';
 };
 
-const STORAGE_KEY = 'schedule_app_history';
-const ACTIVE_DRAFT_KEY = 'schedule_app_active_draft';
-const LOCAL_SETTINGS_KEY = 'schedule_app_local_settings';
+const normalizeImportedShiftCode = (rawValue = '') =>
+  normalizeImportedShiftCodeCore(rawValue, getAllShiftCodes);
 
-// 外部套件載入：ExcelJS 用於高品質 Excel 樣式輸出
-const loadExcelJS = () => {
-  return new Promise((resolve) => {
-    if (window.ExcelJS) return resolve(window.ExcelJS);
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
-    script.onload = () => resolve(window.ExcelJS);
-    document.head.appendChild(script);
+const isConfiguredImportedLeaveCode = (code = '', customLeaveCodes = []) =>
+  isConfiguredImportedLeaveCodeCore(code, customLeaveCodes, getCodePrefix);
+
+const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) =>
+  normalizeManualShiftCodeCore(rawValue, allowedLeaveCodes, getAllShiftCodes);
+
+const getNormalizedManualCodeCandidates = (rawValue = '', allowedLeaveCodes = []) =>
+  getNormalizedManualCodeCandidatesCore(rawValue, allowedLeaveCodes, getAllShiftCodes);
+
+const inferImportedGroupFromCodes = (dayMap = {}) =>
+  inferImportedGroupFromCodesCore(dayMap, { getShiftGroupByCode });
+
+const parseImportedWorksheet = (options = {}) =>
+  parseImportedWorksheetCore(options, {
+    getAllShiftCodes,
+    getShiftGroupByCode,
+    getCodePrefix
   });
-};
 
-const loadSheetJS = () => {
-  return new Promise((resolve, reject) => {
-    if (window.XLSX) return resolve(window.XLSX);
-    const existing = document.querySelector('script[data-sheetjs-loader="true"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve(window.XLSX), { once: true });
-      existing.addEventListener('error', () => reject(new Error('SheetJS 載入失敗')), { once: true });
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-    script.dataset.sheetjsLoader = 'true';
-    script.onload = () => resolve(window.XLSX);
-    script.onerror = () => reject(new Error('SheetJS 載入失敗'));
-    document.head.appendChild(script);
+const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().getFullYear(), options = {}) =>
+  parseImportedExcelFilesCore(files, fallbackYear, options, {
+    loadSheetJS,
+    getAllShiftCodes,
+    getShiftGroupByCode,
+    getCodePrefix
   });
-};
 
-const normalizeImportedHalfWidth = (input = '') => String(input ?? '')
-  .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
-  .replace(/　/g, ' ')
-  .trim();
+const isFourWeekCycleEndDate = (dateStr) =>
+  isFourWeekCycleEndDateCore(dateStr, parseDateKey);
 
-const getImportedRawNumberedLeaveValue = (rawValue = '') => {
-  const normalized = normalizeImportedHalfWidth(rawValue).replace(/\s+/g, '');
-  const match = normalized.match(/^(例|休)([1-4])$/);
-  if (!match) return '';
-  return `${match[1]}${match[2]}`;
-};
-
-const normalizeImportedShiftCode = (rawValue = '') => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) return '';
-
-  const normalizedWhitespace = normalizeImportedHalfWidth(value).replace(/\s+/g, '');
-  const lower = normalizedWhitespace.toLowerCase();
-  const numberedLeaveValue = getImportedRawNumberedLeaveValue(normalizedWhitespace);
-  if (numberedLeaveValue) return numberedLeaveValue.startsWith('例') ? '例' : '休';
-
-  const directMap = {
-    d: 'D',
-    e: 'E',
-    n: 'N',
-    off: 'off',
-    of: 'off',
-    am: 'AM',
-    pm: 'PM',
-    '8-12': '8-12',
-    '12-16': '12-16',
-    '白8-8': '白8-8',
-    '夜8-8': '夜8-8'
-  };
-
-  if (directMap[lower]) return directMap[lower];
-  if (DICT.LEAVES.includes(normalizedWhitespace) || getAllShiftCodes().includes(normalizedWhitespace)) return normalizedWhitespace;
-  return normalizeImportedHalfWidth(value);
-};
-
-const buildMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
-
-const isConfiguredImportedLeaveCode = (code = '', customLeaveCodes = []) => {
-  const mergedLeaveCodes = Array.from(new Set([...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).filter(Boolean);
-  const prefix = getCodePrefix(code);
-  return mergedLeaveCodes.includes(code) || mergedLeaveCodes.includes(prefix);
-};
-
-const normalizeCodeComparisonValue = (input = '') => normalizeImportedHalfWidth(input).trim().replace(/\s+/g, '');
-const normalizeCodeComparisonCompact = (input = '') => normalizeCodeComparisonValue(input).replace(/[－—–~～_]/g, '-');
-const normalizeCodeComparisonCompactNoHyphen = (input = '') => normalizeCodeComparisonCompact(input).replace(/-/g, '');
-const isBuiltInCode = (code = '') => DICT.SHIFTS.includes(code) || DICT.LEAVES.includes(code);
-
-
-const normalizeManualShiftCode = (rawValue = '', allowedLeaveCodes = []) => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) return { normalized: '', isValid: true };
-
-  const normalizedBase = normalizeImportedHalfWidth(value).trim();
-  const collapsed = normalizeCodeComparisonValue(normalizedBase);
-  const lower = collapsed.toLowerCase();
-  const compact = lower.replace(/[－—–~～_]/g, '-');
-  const compactNoHyphen = compact.replace(/-/g, '');
-  const exactCompact = normalizeCodeComparisonCompact(normalizedBase);
-  const exactCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(normalizedBase);
-  const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
-
-  const exactAllowed = allowedCodes.find((code) => {
-    const codeCompact = normalizeCodeComparisonCompact(code);
-    const codeCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(code);
-    return codeCompact === exactCompact || codeCompactNoHyphen === exactCompactNoHyphen;
+const reconcileScheduleDataMap = (scheduleData = {}, customLeaveCodes = []) =>
+  reconcileScheduleDataMapCore(scheduleData, customLeaveCodes, {
+    DICT,
+    getAllShiftCodes,
+    normalizeManualShiftCode,
+    normalizeImportedHalfWidth
   });
-  if (exactAllowed) return { normalized: exactAllowed, isValid: true };
 
-  const directMap = {
-    d: 'D',
-    e: 'E',
-    n: 'N',
-    off: 'off',
-    of: 'off',
-    o: 'off',
-    am: 'AM',
-    pm: 'PM',
-    a: 'AM',
-    p: 'PM',
-    '8-12': '8-12',
-    '812': '8-12',
-    '08-12': '8-12',
-    '0812': '8-12',
-    '12-16': '12-16',
-    '1216': '12-16',
-    '白8-8': '白8-8',
-    '白88': '白8-8',
-    '白8-08': '白8-8',
-    '白8to8': '白8-8',
-    '夜8-8': '夜8-8',
-    '夜88': '夜8-8',
-    '夜8to8': '夜8-8'
-  };
-
-  const directCandidate = directMap[compact] || directMap[compactNoHyphen] || directMap[lower];
-  if (directCandidate) return { normalized: directCandidate, isValid: allowedCodes.includes(directCandidate) };
-
-  const directAllowed = allowedCodes.find((code) => {
-    if (!isBuiltInCode(code)) return false;
-    const codeLower = normalizeCodeComparisonValue(code).toLowerCase();
-    const codeCompact = codeLower.replace(/[－—–~～_]/g, '-');
-    const codeCompactNoHyphen = codeCompact.replace(/-/g, '');
-    return codeLower === lower || codeCompact === compact || codeCompactNoHyphen === compactNoHyphen;
+const reconcileMonthStateCollections = (collection = {}, customLeaveCodes = []) =>
+  reconcileMonthStateCollectionsCore(collection, customLeaveCodes, {
+    DICT,
+    getAllShiftCodes,
+    normalizeManualShiftCode,
+    normalizeImportedHalfWidth
   });
-  if (directAllowed) return { normalized: directAllowed, isValid: true };
-
-  return { normalized: normalizedBase, isValid: false };
-};
-
-const getNormalizedManualCodeCandidates = (rawValue = '', allowedLeaveCodes = []) => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) return [];
-
-  const normalizedBase = normalizeImportedHalfWidth(value).trim();
-  const collapsed = normalizeCodeComparisonValue(normalizedBase);
-  const lower = collapsed.toLowerCase();
-  const compact = lower.replace(/[－—–~～_]/g, '-');
-  const compactNoHyphen = compact.replace(/-/g, '');
-  const aliases = new Set([lower, compact, compactNoHyphen]);
-  const exactCompact = normalizeCodeComparisonCompact(normalizedBase);
-  const exactCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(normalizedBase);
-  const allowedCodes = Array.from(new Set([...(getAllShiftCodes() || []), ...(allowedLeaveCodes || [])])).filter(Boolean);
-
-  const expandedAliases = new Set(aliases);
-  if (aliases.has('o')) {
-    expandedAliases.add('of');
-    expandedAliases.add('off');
-  }
-  if (aliases.has('of')) expandedAliases.add('off');
-  if (aliases.has('a')) expandedAliases.add('am');
-  if (aliases.has('p')) expandedAliases.add('pm');
-  if (aliases.has('8')) {
-    expandedAliases.add('8-12');
-    expandedAliases.add('812');
-  }
-  if (aliases.has('12')) {
-    expandedAliases.add('12-16');
-    expandedAliases.add('1216');
-  }
-  if (aliases.has('白8')) {
-    expandedAliases.add('白8-8');
-    expandedAliases.add('白88');
-  }
-  if (aliases.has('夜8')) {
-    expandedAliases.add('夜8-8');
-    expandedAliases.add('夜88');
-  }
-
-  return allowedCodes.filter((code) => {
-    const codeCompact = normalizeCodeComparisonCompact(code);
-    const codeCompactNoHyphen = normalizeCodeComparisonCompactNoHyphen(code);
-    if (!isBuiltInCode(code)) {
-      return codeCompact.startsWith(exactCompact) || codeCompactNoHyphen.startsWith(exactCompactNoHyphen);
-    }
-    const codeLower = normalizeCodeComparisonValue(code).toLowerCase();
-    const codeLowerCompact = codeLower.replace(/[－—–~～_]/g, '-');
-    const codeLowerCompactNoHyphen = codeLowerCompact.replace(/-/g, '');
-    return Array.from(expandedAliases).some((alias) => codeLower.startsWith(alias) || codeLowerCompact.startsWith(alias) || codeLowerCompactNoHyphen.startsWith(alias));
-  });
-};
 
 const isPotentialManualShiftPrefix = (rawValue = '', allowedLeaveCodes = []) => {
   if (!String(rawValue ?? '').trim()) return true;
   return getNormalizedManualCodeCandidates(rawValue, allowedLeaveCodes).length > 0;
 };
 
-const makeCellKey = (staffId, dateStr) => `${staffId}__${dateStr}`;
-
-const parseClipboardGrid = (text = '') => {
-  const raw = String(text || '').replace(/\r/g, '');
-  if (!raw.trim()) return [];
-  return raw.split('\n').map(row => row.split('\t'));
-};
-
-const getSelectionGroupStaffs = (selection, staffs = []) => {
-  const selectionGroup = selection?.start?.group || selection?.end?.group || '';
-  if (!selectionGroup) return staffs;
-  return staffs.filter((staff) => (staff.group || '白班') === selectionGroup);
-};
-
-const getRectFromSelection = (selection, staffs = [], daysInMonth = []) => {
-  if (!selection?.start || !selection?.end) return null;
-  const scopedStaffs = getSelectionGroupStaffs(selection, staffs);
-  const staffIndexMap = new Map(scopedStaffs.map((staff, index) => [staff.id, index]));
-  const dayIndexMap = new Map(daysInMonth.map((day, index) => [day.date, index]));
-
-  const startRow = staffIndexMap.get(selection.start.staffId);
-  const endRow = staffIndexMap.get(selection.end.staffId);
-  const startCol = dayIndexMap.get(selection.start.dateStr);
-  const endCol = dayIndexMap.get(selection.end.dateStr);
-
-  if ([startRow, endRow, startCol, endCol].some(v => v === undefined)) return null;
-
-  return {
-    rowStart: Math.min(startRow, endRow),
-    rowEnd: Math.max(startRow, endRow),
-    colStart: Math.min(startCol, endCol),
-    colEnd: Math.max(startCol, endCol),
-    scopedStaffs
-  };
-};
-
-const expandSelectionCells = (selection, staffs = [], daysInMonth = []) => {
-  const rect = getRectFromSelection(selection, staffs, daysInMonth);
-  if (!rect) return [];
-  const cells = [];
-  for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
-    for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
-      const staff = rect.scopedStaffs[rowIndex];
-      const day = daysInMonth[colIndex];
-      if (staff && day) cells.push({ staffId: staff.id, dateStr: day.date, rowIndex, colIndex });
-    }
-  }
-  return cells;
-};
-
-const isCellInSelectionRect = (selection, staffs = [], daysInMonth = [], staffId, dateStr) => {
-  const rect = getRectFromSelection(selection, staffs, daysInMonth);
-  if (!rect) return false;
-  const rowIndex = rect.scopedStaffs.findIndex(staff => staff.id === staffId);
-  const colIndex = daysInMonth.findIndex(day => day.date === dateStr);
-  if (rowIndex === -1 || colIndex === -1) return false;
-  return rowIndex >= rect.rowStart && rowIndex <= rect.rowEnd && colIndex >= rect.colStart && colIndex <= rect.colEnd;
-};
-
-const extractYearMonthCandidates = (...sources) => {
-  const fullPatterns = [
-    /(\d{4})\s*年\s*(\d{1,2})\s*月/,
-    /(\d{4})[\/_\-.](\d{1,2})/
-  ];
-  const monthOnlyPatterns = [
-    /(\d{1,2})\s*月/
-  ];
-
-  let monthOnlyCandidate = { year: null, month: null };
-
-  for (const source of sources) {
-    const text = String(source || '').trim();
-    if (!text) continue;
-
-    for (const pattern of fullPatterns) {
-      const match = text.match(pattern);
-      if (!match) continue;
-      const year = Number(match[1]);
-      const month = Number(match[2]);
-      if (year >= 1900 && month >= 1 && month <= 12) {
-        return { year, month };
-      }
-    }
-
-    if (!monthOnlyCandidate.month) {
-      for (const pattern of monthOnlyPatterns) {
-        const match = text.match(pattern);
-        if (!match) continue;
-        const month = Number(match[1]);
-        if (month >= 1 && month <= 12) {
-          monthOnlyCandidate = { year: null, month };
-          break;
-        }
-      }
-    }
-  }
-
-  return monthOnlyCandidate;
-};
-
-const detectImportedDayNumber = (label = '') => {
-  const text = String(label ?? '').replace(/\r/g, '').trim();
-  if (!text) return null;
-  const firstLine = text.split('\n').map(part => part.trim()).find(Boolean) || text;
-  const compact = text.replace(/\s+/g, '');
-  const firstCompact = firstLine.replace(/\s+/g, '');
-  const patterns = [
-    /^(\d{1,2})日$/,
-    /^(\d{1,2})$/,
-    /^(\d{1,2})\(.+\)$/,
-  ];
-  for (const source of [firstCompact, compact]) {
-    for (const pattern of patterns) {
-      const match = source.match(pattern);
-      if (match) {
-        const day = Number(match[1]);
-        if (day >= 1 && day <= 31) return day;
-      }
-    }
-  }
-  const looseMatch = compact.match(/^(\d{1,2})/);
-  if (looseMatch) {
-    const day = Number(looseMatch[1]);
-    if (day >= 1 && day <= 31) return day;
-  }
-  return null;
-};
-
-const inferImportedGroupFromCodes = (dayMap = {}) => {
-  const counts = { 白班: 0, 小夜: 0, 大夜: 0 };
-  Object.values(dayMap || {}).forEach((cell) => {
-    const code = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
-    const group = getShiftGroupByCode(code);
-    if (group && counts[group] !== undefined) counts[group] += 1;
-  });
-  const ranked = Object.entries(counts).sort((a, b) => {
-    if (b[1] !== a[1]) return b[1] - a[1];
-    return SHIFT_GROUPS.indexOf(a[0]) - SHIFT_GROUPS.indexOf(b[0]);
-  });
-  return ranked[0]?.[1] > 0 ? ranked[0][0] : '';
-};
-
-const buildExistingStaffGroupLookup = (monthlySchedules = {}) => {
-  const byMonth = {};
-  const fallback = {};
-
-  Object.entries(monthlySchedules || {}).forEach(([monthKey, monthState]) => {
-    const monthLookup = {};
-    const monthStaffs = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
-    monthStaffs.forEach((staff) => {
-      const nameKey = String(staff?.name || '').trim();
-      const group = staff?.group || '';
-      if (!nameKey || !group) return;
-      if (!monthLookup[nameKey]) monthLookup[nameKey] = group;
-      if (!fallback[nameKey]) fallback[nameKey] = group;
-    });
-    byMonth[monthKey] = monthLookup;
-  });
-
-  return { byMonth, fallback };
-};
-
-const mergeImportedMonthStates = (baseState = null, incomingState = null) => {
-  if (!baseState) return incomingState;
-  if (!incomingState) return baseState;
-
-  const mergedStaffs = [];
-  const mergedSchedule = {};
-  const staffKeyToId = new Map();
-  const signatureToKey = new Map();
-
-  const registerStaffs = (monthState, priority = 'base') => {
-    const staffList = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
-    const scheduleData = monthState?.scheduleData || monthState?.schedule || {};
-
-    staffList.forEach((staff) => {
-      const name = String(staff?.name || '').trim();
-      const group = staff?.group || '白班';
-      if (!name) return;
-      const signature = `${name}__${group}`;
-      const fallbackSignature = `${name}__*`;
-      const matchedSignature = signatureToKey.has(signature)
-        ? signature
-        : (signatureToKey.has(fallbackSignature) ? signatureToKey.get(fallbackSignature) : null);
-
-      let staffKey = matchedSignature || signature;
-      let existingId = staffKeyToId.get(staffKey);
-
-      if (!existingId) {
-        existingId = priority === 'base' ? (staff.id || `${priority}_${mergedStaffs.length + 1}`) : (staff.id || `${priority}_${mergedStaffs.length + 1}`);
-        staffKeyToId.set(staffKey, existingId);
-        signatureToKey.set(signature, staffKey);
-        signatureToKey.set(fallbackSignature, staffKey);
-        mergedStaffs.push({
-          ...staff,
-          id: existingId,
-          name,
-          group
-        });
-        mergedSchedule[existingId] = { ...(scheduleData?.[staff.id] || {}) };
-        return;
-      }
-
-      const existingIndex = mergedStaffs.findIndex((item) => item.id === existingId);
-      if (existingIndex !== -1 && priority === 'incoming') {
-        mergedStaffs[existingIndex] = {
-          ...mergedStaffs[existingIndex],
-          ...staff,
-          id: existingId,
-          name,
-          group
-        };
-      }
-
-      mergedSchedule[existingId] = {
-        ...(mergedSchedule[existingId] || {}),
-        ...(scheduleData?.[staff.id] || {})
-      };
-    });
-  };
-
-  registerStaffs(baseState, 'base');
-  registerStaffs(incomingState, 'incoming');
-
-  const baseImportMeta = baseState?.importMeta || {};
-  const incomingImportMeta = incomingState?.importMeta || {};
-
-  return {
-    ...baseState,
-    ...incomingState,
-    staffs: mergedStaffs,
-    scheduleData: mergedSchedule,
-    importMeta: {
-      ...baseImportMeta,
-      ...incomingImportMeta,
-      sourceType: incomingImportMeta.sourceType || baseImportMeta.sourceType || 'preScheduleExcel',
-      sourceFiles: Array.from(new Set([...(baseImportMeta.sourceFiles || []), ...(incomingImportMeta.sourceFiles || [])])),
-      sourceSheets: Array.from(new Set([...(baseImportMeta.sourceSheets || []), ...(incomingImportMeta.sourceSheets || [])])),
-      importedAt: baseImportMeta.importedAt || incomingImportMeta.importedAt || new Date().toISOString(),
-      lastUpdatedAt: new Date().toISOString()
-    },
-    warnings: [...(baseState?.warnings || []), ...(incomingState?.warnings || [])]
-  };
-};
-
-const parseImportedWorksheet = ({ rows, sheetName, fileName, fallbackYear, customLeaveCodes = [], importMode = 'schedule', existingStaffGroupLookup = { byMonth: {}, fallback: {} } }) => {
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-
-  let headerRowIndex = -1;
-  let nameColumnIndex = -1;
-  let groupColumnIndex = -1;
-  let dayColumnPairs = [];
-
-  for (let rowIndex = 0; rowIndex < Math.min(20, rows.length); rowIndex += 1) {
-    const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
-    let detectedNameIndex = -1;
-    let detectedGroupIndex = -1;
-    const detectedDayPairs = [];
-
-    row.forEach((cellValue, columnIndex) => {
-      const value = String(cellValue ?? '').trim();
-      if (!value) return;
-      if (value === '姓名') detectedNameIndex = columnIndex;
-      if (value === '班別群組') detectedGroupIndex = columnIndex;
-      const dayNumber = detectImportedDayNumber(value);
-      if (dayNumber) detectedDayPairs.push({ day: dayNumber, colNumber: columnIndex });
-    });
-
-    const uniqueDayPairs = Array.from(
-      new Map(detectedDayPairs.sort((a, b) => a.day - b.day).map(item => [item.day, item])).values()
-    );
-
-    if (detectedNameIndex !== -1 && uniqueDayPairs.length > 0) {
-      headerRowIndex = rowIndex;
-      nameColumnIndex = detectedNameIndex;
-      groupColumnIndex = detectedGroupIndex;
-      dayColumnPairs = uniqueDayPairs;
-      break;
-    }
-  }
-
-  if (headerRowIndex === -1 || nameColumnIndex === -1 || dayColumnPairs.length === 0) return null;
-
-  const validGroups = new Set(SHIFT_GROUPS);
-  const knownCodes = new Set([...getAllShiftCodes(), ...DICT.LEAVES, ...(customLeaveCodes || [])]);
-
-  const scanTexts = [];
-  const maxRowsToScan = Math.min(rows.length, 10);
-  for (let r = 0; r < maxRowsToScan; r += 1) {
-    const row = Array.isArray(rows[r]) ? rows[r] : [];
-    for (let c = 0; c < row.length; c += 1) {
-      const cellText = String(row[c] ?? '').trim();
-      if (cellText) scanTexts.push(cellText);
-    }
-  }
-
-  const detected = extractYearMonthCandidates(...scanTexts, sheetName, fileName);
-  const month = detected.month;
-  const year = detected.year || fallbackYear;
-
-  if (!month) {
-    throw new Error(`工作表「${sheetName}」無法辨識月份，請確認表頭、sheet 名稱或檔名包含幾月資訊`);
-  }
-
-  const monthKey = buildMonthKey(year, month);
-  const monthGroupLookup = existingStaffGroupLookup?.byMonth?.[monthKey] || {};
-  const fallbackGroupLookup = existingStaffGroupLookup?.fallback || {};
-
-  const importedStaffs = [];
-  const importedSchedule = {};
-  const invalidMessages = [];
-  const unknownCodes = [];
-
-  for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
-    const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
-    const rawName = String(row[nameColumnIndex] ?? '').trim();
-    const rawGroup = groupColumnIndex === -1 ? '' : String(row[groupColumnIndex] ?? '').trim();
-
-    const hasAnyContent = row.some((value) => String(value ?? '').trim() !== '');
-    if (!hasAnyContent || !rawName) continue;
-
-    const rowNumber = rowIndex + 1;
-    const hasAnyDayContent = dayColumnPairs.some(({ colNumber }) => String(row[colNumber] ?? '').trim() !== '');
-
-    const staffId = `import_${Date.now()}_${sheetName}_${rowNumber}`;
-    importedSchedule[staffId] = {};
-
-    dayColumnPairs.forEach(({ day, colNumber }) => {
-      const rawValue = String(row[colNumber] ?? '').trim();
-      if (!rawValue) return;
-
-      const normalizedCode = normalizeImportedShiftCode(rawValue);
-      const rawImportedValue = getImportedRawNumberedLeaveValue(rawValue);
-      const isKnownCode = knownCodes.has(normalizedCode);
-
-      importedSchedule[staffId][day] = {
-        value: normalizedCode,
-        source: 'manual',
-        ...(rawImportedValue ? { rawImportedValue } : {}),
-        ...(!isKnownCode ? { isUnknownCode: true } : {})
-      };
-
-      if (!isKnownCode) {
-        unknownCodes.push(normalizedCode);
-      }
-    });
-
-    const importedCodes = Object.values(importedSchedule[staffId] || {}).map((cell) => {
-      if (!cell) return '';
-      return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
-    }).filter(Boolean);
-    const hasShiftCode = importedCodes.some(code => !isConfiguredImportedLeaveCode(code, customLeaveCodes));
-    const hasLeaveCode = importedCodes.some(code => isConfiguredImportedLeaveCode(code, customLeaveCodes));
-
-    let normalizedGroup = '';
-    if (rawGroup) {
-      if (validGroups.has(rawGroup)) {
-        normalizedGroup = rawGroup;
-      } else {
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」的班別群組不是白班／小夜／大夜，將改用其他規則判定`);
-      }
-    }
-
-    if (!normalizedGroup) {
-      normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '';
-    }
-
-    if (!normalizedGroup) {
-      normalizedGroup = inferImportedGroupFromCodes(importedSchedule[staffId]);
-    }
-
-    if (!normalizedGroup) {
-      if (!hasAnyDayContent) {
-        normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '白班';
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有排班內容，已先保留人員名單`);
-      } else if (importMode === 'preSchedule') {
-        normalizedGroup = '白班';
-        if (hasLeaveCode && !hasShiftCode) {
-          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有預假代碼，且無可對照群組，已先歸入白班保留資料`);
-        } else {
-          invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」無法判定群組，已依預班規則先歸入白班`);
-        }
-      } else if (hasLeaveCode && !hasShiftCode) {
-        normalizedGroup = '白班';
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」只有休假代碼，已先歸入白班保留資料`);
-      } else {
-        normalizedGroup = monthGroupLookup[rawName] || fallbackGroupLookup[rawName] || '白班';
-        invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」沒有可判定群組的班別代碼，已先歸入${normalizedGroup}`);
-      }
-    }
-
-    if (!hasAnyDayContent && importMode === 'preSchedule') {
-      invalidMessages.push(`工作表「${sheetName}」第 ${rowNumber} 列「${rawName}」日期區沒有預班內容，已先建立人員骨架供後續預班使用`);
-    }
-
-    importedStaffs.push({
-      id: staffId,
-      name: rawName,
-      group: normalizedGroup,
-      pregnant: false
-    });
-  }
-
-  if (importedStaffs.length === 0) return null;
-
-  const importedScheduleByDate = Object.fromEntries(
-    Object.entries(importedSchedule).map(([staffId, dayMap]) => [
-      staffId,
-      Object.fromEntries(
-        Object.entries(dayMap || {}).map(([day, cell]) => {
-          const dateKey = `${monthKey}-${String(Number(day)).padStart(2, '0')}`;
-          return [dateKey, cell];
-        })
-      )
-    ])
-  );
-
-  return {
-    year,
-    month,
-    staffs: importedStaffs,
-    scheduleData: importedScheduleByDate,
-    customColumnValues: {},
-    schedulingRulesText: '',
-    warnings: invalidMessages,
-    unknownCodes: Array.from(new Set(unknownCodes)).sort(),
-    importMeta: {
-      sourceType: importMode === 'preSchedule' ? 'preScheduleExcel' : 'excel',
-      sourceFiles: [fileName],
-      sourceSheets: [sheetName],
-      importedAt: new Date().toISOString(),
-      lastUpdatedAt: new Date().toISOString(),
-      importMode
-    }
-  };
-};
-
-const parseImportedExcelFiles = async (files = [], fallbackYear = new Date().getFullYear(), options = {}) => {
-  const XLSX = await loadSheetJS();
-  const fileList = Array.from(files || []);
-  const monthlySchedules = {};
-  const warnings = [];
-  const unknownCodes = [];
-  let firstMonthKey = '';
-  const importMode = options.importMode || 'schedule';
-  const existingStaffGroupLookup = buildExistingStaffGroupLookup(options.existingMonthlySchedules || {});
-
-  for (const file of fileList) {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array' });
-
-    for (const sheetName of workbook.SheetNames) {
-      const worksheet = workbook.Sheets[sheetName];
-      if (!worksheet || !worksheet['!ref']) continue;
-
-      const rows = XLSX.utils.sheet_to_json(worksheet, {
-        header: 1,
-        raw: false,
-        defval: ''
-      });
-
-      try {
-        const parsed = parseImportedWorksheet({
-          rows,
-          sheetName,
-          fileName: file.name,
-          fallbackYear,
-          customLeaveCodes: options.customLeaveCodes || [],
-          importMode,
-          existingStaffGroupLookup
-        });
-
-        if (!parsed) continue;
-
-        const monthKey = buildMonthKey(parsed.year, parsed.month);
-        const existing = monthlySchedules[monthKey];
-        if (existing) {
-          monthlySchedules[monthKey] = {
-            ...parsed,
-            importMeta: {
-              ...parsed.importMeta,
-              sourceFiles: Array.from(new Set([...(existing.importMeta?.sourceFiles || []), file.name])),
-              sourceSheets: Array.from(new Set([...(existing.importMeta?.sourceSheets || []), sheetName]))
-            }
-          };
-          warnings.push(`月份 ${parsed.year}年${parsed.month}月 重複匯入，已以最後讀取的內容覆蓋`);
-        } else {
-          monthlySchedules[monthKey] = parsed;
-          if (!firstMonthKey) firstMonthKey = monthKey;
-        }
-
-        warnings.push(...(parsed.warnings || []));
-        unknownCodes.push(...(parsed.unknownCodes || []));
-      } catch (error) {
-        warnings.push(error?.message || `檔案「${file.name}」工作表「${sheetName}」無法匯入`);
-      }
-    }
-  }
-
-  const keys = Object.keys(monthlySchedules).sort();
-  if (keys.length === 0) {
-    throw new Error('匯入失敗：找不到可匯入的月份資料，請確認檔案至少包含「姓名」與日期欄（可為 1日~31日，或系統匯出格式的 1\n(六) 這類表頭）；班別群組欄位可省略');
-  }
-
-  return {
-    monthlySchedules,
-    firstMonthKey: firstMonthKey || keys[0],
-    warnings,
-    unknownCodes: Array.from(new Set(unknownCodes.filter(Boolean))).sort(),
-    importMode
-  };
-};
-
-
-const normalizeStaffGroup = (staffList = []) => {
-  if (!Array.isArray(staffList) || staffList.length === 0) return [];
-
-  const fallbackGroups = [
-    '白班', '白班', '白班', '白班', '白班',
-    '小夜', '小夜', '小夜', '小夜', '小夜',
-    '大夜', '大夜', '大夜', '大夜', '大夜'
-  ];
-
-  return staffList.map((staff, index) => ({
-    ...staff,
-    pregnant: Boolean(staff.pregnant),
-    group: SHIFT_GROUPS.includes(staff.group) ? staff.group : (fallbackGroups[index] || '白班')
-  }));
-};
-
-const createBlankMonthStaffs = (targetYear, targetMonth) => {
-  const monthKey = buildMonthKey(targetYear, targetMonth);
-  const blankStaffs = Array.from({ length: 15 }, (_, index) => ({
-    id: `blank_${monthKey}_${index + 1}`,
-    name: '新成員',
-    group: SHIFT_GROUPS[Math.floor(index / 5)] || '白班',
-    pregnant: false
-  }));
-  return normalizeStaffGroup(blankStaffs);
-};
-
-const createBlankMonthState = (targetYear, targetMonth) => {
-  const blankStaffs = createBlankMonthStaffs(targetYear, targetMonth);
-  const blankSchedule = blankStaffs.reduce((acc, staff) => {
-    acc[staff.id] = {};
-    return acc;
-  }, {});
-  return {
-    staffs: blankStaffs,
-    schedule: blankSchedule,
-    customColumnValues: {},
-    schedulingRulesText: ''
-  };
-};
-
-
-
 const isLeaveCode = (code = '') => SMART_RULES.blockedLeavePrefixes.includes(getCodePrefix(code));
 const isShiftCode = (code = '') => getAllShiftCodes().includes(code);
-
-const GROUP_TO_DEMAND_KEY = {
-  '白班': 'white',
-  '小夜': 'evening',
-  '大夜': 'night'
-};
-
-const DEFAULT_REQUIRED_STAFFING = {
-  weekday: { white: 6, evening: 3, night: 2 },
-  saturday: { white: 4, evening: 2, night: 2 },
-  sunday: { white: 4, evening: 2, night: 2 }
-};
 
 const normalizeRequiredStaffingConfig = (requiredStaffing = {}) => {
   const holidayFallback = requiredStaffing?.holiday || {};
@@ -1084,380 +210,6 @@ const getRequiredStaffingBucketByDay = (day) => {
   if (weekDay === 6) return 'saturday';
   if (weekDay === 0) return 'sunday';
   return 'weekday';
-};
-
-const DEFAULT_SHIFT_BY_GROUP = {
-  '白班': 'D',
-  '小夜': 'E',
-  '大夜': 'N'
-};
-
-const RULE_FILL_MAIN_SHIFTS = ['D', 'E', 'N'];
-
-const HOSPITAL_LEVEL_LABELS = {
-  medical: '醫學中心',
-  regional: '區域醫院',
-  local: '地區醫院'
-};
-
-const HOSPITAL_RATIO_HINTS = {
-  medical: { white: '1:6', evening: '1:9', night: '1:11' },
-  regional: { white: '1:7', evening: '1:11', night: '1:13' },
-  local: { white: '1:10', evening: '1:13', night: '1:15' }
-};
-
-
-const UI_FONT_SIZE_OPTIONS = {
-  small: { label: '小', className: 'text-xs', shiftLabelSize: '1.45rem', shiftCellLabelSize: '1.55rem' },
-  medium: { label: '標準', className: 'text-sm', shiftLabelSize: '1.95rem', shiftCellLabelSize: '2.05rem' },
-  large: { label: '大', className: 'text-base', shiftLabelSize: '2.45rem', shiftCellLabelSize: '2.55rem' }
-};
-
-const getUiFontSizeClass = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.className || UI_FONT_SIZE_OPTIONS.medium.className;
-const getShiftLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.shiftLabelSize || UI_FONT_SIZE_OPTIONS.medium.shiftLabelSize;
-const getShiftCellLabelFontSize = (sizeKey = 'medium') => UI_FONT_SIZE_OPTIONS[sizeKey]?.shiftCellLabelSize || UI_FONT_SIZE_OPTIONS.medium.shiftCellLabelSize;
-
-const UI_DENSITY_OPTIONS = {
-  compact: {
-    shiftWidth: 58,
-    nameWidth: 84,
-    dayMinWidth: 32,
-    dayHeaderClass: 'px-0.5 py-1 text-[11px]',
-    statHeaderClass: 'p-1.5',
-    leaveHeaderClass: 'p-1',
-    cellHeightClass: 'h-8',
-    nameCellPaddingClass: 'px-0.5 py-0.5',
-    footCellPaddingClass: 'p-1.5',
-    groupLabelClass: '',
-    selectorDotClass: 'w-1.5 h-1.5',
-    rowMinHeight: 72
-  },
-  standard: {
-    shiftWidth: 68,
-    nameWidth: 84,
-    dayMinWidth: 52,
-    dayHeaderClass: 'px-1.5 py-2 text-xs',
-    statHeaderClass: 'px-1 py-1',
-    leaveHeaderClass: 'px-1 py-1.5',
-    cellHeightClass: 'h-9',
-    nameCellPaddingClass: 'px-1 py-1',
-    footCellPaddingClass: 'px-1 py-1',
-    groupLabelClass: '',
-    selectorDotClass: 'w-2 h-2',
-    rowMinHeight: 72
-  },
-  relaxed: {
-    shiftWidth: 100,
-    nameWidth: 156,
-    dayMinWidth: 68,
-    dayHeaderClass: 'px-1 py-1.5 text-sm',
-    statHeaderClass: 'p-4',
-    leaveHeaderClass: 'p-2',
-    cellHeightClass: 'h-12',
-    nameCellPaddingClass: 'px-2 py-2',
-    footCellPaddingClass: 'p-3',
-    groupLabelClass: '',
-    selectorDotClass: 'w-3 h-3',
-    rowMinHeight: 96
-  }
-};
-
-const getUiDensityConfig = (densityKey = 'standard') => UI_DENSITY_OPTIONS[densityKey] || UI_DENSITY_OPTIONS.standard;
-
-
-const UI_THEME_PRESETS = {
-  classic: {
-    pageBackgroundColor: '#f8fbff',
-    weekendColor: '#dbeafe',
-    holidayColor: '#fca5a5',
-    tableFontColor: '#1f3b5b',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#f8fbff',
-    shiftColumnFontColor: '#1d4ed8',
-    nameDateColumnFontColor: '#1f3b5b',
-    demandOverColor: '#fde68a',
-    groupSummaryRowBgColor: '#dbeafe',
-    warningTintColor: '#60a5fa',
-    warningTextColor: '#1d4ed8',
-    infoTintColor: '#38bdf8',
-    infoTextColor: '#075985',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
-  },
-  soft: {
-    pageBackgroundColor: '#f5faf7',
-    weekendColor: '#dcfce7',
-    holidayColor: '#f9a8d4',
-    tableFontColor: '#334155',
-    shiftColumnBgColor: '#fbfefc',
-    nameDateColumnBgColor: '#f8fcfa',
-    shiftColumnFontColor: '#3f6212',
-    nameDateColumnFontColor: '#334155',
-    demandOverColor: '#d9f99d',
-    groupSummaryRowBgColor: '#ecfccb',
-    warningTintColor: '#84cc16',
-    warningTextColor: '#3f6212',
-    infoTintColor: '#5eead4',
-    infoTextColor: '#115e59',
-    dangerTintColor: '#fb7185',
-    dangerTextColor: '#9f1239'
-  },
-  warm: {
-    pageBackgroundColor: '#fff9f2',
-    weekendColor: '#ffedd5',
-    holidayColor: '#fdba74',
-    tableFontColor: '#7c2d12',
-    shiftColumnBgColor: '#fffdf9',
-    nameDateColumnBgColor: '#fffbf5',
-    shiftColumnFontColor: '#c2410c',
-    nameDateColumnFontColor: '#7c2d12',
-    demandOverColor: '#fed7aa',
-    groupSummaryRowBgColor: '#ffedd5',
-    warningTintColor: '#fb923c',
-    warningTextColor: '#9a3412',
-    infoTintColor: '#fdba74',
-    infoTextColor: '#9a3412',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
-  },
-  dark: {
-    pageBackgroundColor: '#0f172a',
-    weekendColor: '#1e293b',
-    holidayColor: '#7f1d1d',
-    tableFontColor: '#e2e8f0',
-    shiftColumnBgColor: '#111827',
-    nameDateColumnBgColor: '#172033',
-    shiftColumnFontColor: '#f8fafc',
-    nameDateColumnFontColor: '#e2e8f0',
-    demandOverColor: '#78350f',
-    groupSummaryRowBgColor: '#334155',
-    warningTintColor: '#fbbf24',
-    warningTextColor: '#fef3c7',
-    infoTintColor: '#38bdf8',
-    infoTextColor: '#e0f2fe',
-    dangerTintColor: '#fb7185',
-    dangerTextColor: '#ffe4e6'
-  },
-  sky: {
-    pageBackgroundColor: '#f2f8ff',
-    weekendColor: '#cfe8ff',
-    holidayColor: '#fca5a5',
-    tableFontColor: '#0f3d66',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#f7fbff',
-    shiftColumnFontColor: '#0369a1',
-    nameDateColumnFontColor: '#0f3d66',
-    demandOverColor: '#bae6fd',
-    groupSummaryRowBgColor: '#dbeafe',
-    warningTintColor: '#0ea5e9',
-    warningTextColor: '#075985',
-    infoTintColor: '#7dd3fc',
-    infoTextColor: '#075985',
-    dangerTintColor: '#f87171',
-    dangerTextColor: '#991b1b'
-  },
-  lavender: {
-    pageBackgroundColor: '#f5f5f7',
-    weekendColor: '#e5e7eb',
-    holidayColor: '#d1d5db',
-    tableFontColor: '#111827',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#fafafa',
-    shiftColumnFontColor: '#374151',
-    nameDateColumnFontColor: '#111827',
-    demandOverColor: '#d1d5db',
-    groupSummaryRowBgColor: '#e5e7eb',
-    warningTintColor: '#9ca3af',
-    warningTextColor: '#374151',
-    infoTintColor: '#94a3b8',
-    infoTextColor: '#334155',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
-  },
-  forest: {
-    pageBackgroundColor: '#f3faf5',
-    weekendColor: '#d1fae5',
-    holidayColor: '#fca5a5',
-    tableFontColor: '#14532d',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#f7fcf8',
-    shiftColumnFontColor: '#166534',
-    nameDateColumnFontColor: '#14532d',
-    demandOverColor: '#86efac',
-    groupSummaryRowBgColor: '#d1fae5',
-    warningTintColor: '#22c55e',
-    warningTextColor: '#166534',
-    infoTintColor: '#34d399',
-    infoTextColor: '#065f46',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
-  },
-  sakura: {
-    pageBackgroundColor: '#fff7fb',
-    weekendColor: '#fce7f3',
-    holidayColor: '#fb7185',
-    tableFontColor: '#9d174d',
-    shiftColumnBgColor: '#ffffff',
-    nameDateColumnBgColor: '#fffafd',
-    shiftColumnFontColor: '#be185d',
-    nameDateColumnFontColor: '#9d174d',
-    demandOverColor: '#fbcfe8',
-    groupSummaryRowBgColor: '#fce7f3',
-    warningTintColor: '#f472b6',
-    warningTextColor: '#be185d',
-    infoTintColor: '#f9a8d4',
-    infoTextColor: '#9d174d',
-    dangerTintColor: '#ef4444',
-    dangerTextColor: '#991b1b'
-  },
-  sand: {
-    pageBackgroundColor: '#fff8ef',
-    weekendColor: '#fde68a',
-    holidayColor: '#fb923c',
-    tableFontColor: '#78350f',
-    shiftColumnBgColor: '#fffdf8',
-    nameDateColumnBgColor: '#fffbf3',
-    shiftColumnFontColor: '#92400e',
-    nameDateColumnFontColor: '#78350f',
-    demandOverColor: '#fdba74',
-    groupSummaryRowBgColor: '#fef3c7',
-    warningTintColor: '#f59e0b',
-    warningTextColor: '#92400e',
-    infoTintColor: '#fbbf24',
-    infoTextColor: '#92400e',
-    dangerTintColor: '#dc2626',
-    dangerTextColor: '#991b1b'
-  }
-};
-
-const WIDTH_ADJUST_MAP = { narrow: -12, standard: 0, wide: 12 };
-const HEIGHT_ADJUST_MAP = { compact: -4, standard: 0, roomy: 4 };
-const getAdjustedDensityConfig = (baseConfig, uiSettings = {}) => {
-  const shiftAdjust = WIDTH_ADJUST_MAP[uiSettings.shiftColumnWidthMode || 'standard'] || 0;
-  const nameAdjust = WIDTH_ADJUST_MAP[uiSettings.nameDateColumnWidthMode || 'standard'] || 0;
-  const dayAdjust = WIDTH_ADJUST_MAP[uiSettings.dayColumnWidthMode || 'standard'] || 0;
-  const heightAdjust = HEIGHT_ADJUST_MAP[uiSettings.cellHeightMode || 'standard'] || 0;
-  const dotClassMap = { compact: 'w-1.5 h-1.5', standard: 'w-2 h-2', roomy: 'w-2.5 h-2.5' };
-  return {
-    ...baseConfig,
-    shiftWidth: Math.max(48, baseConfig.shiftWidth + shiftAdjust),
-    nameWidth: Math.max(76, baseConfig.nameWidth + nameAdjust),
-    dayMinWidth: Math.max(28, baseConfig.dayMinWidth + dayAdjust),
-    rowMinHeight: Math.max(72, (baseConfig.rowMinHeight || 80) + heightAdjust * 4),
-    selectorDotClass: dotClassMap[uiSettings.cellHeightMode || 'standard'] || baseConfig.selectorDotClass
-  };
-};
-
-const clampColorChannel = (value) => Math.max(0, Math.min(255, Math.round(value)));
-
-const normalizeHexColor = (hex, fallback = '#000000') => {
-  const raw = String(hex || '').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
-  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
-    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
-  }
-  return fallback;
-};
-
-const hexToRgbObject = (hex, fallback = '#000000') => {
-  const normalized = normalizeHexColor(hex, fallback).replace('#', '');
-  return {
-    r: parseInt(normalized.slice(0, 2), 16),
-    g: parseInt(normalized.slice(2, 4), 16),
-    b: parseInt(normalized.slice(4, 6), 16)
-  };
-};
-
-const rgbObjectToHex = ({ r, g, b }) => {
-  const toHex = (value) => clampColorChannel(value).toString(16).padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
-
-const blendHexColors = (baseHex, mixHex, mixRatio = 0.5) => {
-  const ratio = Math.max(0, Math.min(1, Number(mixRatio) || 0));
-  const base = hexToRgbObject(baseHex, '#ffffff');
-  const mix = hexToRgbObject(mixHex, '#ffffff');
-  return rgbObjectToHex({
-    r: base.r * (1 - ratio) + mix.r * ratio,
-    g: base.g * (1 - ratio) + mix.g * ratio,
-    b: base.b * (1 - ratio) + mix.b * ratio
-  });
-};
-
-const hexToExcelArgb = (hex, fallback = '#FFFFFF') => {
-  return `FF${normalizeHexColor(hex, fallback).replace('#', '').toUpperCase()}`;
-};
-
-const FOUR_WEEK_CYCLE_START = '2026-04-13';
-const FOUR_WEEK_CYCLE_DAYS = 28;
-const RULE_CROSS_MONTH_CONTEXT_DAYS = 7;
-
-const isFourWeekCycleEndDate = (dateStr, cycleStart = FOUR_WEEK_CYCLE_START) => {
-  if (!dateStr) return false;
-  const target = parseDateKey(dateStr);
-  const start = parseDateKey(cycleStart);
-  target.setHours(0, 0, 0, 0);
-  start.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
-  const cycleOffset = ((diffDays + 1) % FOUR_WEEK_CYCLE_DAYS + FOUR_WEEK_CYCLE_DAYS) % FOUR_WEEK_CYCLE_DAYS;
-  return cycleOffset === 0;
-};
-
-
-const normalizeStoredScheduleCellValue = (rawValue = '', customLeaveCodes = []) => {
-  const trimmedValue = String(rawValue ?? '').trim();
-  if (!trimmedValue) return '';
-  const exactKnownCode = Array.from(new Set([...(getAllShiftCodes() || []), ...(DICT.LEAVES || []), ...(customLeaveCodes || [])])).find((code) => {
-    return normalizeCodeComparisonCompact(code) === normalizeCodeComparisonCompact(trimmedValue)
-      || normalizeCodeComparisonCompactNoHyphen(code) === normalizeCodeComparisonCompactNoHyphen(trimmedValue);
-  });
-  if (exactKnownCode) return exactKnownCode;
-  const { normalized, isValid } = normalizeManualShiftCode(trimmedValue, customLeaveCodes || []);
-  return isValid ? normalized : normalizeImportedHalfWidth(trimmedValue);
-};
-
-const reconcileScheduleDataMap = (scheduleData = {}, customLeaveCodes = []) => {
-  const nextScheduleData = {};
-  Object.entries(scheduleData || {}).forEach(([staffId, dateMap]) => {
-    if (!dateMap || typeof dateMap !== 'object') {
-      nextScheduleData[staffId] = {};
-      return;
-    }
-    nextScheduleData[staffId] = {};
-    Object.entries(dateMap || {}).forEach(([dateStr, cell]) => {
-      if (!cell) {
-        nextScheduleData[staffId][dateStr] = null;
-        return;
-      }
-      const rawValue = typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '');
-      const normalizedValue = normalizeStoredScheduleCellValue(rawValue, customLeaveCodes);
-      if (!normalizedValue) {
-        nextScheduleData[staffId][dateStr] = null;
-        return;
-      }
-      const isKnownCode = getAllShiftCodes().includes(normalizedValue) || DICT.LEAVES.includes(normalizedValue) || (customLeaveCodes || []).includes(normalizedValue);
-      const existingMeta = typeof cell === 'object' && cell !== null ? { ...cell } : {};
-      delete existingMeta.value;
-      delete existingMeta.isUnknownCode;
-      nextScheduleData[staffId][dateStr] = {
-        ...existingMeta,
-        value: normalizedValue,
-        ...(isKnownCode ? {} : { isUnknownCode: true })
-      };
-    });
-  });
-  return nextScheduleData;
-};
-
-const reconcileMonthStateCollections = (collection = {}, customLeaveCodes = []) => {
-  const nextCollection = {};
-  Object.entries(collection || {}).forEach(([monthKey, monthState]) => {
-    nextCollection[monthKey] = {
-      ...(monthState || {}),
-      scheduleData: reconcileScheduleDataMap(monthState?.scheduleData || monthState?.schedule || {}, customLeaveCodes)
-    };
-  });
-  return nextCollection;
 };
 
 const ScheduleGridCell = React.memo(function ScheduleGridCell({
