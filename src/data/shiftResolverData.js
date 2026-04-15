@@ -27,3 +27,11 @@ export const getShiftGroupByCode = (code = '') => {
   if (['N'].includes(code)) return '大夜';
   return getCustomShiftGroup(code);
 };
+export const getCodePrefix = (rawCode = '', blockedPrefixes = BLOCKED_LEAVE_PREFIXES) => {
+  const code = String(rawCode || '').trim();
+  if (!code) return '';
+  if (code === 'off') return 'off';
+  const direct = blockedPrefixes.find((prefix) => code === prefix || code.startsWith(prefix));
+  if (direct) return direct;
+  return code;
+};
