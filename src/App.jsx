@@ -86,10 +86,6 @@ import {
   reconcileMonthStateCollections
 } from './data/index.js';
 
-import { createExportToExcel, createExportToWord } from './services/exportService.js';
-import { createSaveToHistory, createLoadHistory, createClearHistory } from './services/historyService.js';
-import { createHandleRuleBasedAutoSchedule } from './services/ruleFillService.js';
-
 const STORAGE_KEY = STORAGE_KEYS.HISTORY;
 const ACTIVE_DRAFT_KEY = STORAGE_KEYS.ACTIVE_DRAFT;
 const LOCAL_SETTINGS_KEY = STORAGE_KEYS.LOCAL_SETTINGS;
@@ -2086,26 +2082,205 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // ==========================================
   // 4. Excel 匯出 (ExcelJS 實現)
   // ==========================================
-    const exportToExcel = createExportToExcel({
-    loadExcelJS,
-    year,
-    month,
-    uiSettings,
-    blendHexColors,
-    colors,
-    mergedLeaveCodes,
-    customColumns,
-    daysInMonth,
-    requiredLeaves,
-    hexToExcelArgb,
-    groupedStaffs,
-    buildExportStaffStats,
-    buildExportDailyStats,
-    getExportCellPresentation,
-    getExportNumberedValue,
-    applyExcelFourWeekDivider,
-    setShowExportMenu
-  });
+  const exportToExcel = async () => {
+    const ExcelJS = await loadExcelJS();
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
+
+    const exportTheme = {
+      pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
+      tableFont: uiSettings?.tableFontColor || '#1f2937',
+      shiftBg: uiSettings?.shiftColumnBgColor || '#ffffff',
+      shiftFont: uiSettings?.shiftColumnFontColor || '#1e293b',
+      nameBg: uiSettings?.nameDateColumnBgColor || '#ffffff',
+      nameFont: uiSettings?.nameDateColumnFontColor || '#1e293b',
+      weekdayHeadBg: blendHexColors(uiSettings?.nameDateColumnBgColor || '#ffffff', '#f1f5f9', 0.7),
+      weekendHeadBg: colors.weekend || '#dcfce7',
+      holidayHeadBg: colors.holiday || '#fca5a5',
+      weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
+      holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
+      monthTitleBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.55),
+      summaryBg: uiSettings?.groupSummaryRowBgColor || '#fef3c7',
+      leaveRowBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#ffffff', 0.2)
+    };
+
+    const statHeaders = ['上班', '假日休', '總休', ...mergedLeaveCodes, ...(customColumns || [])];
+    const totalColumns = 1 + daysInMonth.length + statHeaders.length;
+    const lastDateColumn = daysInMonth.length + 1;
+
+    const monthTitleRow = worksheet.addRow([]);
+    monthTitleRow.height = 26;
+
+    const titleStartCol = 2;
+    const titleEndCol = Math.max(2, lastDateColumn - 2);
+    const leaveStartCol = Math.max(titleEndCol + 1, lastDateColumn - 1);
+    const leaveEndCol = lastDateColumn;
+
+    if (titleEndCol >= titleStartCol) {
+      worksheet.mergeCells(1, titleStartCol, 1, titleEndCol);
+      const titleCell = monthTitleRow.getCell(titleStartCol);
+      titleCell.value = `${month}月班表`;
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
+      titleCell.font = { bold: true, size: 14, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+    }
+
+    if (leaveEndCol >= leaveStartCol) {
+      if (leaveEndCol > leaveStartCol) worksheet.mergeCells(1, leaveStartCol, 1, leaveEndCol);
+      const leaveCell = monthTitleRow.getCell(leaveStartCol);
+      leaveCell.value = `應休${requiredLeaves}天`;
+      leaveCell.alignment = { vertical: 'middle', horizontal: 'right' };
+      leaveCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.monthTitleBg, '#EFF6FF') } };
+      leaveCell.font = { bold: true, size: 11, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+    }
+
+    for (let col = 1; col <= totalColumns; col += 1) {
+      const cell = monthTitleRow.getCell(col);
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+      if (col === 1 || col > lastDateColumn) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#FFFFFF') } };
+      }
+    }
+
+    const headerRow = ['姓名', ...daysInMonth.map(d => `${d.day}\n(${d.weekStr})`), ...statHeaders];
+    const header = worksheet.addRow(headerRow);
+    header.height = 30;
+
+    header.eachCell((cell, colNumber) => {
+      cell.font = { bold: true, size: 10, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      const baseBorder = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+      cell.border = baseBorder;
+
+      if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
+        const d = daysInMonth[colNumber - 2];
+        cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
+        if (d.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayHeadBg, '#FFCACA') } };
+        else if (d.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendHeadBg, '#DCFCE7') } };
+        else cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekdayHeadBg, '#F1F5F9') } };
+      } else if (colNumber === 1) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.shiftBg, '#FFFFFF') } };
+        cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(exportTheme.shiftFont, '#1E293B') } };
+      } else {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.pageBg, '#F8FAFC') } };
+      }
+    });
+
+    const makeBaseBorder = () => ({
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' }
+    });
+
+    const applyStandardCellStyle = (cell, colNumber, dateObj = null) => {
+      const baseBorder = makeBaseBorder();
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.font = { color: { argb: hexToExcelArgb(colNumber === 1 ? exportTheme.nameFont : exportTheme.tableFont, '#1F2937') } };
+      cell.border = baseBorder;
+      if (dateObj) {
+        cell.numFmt = '@';
+        cell.border = applyExcelFourWeekDivider(baseBorder, dateObj.date);
+        if (dateObj.isHoliday) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.holidayCellBg, '#FFE4E4') } };
+        else if (dateObj.isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.weekendCellBg, '#F0FDF4') } };
+      }
+    };
+
+    const addStaffRow = (staff) => {
+      const stats = buildExportStaffStats(staff.id);
+      const rowData = [
+        staff.name,
+        ...daysInMonth.map((d) => getExportNumberedValue(staff.id, d.date) || ''),
+        stats.work,
+        stats.holidayLeave,
+        stats.totalLeave,
+        ...mergedLeaveCodes.map(l => stats.leaveDetails[l] || ''),
+        ...(customColumns || []).map(col => customColumnValues?.[staff.id]?.[col] || '')
+      ];
+      const row = worksheet.addRow(rowData);
+      row.eachCell((cell, colNumber) => {
+        const dateObj = (colNumber >= 2 && colNumber <= daysInMonth.length + 1) ? daysInMonth[colNumber - 2] : null;
+        applyStandardCellStyle(cell, colNumber, dateObj);
+        if (dateObj) {
+          const presentation = getExportCellPresentation(staff.id, dateObj);
+          if (presentation.backgroundColor) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(presentation.backgroundColor, '#DBEAFE') } };
+          }
+          cell.font = { ...(cell.font || {}), color: { argb: hexToExcelArgb(presentation.textColor || exportTheme.tableFont, '#1F2937') } };
+        }
+      });
+      return row;
+    };
+
+    const addSummaryRow = (summaryKey, includeRightStats = false) => {
+      const rowData = [
+        '',
+        ...daysInMonth.map(d => buildExportDailyStats(d.date)[summaryKey] || ''),
+        ...(includeRightStats ? Array(statHeaders.length).fill('') : Array(statHeaders.length).fill(''))
+      ];
+      const row = worksheet.addRow(rowData);
+      row.eachCell((cell, colNumber) => {
+        const baseBorder = makeBaseBorder();
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        cell.font = { bold: true, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+        cell.border = baseBorder;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.summaryBg, '#FEF3C7') } };
+        if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
+          const d = daysInMonth[colNumber - 2];
+          cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
+        }
+      });
+      return row;
+    };
+
+    groupedStaffs.forEach(({ group, staffs: groupStaffList }) => {
+      groupStaffList.forEach(addStaffRow);
+      const summaryKey = group === '白班' ? 'D' : group === '小夜' ? 'E' : 'N';
+      addSummaryRow(summaryKey);
+    });
+
+    const leaveRowData = [
+      '',
+      ...daysInMonth.map(d => buildExportDailyStats(d.date).totalLeave || ''),
+      ...Array(statHeaders.length).fill('')
+    ];
+    const leaveRow = worksheet.addRow(leaveRowData);
+    leaveRow.eachCell((cell, colNumber) => {
+      const baseBorder = makeBaseBorder();
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.font = { bold: true, color: { argb: hexToExcelArgb(exportTheme.tableFont, '#1F2937') } };
+      cell.border = baseBorder;
+      if (colNumber >= 1 && colNumber <= totalColumns) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToExcelArgb(exportTheme.leaveRowBg, '#FFFFFF') } };
+      }
+      if (colNumber >= 2 && colNumber <= daysInMonth.length + 1) {
+        const d = daysInMonth[colNumber - 2];
+        cell.border = applyExcelFourWeekDivider(baseBorder, d.date);
+      }
+    });
+
+    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
+
+    worksheet.getColumn(1).width = 15;
+    for (let i = 2; i <= daysInMonth.length + 1; i += 1) worksheet.getColumn(i).width = 5;
+    for (let i = daysInMonth.length + 2; i <= totalColumns; i += 1) worksheet.getColumn(i).width = 8;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `排班表_${year}年${month}月.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  };
 
   const formatWordDayCellValue = (value = "") => {
     const text = String(value || '').trim();
@@ -2115,58 +2290,587 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return text;
   };
 
-    const exportToWord = createExportToWord({
-    uiSettings,
-    blendHexColors,
-    colors,
-    daysInMonth,
-    requiredLeaves,
-    schedulingRulesText,
-    SHIFT_GROUPS,
-    staffs,
-    buildExportStaffStats,
-    buildExportDailyStats,
-    getExportCellPresentation,
-    getExportNumberedValue,
-    getWordCycleDividerStyle,
-    formatWordDayCellValue,
-    month,
-    setShowExportMenu
-  });
+  const exportToWord = () => {
+    const statHeaders = ['上班', '假日休', '總休'];
+    const exportTheme = {
+      pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
+      tableFont: uiSettings?.tableFontColor || '#1f2937',
+      shiftBg: uiSettings?.shiftColumnBgColor || '#ffffff',
+      shiftFont: uiSettings?.shiftColumnFontColor || '#1e293b',
+      nameBg: uiSettings?.nameDateColumnBgColor || '#ffffff',
+      nameFont: uiSettings?.nameDateColumnFontColor || '#1e293b',
+      weekdayHeadBg: blendHexColors(uiSettings?.nameDateColumnBgColor || '#ffffff', '#f1f5f9', 0.7),
+      weekendHeadBg: colors.weekend || '#dcfce7',
+      holidayHeadBg: colors.holiday || '#fca5a5',
+      weekendCellBg: blendHexColors(colors.weekend || '#dcfce7', '#ffffff', 0.35),
+      holidayCellBg: blendHexColors(colors.holiday || '#fca5a5', '#ffffff', 0.35),
+      statWorkBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', '#93c5fd', 0.45),
+      statHolidayBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.weekend || '#dcfce7', 0.5),
+      statTotalBg: blendHexColors(uiSettings?.pageBackgroundColor || '#f8fafc', colors.holiday || '#fca5a5', 0.45)
+    };
+
+    const leaveTitleColSpan = Math.min(3, Math.max(1, daysInMonth.length));
+    const titleColSpan = Math.max(1, daysInMonth.length - leaveTitleColSpan);
+    const statColSpan = statHeaders.length;
+    const totalColumns = 1 + daysInMonth.length + statHeaders.length;
+    const wordPageWidthPt = 841.9;
+    const wordMarginPt = 18;
+    const wordUsableWidthPt = wordPageWidthPt - (wordMarginPt * 2);
+    const wordNameColWidthPt = 54;
+    const wordStatColWidthPt = 30;
+    const rawWordDayColWidthPt = (wordUsableWidthPt - wordNameColWidthPt - (statHeaders.length * wordStatColWidthPt)) / Math.max(daysInMonth.length, 1);
+    const wordDayColWidthPt = Math.max(18, Math.min(24, rawWordDayColWidthPt));
+    const wordTableWidthPt = wordNameColWidthPt + (daysInMonth.length * wordDayColWidthPt) + (statHeaders.length * wordStatColWidthPt);
+    const schedulingRuleLines = String(schedulingRulesText || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean);
+    const schedulingRulesHtml = schedulingRuleLines.length > 0
+      ? `排班規則：<br/>${schedulingRuleLines.map((line, index) => `${index + 1}. ${line}`).join('<br/>')}`
+      : '排班規則：';
+
+    const webSummaryRowBg = uiSettings?.groupSummaryRowBgColor || '#fef3c7';
+    const summaryRows = [
+      { group: '白班', key: 'D', label: '白班上班', bg: webSummaryRowBg },
+      { group: '小夜', key: 'E', label: '小夜上班', bg: webSummaryRowBg },
+      { group: '大夜', key: 'N', label: '大夜上班', bg: webSummaryRowBg }
+    ];
+
+    const groupedExportRowsHtml = SHIFT_GROUPS.map((group) => {
+      const groupStaffsForExport = staffs.filter((staff) => (staff.group || '白班') === group);
+
+      const staffRowsHtml = groupStaffsForExport.map((staff) => {
+        const stats = buildExportStaffStats(staff.id);
+        return `
+                <tr>
+                  <td class="name-col" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">${staff.name}</td>
+                  ${daysInMonth.map(d => {
+                    const presentation = getExportCellPresentation(staff.id, d);
+                    const value = getExportNumberedValue(staff.id, d.date) || '';
+                    const cellClass = d.isHoliday ? 'holiday-cell' : (d.isWeekend ? 'weekend-cell' : '');
+                    const cellBg = presentation.hasPreSchedule
+                      ? presentation.backgroundColor
+                      : (d.isHoliday ? exportTheme.holidayCellBg : (d.isWeekend ? exportTheme.weekendCellBg : exportTheme.pageBg));
+                    return `<td class="day-col ${cellClass}" style="background:${cellBg}; color:${presentation.textColor || exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${formatWordDayCellValue(value)}</td>`;
+                  }).join('')}
+                  <td class="stat-col stat-work-cell" style="background:${exportTheme.statWorkBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.work || ''}</td>
+                  <td class="stat-col stat-holiday-cell" style="background:${exportTheme.statHolidayBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.holidayLeave || ''}</td>
+                  <td class="stat-col stat-total-cell" style="background:${exportTheme.statTotalBg}; color:${exportTheme.tableFont}; mso-pattern:auto none;">${stats.totalLeave || ''}</td>
+                </tr>`;
+      }).join('');
+
+      const summaryConfig = summaryRows.find((item) => item.group === group);
+      const summaryRowHtml = summaryConfig ? `
+                <tr>
+                  <td class="name-col summary-label-cell" style="background:${summaryConfig.bg}; color:${exportTheme.nameFont}; mso-pattern:auto none;"></td>
+                  ${daysInMonth.map(d => {
+                    const count = buildExportDailyStats(d.date)[summaryConfig.key];
+                    return `<td class="day-col summary-value-cell" style="background:${summaryConfig.bg}; color:${exportTheme.tableFont}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${count || ''}</td>`;
+                  }).join('')}
+                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
+                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
+                  <td class="stat-col summary-value-cell" style="background:${summaryConfig.bg}; mso-pattern:auto none;"></td>
+                </tr>` : '';
+
+      return `${staffRowsHtml}${summaryRowHtml}`;
+    }).join('');
+
+    const html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office"
+          xmlns:w="urn:schemas-microsoft-com:office:word"
+          xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <meta name="ProgId" content="Word.Document">
+        <meta name="Generator" content="Microsoft Word 15">
+        <meta name="Originator" content="Microsoft Word 15">
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>90</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
+        <style>
+          @page WordSection1 {
+            size: 841.9pt 595.3pt;
+            mso-page-orientation: landscape;
+            margin: ${wordMarginPt}pt ${wordMarginPt}pt ${wordMarginPt}pt ${wordMarginPt}pt;
+          }
+          div.WordSection1 { page: WordSection1; }
+          body {
+            font-family: "Microsoft JhengHei", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: ${exportTheme.tableFont};
+            background: ${exportTheme.pageBg};
+          }
+          table {
+            border-collapse: collapse;
+            table-layout: fixed;
+            width: ${wordTableWidthPt}pt;
+            max-width: ${wordTableWidthPt}pt;
+            margin: 0 auto;
+            font-size: 9pt;
+          }
+          th, td {
+            border: 1px solid #000;
+            padding: 2px 3px;
+            text-align: center;
+            vertical-align: middle;
+            word-break: break-all;
+          }
+          .month-row td {
+            height: 24pt;
+            font-weight: 700;
+            background: ${exportTheme.pageBg};
+            border-top: 0;
+            border-left: 0;
+            border-right: 0;
+            border-bottom: 1px solid #000;
+          }
+          .month-name-spacer,
+          .month-stat-spacer {
+            color: transparent;
+          }
+          .month-title-zone,
+          .month-leave-zone {
+            height: 24pt;
+            padding: 0 6pt;
+          }
+          .month-title-wrap,
+          .month-leave-wrap {
+            position: relative;
+            width: 100%;
+            height: 24pt;
+          }
+          .month-title {
+            display: block;
+            width: 100%;
+            text-align: center;
+            font-size: 14pt;
+            font-weight: 700;
+            line-height: 24pt;
+            white-space: nowrap;
+          }
+          .month-leave-inline {
+            display: block;
+            width: 100%;
+            text-align: right;
+            font-size: 10.5pt;
+            font-weight: 700;
+            line-height: 24pt;
+            white-space: nowrap;
+          }
+          .name-col {
+            width: ${wordNameColWidthPt}pt;
+            min-width: ${wordNameColWidthPt}pt;
+            font-weight: 700;
+          }
+          .day-col {
+            width: ${wordDayColWidthPt}pt;
+            min-width: ${wordDayColWidthPt}pt;
+            white-space: nowrap;
+          }
+          .word-numbered-leave {
+            display: inline-block;
+            white-space: nowrap;
+            word-break: keep-all;
+            font-size: 8pt;
+            line-height: 1;
+            letter-spacing: -0.1pt;
+          }
+          .stat-col {
+            width: ${wordStatColWidthPt}pt;
+            min-width: ${wordStatColWidthPt}pt;
+          }
+          .header-cell {
+            font-weight: 700;
+            line-height: 1.1;
+          }
+          .weekday-head { background-color: ${exportTheme.weekdayHeadBg}; }
+          .holiday-head { background-color: ${exportTheme.holidayHeadBg}; }
+          .weekend-head { background-color: ${exportTheme.weekendHeadBg}; }
+          .holiday-cell { background-color: ${exportTheme.holidayCellBg}; }
+          .weekend-cell { background-color: ${exportTheme.weekendCellBg}; }
+          .stat-work-head { background-color: ${exportTheme.statWorkBg}; color: ${exportTheme.tableFont}; }
+          .stat-holiday-head { background-color: ${exportTheme.statHolidayBg}; color: ${exportTheme.tableFont}; }
+          .stat-total-head { background-color: ${exportTheme.statTotalBg}; color: ${exportTheme.tableFont}; }
+          .stat-work-cell { background-color: ${exportTheme.statWorkBg}; }
+          .stat-holiday-cell { background-color: ${exportTheme.statHolidayBg}; }
+          .stat-total-cell { background-color: ${exportTheme.statTotalBg}; }
+          .summary-label-cell, .summary-value-cell {
+            font-weight: 700;
+          }
+          .rules-row td {
+            padding: 8pt 10pt;
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.7;
+            font-size: 10pt;
+            background: ${exportTheme.pageBg};
+          }
+        </style>
+      </head>
+      <body>
+        <div class="WordSection1">
+          <table>
+            <thead>
+              <tr class="month-row">
+                <td class="name-col month-name-spacer"></td>
+                <td class="month-title-zone" colspan="${titleColSpan}">
+                  <div class="month-title-wrap">
+                    <span class="month-title">${month}月班表</span>
+                  </div>
+                </td>
+                <td class="month-leave-zone" colspan="${leaveTitleColSpan}">
+                  <div class="month-leave-wrap">
+                    <span class="month-leave-inline">應休${requiredLeaves}天</span>
+                  </div>
+                </td>
+                <td class="month-stat-spacer" colspan="${statColSpan}"></td>
+              </tr>
+              <tr>
+                <th class="name-col header-cell" style="background:${exportTheme.nameBg}; color:${exportTheme.nameFont}; mso-pattern:auto none;">姓名</th>
+                ${daysInMonth.map(d => {
+                  const headClass = d.isHoliday ? 'holiday-head' : (d.isWeekend ? 'weekend-head' : 'weekday-head');
+                  const headBg = d.isHoliday ? exportTheme.holidayHeadBg : (d.isWeekend ? exportTheme.weekendHeadBg : exportTheme.weekdayHeadBg);
+                  return `<th class="day-col header-cell ${headClass}" style="background:${headBg}; mso-pattern:auto none;${getWordCycleDividerStyle(d.date)}">${d.day}<br/>(${d.weekStr})</th>`;
+                }).join('')}
+                <th class="stat-col header-cell stat-work-head">上班</th>
+                <th class="stat-col header-cell stat-holiday-head">假日休</th>
+                <th class="stat-col header-cell stat-total-head">總休</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${groupedExportRowsHtml}
+            </tbody>
+            <tfoot>
+              <tr class="rules-row">
+                <td colspan="${totalColumns}">${schedulingRulesHtml}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </body>
+    </html>`;
+
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `列印班表_${year}年${month}月.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  };
 
   // ==========================================
   // 5. 規則式半智慧補班功能
   // ==========================================
-    const handleRuleBasedAutoSchedule = createHandleRuleBasedAutoSchedule({
-    setIsRuleFillLoading,
-    setRuleFillFeedback,
-    schedule,
-    ruleFillConfig,
-    staffs,
-    daysInMonth,
-    RULE_FILL_MAIN_SHIFTS,
-    getShiftGroupByCode,
-    makeCellKey,
-    getContextCellCode,
-    getRequiredStaffingBucketByDay,
-    GROUP_TO_DEMAND_KEY,
-    staffingConfig,
-    addDays,
-    parseDateKey,
-    formatDateKey,
-    isShiftCode,
-    isConfiguredLeaveCode,
-    getVisiblePreScheduleCode,
-    SMART_RULES,
-    requiredLeaves,
-    getStaffRefFromCurrentMonth,
-    buildEntriesFromSnapshotDiff,
-    applyRuleFillEntries,
-    saveToHistory: (...args) => saveToHistory(...args),
-    defaultAutoLeaveCode,
-    SHIFT_GROUPS,
-    DEFAULT_SHIFT_BY_GROUP
-  });
+  const handleRuleBasedAutoSchedule = async (isPartial = false) => {
+    setIsRuleFillLoading(true);
+    setRuleFillFeedback(isPartial ? "🧩 系統正在依指定範圍進行規則補空..." : "🧩 系統正在依人力需求執行整月規則補空...");
+
+    try {
+      const mergedSchedule = JSON.parse(JSON.stringify(schedule));
+      const targetStaffIds = isPartial && ruleFillConfig.selectedStaffs.length > 0
+        ? new Set(ruleFillConfig.selectedStaffs)
+        : new Set(staffs.map(s => s.id));
+
+      const targetDays = daysInMonth.filter(d => {
+        if (!isPartial) return true;
+        return d.day >= ruleFillConfig.dateRange.start && d.day <= ruleFillConfig.dateRange.end;
+      });
+
+      const normalizedTargetShift = RULE_FILL_MAIN_SHIFTS.includes(ruleFillConfig.targetShift) ? ruleFillConfig.targetShift : '';
+      const restrictedGroup = normalizedTargetShift ? getShiftGroupByCode(normalizedTargetShift) : null;
+      const summary = { workFilled: 0, leaveFilled: 0, skipped: 0 };
+      const touchedRuleFillCellMap = new Map();
+      const markRuleFillCellTouched = (staffId, dateStr) => {
+        if (!staffId || !dateStr) return;
+        touchedRuleFillCellMap.set(makeCellKey(staffId, dateStr), { staffId, dateStr });
+      };
+
+      const getScheduleCode = (snapshot, staffRef, dateStr) => {
+        return getContextCellCode(staffRef, dateStr, { snapshot });
+      };
+
+      const setScheduleCode = (snapshot, staffId, dateStr, value, source = 'auto') => {
+        if (!snapshot[staffId]) snapshot[staffId] = {};
+        snapshot[staffId][dateStr] = value ? { value, source } : null;
+        markRuleFillCellTouched(staffId, dateStr);
+      };
+
+      const getDemandType = (day) => getRequiredStaffingBucketByDay(day);
+      const getDemandForGroup = (day, group) => {
+        const bucket = getDemandType(day);
+        const key = GROUP_TO_DEMAND_KEY[group];
+        return Number(staffingConfig?.requiredStaffing?.[bucket]?.[key] || 0);
+      };
+
+      const getAssignedCountByGroup = (snapshot, dateStr, group) => {
+        return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
+          const code = getScheduleCode(snapshot, s, dateStr);
+          return sum + (getShiftGroupByCode(code) === group ? 1 : 0);
+        }, 0);
+      };
+
+      const countConsecutiveBeforeFromSnapshot = (snapshot, staffRef, dateStr) => {
+        let count = 0;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        while (true) {
+          const key = formatDateKey(cursor);
+          const code = getScheduleCode(snapshot, staffRef, key);
+          if (!isShiftCode(code)) break;
+          count += 1;
+          cursor = addDays(cursor, -1);
+        }
+        return count;
+      };
+
+      const canAssignWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
+        const reasons = [];
+        const currentCode = getScheduleCode(snapshot, staff, dateStr);
+        const preScheduleCode = getVisiblePreScheduleCode(staff, dateStr);
+        const hasBlockedPreScheduleCode = Boolean(preScheduleCode);
+        if (currentCode) reasons.push('該格已有排班或休假代碼');
+        if (hasBlockedPreScheduleCode) reasons.push('該格已有預班／預假，不可被規則補空覆蓋');
+        if (isConfiguredLeaveCode(currentCode)) reasons.push('該格已有休假，不可再排班');
+        const staffGroup = staff.group || '白班';
+        const shiftGroup = getShiftGroupByCode(shiftCode);
+        if (!SMART_RULES.allowCrossGroupAssignment && shiftGroup && staffGroup !== shiftGroup) reasons.push('不可跨群組排班');
+        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
+        const prevCode = getScheduleCode(snapshot, staff, prevKey);
+        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
+        if (disallowed.includes(shiftCode)) reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
+        const consecutiveBefore = countConsecutiveBeforeFromSnapshot(snapshot, staff, dateStr);
+        if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
+        if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) reasons.push('懷孕標記人員不可排 N / 夜8-8');
+        return { allowed: reasons.length === 0, reasons };
+      };
+
+      const getWorkCountFromSnapshot = (snapshot, staffId) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        return daysInMonth.reduce((sum, d) => sum + (isShiftCode(getScheduleCode(snapshot, staffRef, d.date)) ? 1 : 0), 0);
+      };
+
+      const getShiftCountFromSnapshot = (snapshot, staffId, shiftCode) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        return daysInMonth.reduce((sum, d) => sum + (getScheduleCode(snapshot, staffRef, d.date) === shiftCode ? 1 : 0), 0);
+      };
+
+      const getLeaveCountFromSnapshot = (snapshot, staffId) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        return daysInMonth.reduce((sum, d) => sum + (isConfiguredLeaveCode(getScheduleCode(snapshot, staffRef, d.date)) ? 1 : 0), 0);
+      };
+
+      const getBlankCountFromSnapshot = (snapshot, staffId) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        return daysInMonth.reduce((sum, d) => sum + (!getScheduleCode(snapshot, staffRef, d.date) ? 1 : 0), 0);
+      };
+
+      const canStillMeetRequiredLeavesAfterAssign = (snapshot, staffId) => {
+        const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
+        const remainingBlanks = getBlankCountFromSnapshot(snapshot, staffId);
+        const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
+        return remainingBlanks >= remainingLeavesNeeded;
+      };
+
+      const canStillMeetRequiredLeavesIfAssignShift = (snapshot, staffId) => {
+        const currentLeaves = getLeaveCountFromSnapshot(snapshot, staffId);
+        const remainingBlanks = getBlankCountFromSnapshot(snapshot, staffId);
+        const remainingLeavesNeeded = Math.max(0, requiredLeaves - currentLeaves);
+        return (remainingBlanks - 1) >= remainingLeavesNeeded;
+      };
+
+      const getRecentWorkPressure = (snapshot, staffId, dateStr, lookback = 3) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        let count = 0;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        for (let i = 0; i < lookback; i += 1) {
+          const code = getScheduleCode(snapshot, staffRef, formatDateKey(cursor));
+          if (isShiftCode(code)) count += 1;
+          cursor = addDays(cursor, -1);
+        }
+        return count;
+      };
+
+      const getRecentLeavePressure = (snapshot, staffId, dateStr, lookback = 4) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        let count = 0;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        for (let i = 0; i < lookback; i += 1) {
+          const code = getScheduleCode(snapshot, staffRef, formatDateKey(cursor));
+          if (isLeaveCode(code)) count += 1;
+          cursor = addDays(cursor, -1);
+        }
+        return count;
+      };
+
+      const getNearbyLeavePressure = (snapshot, staffId, dateStr, radius = 2) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        let count = 0;
+        const center = parseDateKey(dateStr);
+        for (let offset = -radius; offset <= radius; offset += 1) {
+          if (offset === 0) continue;
+          const key = formatDateKey(addDays(center, offset));
+          const code = getScheduleCode(snapshot, staffRef, key);
+          if (isLeaveCode(code)) count += 1;
+        }
+        return count;
+      };
+
+      const getDaysSinceLastLeave = (snapshot, staffId, dateStr, maxLookback = 10) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        let cursor = addDays(parseDateKey(dateStr), -1);
+        for (let i = 1; i <= maxLookback; i += 1) {
+          const code = getScheduleCode(snapshot, staffRef, formatDateKey(cursor));
+          if (isLeaveCode(code)) return i;
+          cursor = addDays(cursor, -1);
+        }
+        return maxLookback + 1;
+      };
+
+      const getGroupLeaveLoad = (snapshot, dateStr, group) => {
+        return staffs.filter(s => (s.group || '白班') === group).reduce((sum, s) => {
+          const code = getScheduleCode(snapshot, s, dateStr);
+          return sum + (isLeaveCode(code) ? 1 : 0);
+        }, 0);
+      };
+
+      const getConsecutiveLeavePattern = (snapshot, staffId, dateStr) => {
+        const staffRef = getStaffRefFromCurrentMonth(staffId) || staffId;
+        const prevCode = getScheduleCode(snapshot, staffRef, formatDateKey(addDays(parseDateKey(dateStr), -1)));
+        const nextCode = getScheduleCode(snapshot, staffRef, formatDateKey(addDays(parseDateKey(dateStr), 1)));
+        const prevIsLeave = isLeaveCode(prevCode);
+        const nextIsLeave = isLeaveCode(nextCode);
+        return {
+          prevIsLeave,
+          nextIsLeave,
+          adjacentLeaveCount: (prevIsLeave ? 1 : 0) + (nextIsLeave ? 1 : 0)
+        };
+      };
+
+      const scoreCandidateWithSnapshot = (snapshot, staff, dateStr, shiftCode) => {
+        let score = 0;
+        score += (999 - getShiftCountFromSnapshot(snapshot, staff.id, shiftCode)) * SMART_RULES.fillPriorityWeights.sameShiftCount;
+        score += (999 - getWorkCountFromSnapshot(snapshot, staff.id)) * SMART_RULES.fillPriorityWeights.totalShiftCount;
+        if (getShiftGroupByCode(shiftCode) === (staff.group || '白班')) score += 100 * SMART_RULES.fillPriorityWeights.sameGroup;
+        score -= getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 18;
+        return score;
+      };
+
+      const scoreLeaveCandidateWithSnapshot = (snapshot, staff, dateStr) => {
+        const leaveDeficit = Math.max(0, requiredLeaves - getLeaveCountFromSnapshot(snapshot, staff.id));
+        const workCount = getWorkCountFromSnapshot(snapshot, staff.id);
+        const group = staff.group || '白班';
+        const sameDayLeaveLoad = getGroupLeaveLoad(snapshot, dateStr, group);
+        const recentLeavePressure = getRecentLeavePressure(snapshot, staff.id, dateStr, 4);
+        const nearbyLeavePressure = getNearbyLeavePressure(snapshot, staff.id, dateStr, 2);
+        const daysSinceLastLeave = getDaysSinceLastLeave(snapshot, staff.id, dateStr, 10);
+        const consecutiveLeavePattern = getConsecutiveLeavePattern(snapshot, staff.id, dateStr);
+        let score = 0;
+        score += leaveDeficit * 120;
+        score += workCount * 5;
+        score += getRecentWorkPressure(snapshot, staff.id, dateStr, 3) * 18;
+        score += Math.min(daysSinceLastLeave, 10) * 8;
+        score -= sameDayLeaveLoad * 30;
+        score -= recentLeavePressure * 18;
+        score -= nearbyLeavePressure * 28;
+        if (consecutiveLeavePattern.adjacentLeaveCount === 1) score += 22;
+        if (consecutiveLeavePattern.adjacentLeaveCount >= 2) score -= 12;
+        return score;
+      };
+
+      for (const day of targetDays) {
+        for (const group of SHIFT_GROUPS) {
+          if (restrictedGroup && restrictedGroup !== group) continue;
+
+          const shiftCode = normalizedTargetShift && getShiftGroupByCode(normalizedTargetShift) === group
+            ? normalizedTargetShift
+            : DEFAULT_SHIFT_BY_GROUP[group];
+
+          const demand = getDemandForGroup(day, group);
+          const alreadyAssigned = getAssignedCountByGroup(mergedSchedule, day.date, group);
+          const needed = Math.max(0, demand - alreadyAssigned);
+
+          const groupStaffs = staffs.filter(s => (s.group || '白班') === group && targetStaffIds.has(s.id));
+          const groupStaffIds = new Set(groupStaffs.map(s => s.id));
+
+          // 逐格補主班別，補到需求就停
+          for (let slot = 0; slot < needed; slot += 1) {
+            const assignableCandidates = groupStaffs
+              .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
+              .filter(staff => !getVisiblePreScheduleCode(staff.id, day.date))
+              .map(staff => {
+                const result = canAssignWithSnapshot(mergedSchedule, staff, day.date, shiftCode);
+                const canKeepLeaveTarget = result.allowed ? canStillMeetRequiredLeavesIfAssignShift(mergedSchedule, staff.id) : false;
+                return {
+                  staff,
+                  allowed: result.allowed && canKeepLeaveTarget,
+                  score: result.allowed && canKeepLeaveTarget ? scoreCandidateWithSnapshot(mergedSchedule, staff, day.date, shiftCode) : -1
+                };
+              })
+              .filter(item => item.allowed)
+              .sort((a, b) => b.score - a.score);
+
+            if (assignableCandidates.length === 0) {
+              summary.skipped += 1;
+              continue;
+            }
+
+            const picked = assignableCandidates[0];
+            setScheduleCode(mergedSchedule, picked.staff.id, day.date, shiftCode, 'auto');
+            summary.workFilled += 1;
+          }
+
+          // 需求已滿後，只替休假不足者補 off；其他空白保留
+          const leaveCandidates = groupStaffs
+            .filter(staff => !getScheduleCode(mergedSchedule, staff.id, day.date))
+            .filter(staff => {
+              const preScheduleCode = getVisiblePreScheduleCode(staff.id, day.date);
+              return !preScheduleCode;
+            })
+            .filter(staff => getLeaveCountFromSnapshot(mergedSchedule, staff.id) < requiredLeaves)
+            .map(staff => ({ staff, score: scoreLeaveCandidateWithSnapshot(mergedSchedule, staff, day.date) }))
+            .sort((a, b) => b.score - a.score);
+
+          if (leaveCandidates.length > 0) {
+            const currentLeaveLoad = getGroupLeaveLoad(mergedSchedule, day.date, group);
+            const maxLeaveForDay = Math.max(0, groupStaffIds.size - demand);
+            if (currentLeaveLoad < maxLeaveForDay) {
+              const bestLeaveCandidate = leaveCandidates[0];
+              if (bestLeaveCandidate && canStillMeetRequiredLeavesAfterAssign(mergedSchedule, bestLeaveCandidate.staff.id)) {
+                setScheduleCode(mergedSchedule, bestLeaveCandidate.staff.id, day.date, defaultAutoLeaveCode, 'auto');
+                summary.leaveFilled += 1;
+              }
+            }
+          }
+        }
+      }
+
+      const touchedRuleFillCells = Array.from(touchedRuleFillCellMap.values());
+      const ruleFillChangedEntries = buildEntriesFromSnapshotDiff(mergedSchedule, { onlyCells: touchedRuleFillCells });
+      if (ruleFillChangedEntries.length > 0) {
+        applyRuleFillEntries(ruleFillChangedEntries, {
+          preserveSelection: true,
+          selectionCells: ruleFillChangedEntries.map(({ staffId, dateStr }) => ({ staffId, dateStr })),
+          activeCell: ruleFillChangedEntries.length > 0 ? { staffId: ruleFillChangedEntries[ruleFillChangedEntries.length - 1].staffId, dateStr: ruleFillChangedEntries[ruleFillChangedEntries.length - 1].dateStr } : null,
+          clearAssist: false,
+          resetBuffer: true
+        });
+      }
+      saveToHistory(isPartial ? '規則指定補空' : '規則全月補空', mergedSchedule);
+      const changedCount = ruleFillChangedEntries.length;
+      setRuleFillFeedback(`✅ 補空完成：上班 ${summary.workFilled} 格、休假 ${summary.leaveFilled} 格、未補成功 ${summary.skipped} 格${changedCount > 0 ? `，實際寫入 ${changedCount} 格` : '，沒有可寫入的新格'}`);
+    } catch (error) {
+      console.error(error);
+      setRuleFillFeedback("❌ 規則補空失敗，請檢查設定。");
+    } finally {
+      setIsRuleFillLoading(false);
+    }
+  };
 
 
   // ==========================================
@@ -2192,58 +2896,98 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return {};
   };
 
-    const saveToHistory = createSaveToHistory({
-    buildMonthKey,
-    year,
-    month,
-    staffs,
-    normalizeStaffGroup,
-    monthlySchedules,
-    preScheduleMonthlySchedules,
-    schedule,
-    colors,
-    customHolidays,
-    specialWorkdays,
-    medicalCalendarAdjustments,
-    staffingConfig,
-    uiSettings,
-    customLeaveCodes,
-    customWorkShifts,
-    customColumns,
-    customColumnValues,
-    schedulingRulesText,
-    setHistoryList,
-    STORAGE_KEY
-  });
+  const saveToHistory = (label, currentSchedule = schedule) => {
+    const currentMonthKey = buildMonthKey(year, month);
+    const normalizedMonthStaffs = normalizeStaffGroup(staffs);
+    const mergedMonthlySchedules = {
+      ...(monthlySchedules || {}),
+      [currentMonthKey]: {
+        ...(monthlySchedules?.[currentMonthKey] || {}),
+        year,
+        month,
+        staffs: normalizedMonthStaffs,
+        scheduleData: currentSchedule,
+        customColumnValues: customColumnValues || {},
+        schedulingRulesText: typeof schedulingRulesText === 'string' ? schedulingRulesText : '',
+        importMeta: {
+          ...(monthlySchedules?.[currentMonthKey]?.importMeta || {}),
+          sourceType: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceType || 'manual',
+          sourceFiles: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceFiles || [],
+          sourceSheets: monthlySchedules?.[currentMonthKey]?.importMeta?.sourceSheets || [],
+          importedAt: monthlySchedules?.[currentMonthKey]?.importMeta?.importedAt || new Date().toISOString(),
+          lastUpdatedAt: new Date().toISOString()
+        }
+      }
+    };
 
-    const loadHistory = createLoadHistory({
-    buildMonthKey,
-    normalizeStaffGroup,
-    setMonthlySchedules,
-    setPreScheduleMonthlySchedules,
-    setYear,
-    setMonth,
-    setCustomHolidays,
-    setSpecialWorkdays,
-    setMedicalCalendarAdjustments,
-    setStaffingConfig,
-    setUiSettings,
-    setCustomLeaveCodes,
-    setCustomWorkShifts,
-    setCustomColumns,
-    setCustomColumnValues,
-    setSchedulingRulesText,
-    setStaffs,
-    setSchedule,
-    setColors,
-    setShowHistoryModal,
-    setShowDraftPrompt
-  });
+    const newRecord = {
+      id: Date.now(),
+      label,
+      timestamp: new Date().toLocaleString(),
+      state: {
+        year,
+        month,
+        staffs: normalizedMonthStaffs,
+        schedule: currentSchedule,
+        monthlySchedules: mergedMonthlySchedules,
+        preScheduleMonthlySchedules: preScheduleMonthlySchedules || {},
+        colors,
+        customHolidays,
+        specialWorkdays,
+        medicalCalendarAdjustments,
+        staffingConfig,
+        uiSettings,
+        customLeaveCodes,
+        customWorkShifts,
+        customColumns,
+        customColumnValues,
+        schedulingRulesText
+      }
+    };
 
-    const clearHistory = createClearHistory({
-    STORAGE_KEY,
-    setHistoryList
-  });
+    setHistoryList(prev => {
+      const updated = [newRecord, ...prev].slice(0, 10);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const loadHistory = (record) => {
+    const { state } = record;
+    const nextMonthlySchedules = state.monthlySchedules || {};
+    const nextPreScheduleMonthlySchedules = state.preScheduleMonthlySchedules || {};
+    const targetMonthKey = buildMonthKey(state.year, state.month);
+    const currentMonthState = nextMonthlySchedules?.[targetMonthKey] || null;
+
+    setMonthlySchedules(nextMonthlySchedules);
+    setPreScheduleMonthlySchedules(nextPreScheduleMonthlySchedules);
+    setYear(state.year);
+    setMonth(state.month);
+    setCustomHolidays(Array.isArray(state.customHolidays) ? state.customHolidays : []);
+    setSpecialWorkdays(Array.isArray(state.specialWorkdays) ? state.specialWorkdays : []);
+    setMedicalCalendarAdjustments(state.medicalCalendarAdjustments || { holidays: [], workdays: [] });
+    if (state.staffingConfig) setStaffingConfig(state.staffingConfig);
+    if (state.uiSettings) setUiSettings(state.uiSettings);
+    if (Array.isArray(state.customLeaveCodes)) setCustomLeaveCodes(state.customLeaveCodes);
+    if (Array.isArray(state.customWorkShifts)) setCustomWorkShifts(state.customWorkShifts);
+    if (Array.isArray(state.customColumns)) setCustomColumns(state.customColumns);
+    setCustomColumnValues(currentMonthState?.customColumnValues || state.customColumnValues || {});
+    if (typeof (currentMonthState?.schedulingRulesText ?? state.schedulingRulesText) === 'string') {
+      setSchedulingRulesText(currentMonthState?.schedulingRulesText ?? state.schedulingRulesText);
+    }
+    setStaffs(normalizeStaffGroup(currentMonthState?.staffs || state.staffs));
+    setSchedule(currentMonthState?.scheduleData || state.schedule);
+    if (state.colors) setColors(state.colors);
+    setShowHistoryModal(false);
+    setShowDraftPrompt(false);
+  };
+
+  const clearHistory = () => {
+    if (window.confirm("確定要清空所有本機暫存紀錄嗎？")) {
+      localStorage.removeItem(STORAGE_KEY);
+      setHistoryList([]);
+    }
+  };
 
 
   const canAssignWithManualOverride = (staff, dateStr, shiftCode) => {
