@@ -1,4 +1,4 @@
-export const createHandleRuleBasedAutoSchedule = (deps) => async (isPartial = false) => {
+export const createHandleRuleBasedAutoSchedule = (deps = {}) => {
   const {
     setIsRuleFillLoading,
     setRuleFillFeedback,
@@ -8,28 +8,29 @@ export const createHandleRuleBasedAutoSchedule = (deps) => async (isPartial = fa
     daysInMonth,
     RULE_FILL_MAIN_SHIFTS,
     getShiftGroupByCode,
-    makeCellKey,
-    getContextCellCode,
-    getRequiredStaffingBucketByDay,
     GROUP_TO_DEMAND_KEY,
     staffingConfig,
-    addDays,
-    parseDateKey,
-    formatDateKey,
-    isShiftCode,
-    isConfiguredLeaveCode,
-    getVisiblePreScheduleCode,
     SMART_RULES,
+    getVisiblePreScheduleCode,
+    isConfiguredLeaveCode,
     requiredLeaves,
+    isShiftCode,
+    isLeaveCode,
+    DEFAULT_SHIFT_BY_GROUP,
+    makeCellKey,
+    getContextCellCode,
+    parseDateKey,
+    addDays,
+    formatDateKey,
+    getRequiredStaffingBucketByDay,
     getStaffRefFromCurrentMonth,
     buildEntriesFromSnapshotDiff,
     applyRuleFillEntries,
     saveToHistory,
-    defaultAutoLeaveCode,
-    SHIFT_GROUPS,
-    DEFAULT_SHIFT_BY_GROUP
+    defaultAutoLeaveCode
   } = deps;
 
+  return async (isPartial = false) => {
     setIsRuleFillLoading(true);
     setRuleFillFeedback(isPartial ? "🧩 系統正在依指定範圍進行規則補空..." : "🧩 系統正在依人力需求執行整月規則補空...");
 
@@ -331,4 +332,6 @@ export const createHandleRuleBasedAutoSchedule = (deps) => async (isPartial = fa
     } finally {
       setIsRuleFillLoading(false);
     }
+  
+  };
 };
