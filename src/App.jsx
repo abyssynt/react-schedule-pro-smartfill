@@ -85,6 +85,8 @@ import {
   reconcileScheduleDataMap,
   reconcileMonthStateCollections
 } from './data/index.js';
+
+import { createHandleRuleBasedAutoSchedule } from './services/ruleFillService.js';
 import { buildMonthStatePayload } from './services/monthStateService.js';
 
 import { exportToExcelService, exportToWordService } from './services/exportService.js';
@@ -96,7 +98,6 @@ import {
   buildRequiredCountMapService,
   getDemandHighlightStyleService
 } from './services/statsService.js';
-import { createHandleRuleBasedAutoSchedule } from './services/ruleFillService.js';
 import {
   getCellCodeFromSnapshotService,
   evaluateRuleWarningForCellInSnapshotService,
