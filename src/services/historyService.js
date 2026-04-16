@@ -1,27 +1,8 @@
-export const createSaveToHistory = (deps) => (label, currentSchedule = deps.schedule) => {
+export const saveToHistoryService = (label, currentSchedule, ctx) => {
   const {
-    buildMonthKey,
-    year,
-    month,
-    staffs,
-    normalizeStaffGroup,
-    monthlySchedules,
-    preScheduleMonthlySchedules,
-    colors,
-    customHolidays,
-    specialWorkdays,
-    medicalCalendarAdjustments,
-    staffingConfig,
-    uiSettings,
-    customLeaveCodes,
-    customWorkShifts,
-    customColumns,
-    customColumnValues,
-    schedulingRulesText,
-    setHistoryList,
-    STORAGE_KEY
-  } = deps;
-
+    buildMonthKey, year, month, normalizeStaffGroup, staffs, monthlySchedules, customColumnValues, schedulingRulesText, preScheduleMonthlySchedules, colors, customHolidays, specialWorkdays, medicalCalendarAdjustments, staffingConfig, uiSettings, customLeaveCodes, customWorkShifts, customColumns, setHistoryList, storageKey
+  } = ctx;
+  if (currentSchedule === undefined) currentSchedule = ctx.schedule;
     const currentMonthKey = buildMonthKey(year, month);
     const normalizedMonthStaffs = normalizeStaffGroup(staffs);
     const mergedMonthlySchedules = {
@@ -72,36 +53,15 @@ export const createSaveToHistory = (deps) => (label, currentSchedule = deps.sche
 
     setHistoryList(prev => {
       const updated = [newRecord, ...prev].slice(0, 10);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(storageKey, JSON.stringify(updated));
       return updated;
     });
-};
+  };
 
-export const createLoadHistory = (deps) => (record) => {
+export const loadHistoryService = (record, ctx) => {
   const {
-    buildMonthKey,
-    normalizeStaffGroup,
-    setMonthlySchedules,
-    setPreScheduleMonthlySchedules,
-    setYear,
-    setMonth,
-    setCustomHolidays,
-    setSpecialWorkdays,
-    setMedicalCalendarAdjustments,
-    setStaffingConfig,
-    setUiSettings,
-    setCustomLeaveCodes,
-    setCustomWorkShifts,
-    setCustomColumns,
-    setCustomColumnValues,
-    setSchedulingRulesText,
-    setStaffs,
-    setSchedule,
-    setColors,
-    setShowHistoryModal,
-    setShowDraftPrompt
-  } = deps;
-
+    buildMonthKey, setMonthlySchedules, setPreScheduleMonthlySchedules, setYear, setMonth, setCustomHolidays, setSpecialWorkdays, setMedicalCalendarAdjustments, setStaffingConfig, setUiSettings, setCustomLeaveCodes, setCustomWorkShifts, setCustomColumns, setCustomColumnValues, setSchedulingRulesText, setStaffs, normalizeStaffGroup, setSchedule, setColors, setShowHistoryModal, setShowDraftPrompt
+  } = ctx;
     const { state } = record;
     const nextMonthlySchedules = state.monthlySchedules || {};
     const nextPreScheduleMonthlySchedules = state.preScheduleMonthlySchedules || {};
@@ -129,16 +89,12 @@ export const createLoadHistory = (deps) => (record) => {
     if (state.colors) setColors(state.colors);
     setShowHistoryModal(false);
     setShowDraftPrompt(false);
-};
+  };
 
-export const createClearHistory = (deps) => () => {
-  const {
-    STORAGE_KEY,
-    setHistoryList
-  } = deps;
-
+export const clearHistoryService = (ctx) => {
+  const { setHistoryList, storageKey } = ctx;
     if (window.confirm("確定要清空所有本機暫存紀錄嗎？")) {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKey);
       setHistoryList([]);
     }
-};
+  };
