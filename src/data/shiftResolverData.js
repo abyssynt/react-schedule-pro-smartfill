@@ -1,4 +1,4 @@
-import { DICT } from './scheduleData';
+import { DICT } from './scheduleData.js';
 
 export const BLOCKED_LEAVE_PREFIXES = ['off', '例', '休', '特', '補', '國', '喪', '婚', '產', '病', '事', '陪產', 'AM', 'PM'];
 
