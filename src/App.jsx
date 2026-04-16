@@ -1983,7 +1983,10 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
   };
 
-  // =============================const handleRuleBasedAutoSchedule = createHandleRuleBasedAutoSchedule({
+  // ==========================================
+  // 5. 規則式半智慧補班功能
+  // ==========================================
+  const handleRuleBasedAutoSchedule = createHandleRuleBasedAutoSchedule({
     setIsRuleFillLoading,
     setRuleFillFeedback,
     schedule,
@@ -2012,11 +2015,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     applyRuleFillEntries,
     saveToHistory,
     defaultAutoLeaveCode
-  });ck("❌ 規則補空失敗，請檢查設定。");
-    } finally {
-      setIsRuleFillLoading(false);
-    }
-  };
+  });
 
 
   // ==========================================
