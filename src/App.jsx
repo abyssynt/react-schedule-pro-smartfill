@@ -89,7 +89,6 @@ import { buildMonthStatePayload } from './services/monthStateService.js';
 
 import { exportToExcelService, exportToWordService } from './services/exportService.js';
 import { saveToHistoryService, loadHistoryService, clearHistoryService } from './services/historyService.js';
-import { createHandleRuleBasedAutoSchedule } from './services/ruleFillService.js';
 import {
   buildEmptyStaffStatsService,
   buildStaffStatsMapService,
@@ -104,6 +103,7 @@ import {
   expandCellsForRuleRecheckService,
   scanScheduleRuleViolationsService
 } from './services/ruleWarningService.js';
+import { createHandleRuleBasedAutoSchedule } from './services/ruleFillService.js';
 
 const STORAGE_KEY = STORAGE_KEYS.HISTORY;
 const ACTIVE_DRAFT_KEY = STORAGE_KEYS.ACTIVE_DRAFT;
