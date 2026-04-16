@@ -1,25 +1,7 @@
-export const createExportToExcel = (deps) => async () => {
+export const exportToExcelService = async (ctx) => {
   const {
-    loadExcelJS,
-    year,
-    month,
-    uiSettings,
-    blendHexColors,
-    colors,
-    mergedLeaveCodes,
-    customColumns,
-    daysInMonth,
-    requiredLeaves,
-    hexToExcelArgb,
-    groupedStaffs,
-    buildExportStaffStats,
-    buildExportDailyStats,
-    getExportCellPresentation,
-    getExportNumberedValue,
-    applyExcelFourWeekDivider,
-    setShowExportMenu
-  } = deps;
-
+    loadExcelJS, year, month, uiSettings, blendHexColors, colors, hexToExcelArgb, mergedLeaveCodes, customColumns, daysInMonth, requiredLeaves, getExportNumberedValue, customColumnValues, getExportCellPresentation, buildExportStaffStats, groupedStaffs, buildExportDailyStats, applyExcelFourWeekDivider, tableFontColor, setShowExportMenu
+  } = ctx;
     const ExcelJS = await loadExcelJS();
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月班表`);
@@ -217,28 +199,12 @@ export const createExportToExcel = (deps) => async () => {
     a.click();
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-};
+  };
 
-export const createExportToWord = (deps) => () => {
+export const exportToWordService = (ctx) => {
   const {
-    uiSettings,
-    blendHexColors,
-    colors,
-    daysInMonth,
-    requiredLeaves,
-    schedulingRulesText,
-    SHIFT_GROUPS,
-    staffs,
-    buildExportStaffStats,
-    buildExportDailyStats,
-    getExportCellPresentation,
-    getExportNumberedValue,
-    getWordCycleDividerStyle,
-    formatWordDayCellValue,
-    month,
-    setShowExportMenu
-  } = deps;
-
+    year, month, uiSettings, blendHexColors, colors, daysInMonth, requiredLeaves, schedulingRulesText, SHIFT_GROUPS, staffs, getExportCellPresentation, getExportNumberedValue, buildExportStaffStats, buildExportDailyStats, getWordCycleDividerStyle, tableFontColor, setShowExportMenu
+  } = ctx;
     const statHeaders = ['上班', '假日休', '總休'];
     const exportTheme = {
       pageBg: uiSettings?.pageBackgroundColor || '#f8fafc',
@@ -511,4 +477,4 @@ export const createExportToWord = (deps) => () => {
     a.click();
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-};
+  };
