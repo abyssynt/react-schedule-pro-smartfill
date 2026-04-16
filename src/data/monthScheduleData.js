@@ -1,4 +1,4 @@
-import { SHIFT_GROUPS } from './scheduleData';
+import { SHIFT_GROUPS } from './scheduleData.js';
 
 export const buildMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 
