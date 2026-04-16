@@ -1,4 +1,4 @@
-import { STORAGE_KEYS } from './scheduleData';
+import { STORAGE_KEYS } from './scheduleData.js';
 
 export const ANNOUNCED_CALENDAR_OVERRIDES = {
   2024: {
