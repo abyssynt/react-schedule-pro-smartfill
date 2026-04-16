@@ -90,13 +90,19 @@ import { buildMonthStatePayload } from './services/monthStateService.js';
 import { exportToExcelService, exportToWordService } from './services/exportService.js';
 import { saveToHistoryService, loadHistoryService, clearHistoryService } from './services/historyService.js';
 import {
-  normalizePreScheduleInputService,
-  validateManualEntriesService,
-  applyValueToCellsService,
-  applyPreScheduleValueToCellsService,
-  applySelectionValueService,
-  handleCellChangeService
-} from './services/inputService.js';
+  buildEmptyStaffStatsService,
+  buildStaffStatsMapService,
+  buildDailyStatsMapService,
+  buildRequiredCountMapService,
+  getDemandHighlightStyleService
+} from './services/statsService.js';
+import {
+  getCellCodeFromSnapshotService,
+  evaluateRuleWarningForCellInSnapshotService,
+  refreshRuleWarningsForCellsService,
+  expandCellsForRuleRecheckService,
+  scanScheduleRuleViolationsService
+} from './services/ruleWarningService.js';
 
 const STORAGE_KEY = STORAGE_KEYS.HISTORY;
 const ACTIVE_DRAFT_KEY = STORAGE_KEYS.ACTIVE_DRAFT;
@@ -989,159 +995,59 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const getCellCodeFromSnapshot = (snapshot = {}, staffId, dateStr) => {
-    const staffSnapshot = snapshot?.[staffId];
-    if (staffSnapshot && Object.prototype.hasOwnProperty.call(staffSnapshot, dateStr)) {
-      const cellData = staffSnapshot?.[dateStr];
-      if (!cellData) return '';
-      return typeof cellData === 'object' && cellData !== null ? (cellData.value || '') : (cellData || '');
-    }
-
-    const targetMonthKey = String(dateStr || '').slice(0, 7);
-    if (!targetMonthKey || targetMonthKey === currentMonthKey) return '';
-    return getContextCellCode(staffId, dateStr, { snapshot }) || '';
-  };
-
-  const countConsecutiveWorkDaysBeforeInSnapshot = (snapshot = {}, staffId, dateStr) => {
-    let count = 0;
-    let cursor = addDays(parseDateKey(dateStr), -1);
-    while (true) {
-      const key = formatDateKey(cursor);
-      const code = getCellCodeFromSnapshot(snapshot, staffId, key);
-      if (!isShiftCode(code)) break;
-      count += 1;
-      cursor = addDays(cursor, -1);
-    }
-    return count;
+    return getCellCodeFromSnapshotService({
+      snapshot,
+      staffId,
+      dateStr,
+      currentMonthKey,
+      getContextCellCode
+    });
   };
 
   const evaluateRuleWarningForCellInSnapshot = (snapshot = {}, staff, dateStr) => {
-    if (!staff || !dateStr) return [];
-    const shiftCode = getCellCodeFromSnapshot(snapshot, staff.id, dateStr);
-    if (!shiftCode || isConfiguredLeaveCode(shiftCode) || !isShiftCode(shiftCode)) return [];
-
-    const reasons = [];
-    const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-    const prevCode = getCellCodeFromSnapshot(snapshot, staff.id, prevKey);
-    const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-    if (disallowed.includes(shiftCode)) {
-      reasons.push(`${prevCode} 後不可接 ${shiftCode}`);
-    }
-
-    const consecutiveBefore = countConsecutiveWorkDaysBeforeInSnapshot(snapshot, staff.id, dateStr);
-    if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
-      reasons.push(`連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`);
-    }
-
-    if (staff.pregnant && SMART_RULES.pregnancyRestrictedShifts.includes(shiftCode)) {
-      reasons.push('懷孕標記人員不可排 N / 夜8-8');
-    }
-
-    return reasons;
+    return evaluateRuleWarningForCellInSnapshotService({
+      snapshot,
+      staff,
+      dateStr,
+      smartRules: SMART_RULES,
+      isConfiguredLeaveCode,
+      isShiftCode,
+      parseDateKey,
+      formatDateKey,
+      addDays,
+      getCellCodeFromSnapshot
+    });
   };
 
   const refreshRuleWarningsForCells = (cells = [], snapshot = schedule) => {
-    const normalizedCells = Array.isArray(cells)
-      ? Array.from(new Map(cells.filter((cell) => cell?.staffId && cell?.dateStr).map((cell) => [makeCellKey(cell.staffId, cell.dateStr), cell])).values())
-      : [];
-
-    if (normalizedCells.length === 0) return;
-
-    setCellRuleWarnings(prev => {
-      const next = { ...prev };
-      normalizedCells.forEach(({ staffId, dateStr }) => {
-        const staff = staffs.find((item) => item.id === staffId);
-        const reasons = evaluateRuleWarningForCellInSnapshot(snapshot, staff, dateStr);
-        const cellKey = makeCellKey(staffId, dateStr);
-        if (reasons.length > 0) next[cellKey] = reasons[0];
-        else delete next[cellKey];
-      });
-      return next;
+    refreshRuleWarningsForCellsService({
+      cells,
+      snapshot,
+      schedule,
+      staffs,
+      makeCellKey,
+      setCellRuleWarnings,
+      evaluateRuleWarningForCellInSnapshot
     });
   };
 
   const expandCellsForRuleRecheck = (cells = []) => {
-    const staffIds = Array.from(new Set(
-      (Array.isArray(cells) ? cells : [])
-        .map((cell) => cell?.staffId)
-        .filter(Boolean)
-    ));
-
-    if (staffIds.length === 0) return [];
-
-    const expanded = [];
-    staffIds.forEach((staffId) => {
-      daysInMonth.forEach((day) => {
-        expanded.push({ staffId, dateStr: day.date });
-      });
+    return expandCellsForRuleRecheckService({
+      cells,
+      daysInMonth
     });
-
-    return expanded;
   };
 
   const scanScheduleRuleViolations = (schedulesSource = {}, options = {}) => {
-    const monthKeys = Object.keys(schedulesSource || {}).sort();
-    const targetMonthKeys = new Set(Array.isArray(options.targetMonthKeys) ? options.targetMonthKeys : monthKeys);
-    const byName = new Map();
-
-    monthKeys.forEach((monthKey) => {
-      const monthState = schedulesSource?.[monthKey];
-      const monthStaffs = Array.isArray(monthState?.staffs) ? monthState.staffs : [];
-      const monthSchedule = monthState?.scheduleData || monthState?.schedule || {};
-      monthStaffs.forEach((staff) => {
-        const nameKey = String(staff?.name || '').trim();
-        if (!nameKey) return;
-        const staffSchedule = monthSchedule?.[staff.id] || {};
-        if (!byName.has(nameKey)) byName.set(nameKey, { staff, cells: {} });
-        const ref = byName.get(nameKey);
-        Object.entries(staffSchedule).forEach(([dateStr, cell]) => {
-          ref.cells[dateStr] = cell;
-        });
-      });
+    return scanScheduleRuleViolationsService({
+      schedulesSource,
+      options,
+      smartRules: SMART_RULES,
+      isShiftCode,
+      parseDateKey,
+      formatDateKey,
+      addDays
     });
-
-    const violations = [];
-    byName.forEach((ref, nameKey) => {
-      const dateKeys = Object.keys(ref.cells || {}).sort();
-      const getCode = (dateStr) => {
-        const cell = ref.cells?.[dateStr];
-        return typeof cell === 'object' && cell !== null ? (cell.value || '') : String(cell || '').trim();
-      };
-      dateKeys.forEach((dateStr) => {
-        if (!targetMonthKeys.has(String(dateStr).slice(0, 7))) return;
-        const code = getCode(dateStr);
-        if (!isShiftCode(code)) return;
-        const prevKey = formatDateKey(addDays(parseDateKey(dateStr), -1));
-        const prevCode = getCode(prevKey);
-        const disallowed = SMART_RULES.disallowedNextShiftMap[prevCode] || [];
-        if (disallowed.includes(code)) {
-          violations.push({
-            staffName: nameKey,
-            dateStr,
-            code,
-            reason: `${prevCode} 後不可接 ${code}`
-          });
-        }
-        let consecutiveBefore = 0;
-        let cursor = addDays(parseDateKey(dateStr), -1);
-        while (true) {
-          const cursorKey = formatDateKey(cursor);
-          const cursorCode = getCode(cursorKey);
-          if (!isShiftCode(cursorCode)) break;
-          consecutiveBefore += 1;
-          cursor = addDays(cursor, -1);
-        }
-        if (consecutiveBefore + 1 > SMART_RULES.maxConsecutiveWorkDays) {
-          violations.push({
-            staffName: nameKey,
-            dateStr,
-            code,
-            reason: `連續上班不可超過 ${SMART_RULES.maxConsecutiveWorkDays} 天`
-          });
-        }
-      });
-    });
-
-    return violations;
   };
 
   const clearInvalidCellLater = (cellKey) => {
@@ -1426,18 +1332,50 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
   };
 
-  const applyValueToCells = (cells, normalized, options = {}) => applyValueToCellsService(cells, normalized, options, {
-    validateManualEntries,
-    clearRuleWarningCells,
-    applyScheduleEntries
-  });
+  const applyValueToCells = (cells, normalized, options = {}) => {
+    if (!cells || cells.length === 0) return false;
+    const targetCells = Array.isArray(cells) ? cells : [];
+    const source = options.source || 'manual';
+    const rawEntries = targetCells.map(({ staffId, dateStr }) => ({
+      staffId,
+      dateStr,
+      value: normalized,
+      source
+    }));
+    const { allowedEntries, warningEntries } = source === 'manual'
+      ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
+      : { allowedEntries: rawEntries, warningEntries: [] };
+    if (allowedEntries.length === 0) return false;
+    const nonWarningCells = targetCells.filter(({ staffId, dateStr }) => !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr));
+    if (source === 'manual') clearRuleWarningCells(nonWarningCells);
+    return applyScheduleEntries(
+      allowedEntries,
+      {
+        ...options,
+        clearAssist: options.clearAssist !== false && warningEntries.length === 0,
+        preserveSelection: options.preserveSelection === true || warningEntries.length > 0,
+        selectionCells: options.selectionCells || targetCells,
+        activeCell: options.activeCell || targetCells[targetCells.length - 1]
+      }
+    );
+  };
 
-  const normalizePreScheduleInput = (rawValue = '') => normalizePreScheduleInputService(rawValue, {
-    getImportedRawNumberedLeaveValue,
-    normalizeManualShiftCode,
-    mergedLeaveCodes,
-    mergedShiftCodes
-  });
+  const normalizePreScheduleInput = (rawValue = '') => {
+    const raw = String(rawValue ?? '').trim();
+    if (!raw) return { normalized: '', isValid: true };
+
+    const normalizedNumberedLeave = getImportedRawNumberedLeaveValue(raw);
+    if (normalizedNumberedLeave) {
+      return {
+        normalized: normalizedNumberedLeave.startsWith('例') ? '例' : '休',
+        isValid: true
+      };
+    }
+
+    const { normalized, isValid } = normalizeManualShiftCode(raw, [...mergedLeaveCodes, ...mergedShiftCodes]);
+    if (!isValid) return { normalized: '', isValid: false };
+    return { normalized, isValid: true };
+  };
 
   const buildPreSchedulePastePlan = (grid = [], rect = null) => {
     if (!rect || !Array.isArray(grid) || grid.length === 0) {
@@ -1524,31 +1462,66 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return true;
   };
 
-  const applyPreScheduleValueToCells = (cells = [], rawValue = '', options = {}) => applyPreScheduleValueToCellsService(cells, rawValue, options, {
-    normalizePreScheduleInput,
-    flashInvalidSelection,
-    showInputAssist,
-    updatePreScheduleEntries,
-    setSelectionRangeFromCells,
-    clearInputAssist,
-    resetKeyInputBuffer,
-    moveSelectionAfterInput
-  });
+  const applyPreScheduleValueToCells = (cells = [], rawValue = '', options = {}) => {
+    if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
+    const { normalized, isValid } = normalizePreScheduleInput(rawValue);
+    if (!isValid) {
+      flashInvalidSelection(cells);
+      if (options.showFeedback !== false) showInputAssist('預班可輸入上班或休假代號', 'error');
+      return { applied: false, normalized: '' };
+    }
+
+    const changedCount = updatePreScheduleEntries(cells.map(({ staffId, dateStr }) => ({
+      staffId,
+      dateStr,
+      value: normalized
+    })));
+
+    if (changedCount <= 0 && normalized) return { applied: false, normalized: '' };
+
+    const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
+    if (options.preserveSelection || !shouldAdvance) {
+      setSelectionRangeFromCells(cells, { activeCell: options.activeCell || cells[cells.length - 1] });
+    }
+
+    if (options.clearAssist !== false) clearInputAssist();
+    resetKeyInputBuffer();
+
+    if (shouldAdvance) moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
+
+    return { applied: true, normalized };
+  };
 
   const moveSelectionAfterInput = (cells = [], direction = 1) => {
     if (!Array.isArray(cells) || cells.length !== 1) return false;
     return moveSelectedCell(0, direction);
   };
 
-  const applySelectionValue = (cells = [], rawValue = '', options = {}) => applySelectionValueService(cells, rawValue, options, {
-    normalizeManualShiftCode,
-    mergedLeaveCodes,
-    mergedShiftCodes,
-    applyValueToCells,
-    clearInputAssist,
-    resetKeyInputBuffer,
-    moveSelectionAfterInput
-  });
+  const applySelectionValue = (cells = [], rawValue = '', options = {}) => {
+    if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
+    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
+    if (!isValid) return { applied: false, normalized: '' };
+
+    const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
+    const applied = applyValueToCells(cells, normalized, {
+      source: options.source || 'manual',
+      preserveSelection: !shouldAdvance,
+      selectionCells: cells,
+      activeCell: cells[cells.length - 1],
+      clearAssist: options.clearAssist,
+      resetBuffer: options.resetBuffer
+    });
+    if (!applied) return { applied: false, normalized: '' };
+
+    if (options.clearAssist !== false) clearInputAssist();
+    resetKeyInputBuffer();
+
+    if (shouldAdvance) {
+      moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
+    }
+
+    return { applied: true, normalized };
+  };
 
   const navigateSelection = (rowDelta = 0, colDelta = 0) => {
     clearInputAssist();
@@ -2333,11 +2306,13 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   };
 
   const getDemandHighlightStyle = (dateStr, rowKey, actualCount) => {
-    if (!['D', 'E', 'N'].includes(rowKey)) return {};
-    const requiredCount = getRequiredCountForDate(dateStr, rowKey);
-    if (requiredCount === null) return {};
-    if (actualCount > requiredCount) return { backgroundColor: demandOverColor };
-    return {};
+    return getDemandHighlightStyleService({
+      dateStr,
+      rowKey,
+      actualCount,
+      requiredCountMap,
+      demandOverColor
+    });
   };
 
   const saveToHistory = (label, currentSchedule = schedule) => {
@@ -2382,21 +2357,71 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return { allowed: reasons.length === 0, reasons };
   };
 
-  const validateManualEntries = (entries = [], options = {}) => validateManualEntriesService(entries, options, {
-    schedule,
-    isConfiguredLeaveCode,
-    isShiftCode,
-    staffs,
-    evaluateRuleWarningForCellInSnapshot,
-    setRuleWarningsForEntries,
-    showInputAssist
-  });
+  const validateManualEntries = (entries = [], options = {}) => {
+    const allowedEntries = [];
+    const warningEntries = [];
+    const showFeedback = options.showFeedback !== false;
+    const workingSnapshot = JSON.parse(JSON.stringify(schedule || {}));
 
-  const handleCellChange = (staffId, dateStr, value, options = {}) => handleCellChangeService(staffId, dateStr, value, options, {
-    validateManualEntries,
-    clearRuleWarningCells,
-    applyScheduleEntries
-  });
+    (Array.isArray(entries) ? entries : []).forEach((entry) => {
+      const normalizedValue = String(entry?.value || '').trim();
+      const normalizedEntry = { ...entry, value: normalizedValue, source: entry?.source || 'manual' };
+      if (!normalizedEntry.staffId || !normalizedEntry.dateStr) return;
+
+      if (!workingSnapshot[normalizedEntry.staffId]) workingSnapshot[normalizedEntry.staffId] = {};
+      const existingCell = workingSnapshot[normalizedEntry.staffId]?.[normalizedEntry.dateStr];
+      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
+      workingSnapshot[normalizedEntry.staffId][normalizedEntry.dateStr] = normalizedValue
+        ? { ...existingMeta, value: normalizedValue, source: normalizedEntry.source }
+        : null;
+
+      if (!normalizedValue || isConfiguredLeaveCode(normalizedValue) || !isShiftCode(normalizedValue)) {
+        allowedEntries.push(normalizedEntry);
+        return;
+      }
+
+      const staff = staffs.find((item) => item.id === normalizedEntry.staffId);
+      if (!staff) {
+        allowedEntries.push(normalizedEntry);
+        return;
+      }
+
+      const reasons = evaluateRuleWarningForCellInSnapshot(workingSnapshot, staff, normalizedEntry.dateStr);
+      allowedEntries.push(normalizedEntry);
+      if (reasons.length > 0) {
+        warningEntries.push({ ...normalizedEntry, reasons });
+      }
+    });
+
+    if (warningEntries.length > 0 && showFeedback) {
+      setRuleWarningsForEntries(warningEntries);
+      showInputAssist(`已寫入，但有 ${warningEntries.length} 格違反規則`, 'warning', 2200);
+    }
+
+    return { allowedEntries, warningEntries };
+  };
+
+  const handleCellChange = (staffId, dateStr, value, options = {}) => {
+    const source = options.source || 'manual';
+    const rawEntries = [{ staffId, dateStr, value, source }];
+    const { allowedEntries, warningEntries } = source === 'manual'
+      ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
+      : { allowedEntries: rawEntries, warningEntries: [] };
+    if (allowedEntries.length === 0) return false;
+    const nonWarningCells = rawEntries.filter(({ staffId, dateStr }) => !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr));
+    if (source === 'manual') clearRuleWarningCells(nonWarningCells);
+    if (!options.allowWarningAssistClear && warningEntries.length > 0) options = { ...options, clearAssist: false };
+    return applyScheduleEntries(
+      allowedEntries,
+      {
+        clearAssist: options.clearAssist !== false,
+        resetBuffer: options.resetBuffer !== false,
+        preserveSelection: options.preserveSelection === true || warningEntries.length > 0,
+        selectionCells: options.selectionCells || [{ staffId, dateStr }],
+        activeCell: options.activeCell || { staffId, dateStr }
+      }
+    );
+  };
 
   const applyCellTextColor = (staffId, dateStr, textColor = '') => {
     const currentCell = getContextCellData(staffId, dateStr);
@@ -3014,70 +3039,39 @@ const openSelectedCellFillModal = () => {
   }, [staffs]);
 
 
-  const emptyStaffStats = useMemo(() => ({
-    work: 0,
-    holidayLeave: 0,
-    totalLeave: 0,
-    leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
-  }), [mergedLeaveCodes]);
+  const emptyStaffStats = useMemo(
+    () => buildEmptyStaffStatsService(mergedLeaveCodes),
+    [mergedLeaveCodes]
+  );
 
   const staffStatsMap = useMemo(() => {
-    const next = {};
-    (staffs || []).forEach((staff) => {
-      const stats = {
-        work: 0,
-        holidayLeave: 0,
-        totalLeave: 0,
-        leaveDetails: Object.fromEntries(mergedLeaveCodes.map((leaveCode) => [leaveCode, 0]))
-      };
-      const mySchedule = schedule?.[staff.id] || {};
-      daysInMonth.forEach((dayInfo) => {
-        const cellData = mySchedule[dayInfo.date];
-        const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
-        if (!code) return;
-        if (getAllShiftCodes().includes(code)) stats.work += 1;
-        if (isConfiguredLeaveCode(code)) {
-          stats.totalLeave += 1;
-          const leavePrefix = getCodePrefix(code);
-          if (stats.leaveDetails[leavePrefix] !== undefined) stats.leaveDetails[leavePrefix] += 1;
-          if (dayInfo.isWeekend || dayInfo.isHoliday) stats.holidayLeave += 1;
-        }
-      });
-      next[staff.id] = stats;
+    return buildStaffStatsMapService({
+      staffs,
+      schedule,
+      daysInMonth,
+      mergedLeaveCodes,
+      getAllShiftCodes,
+      isConfiguredLeaveCode,
+      getCodePrefix
     });
-    return next;
   }, [staffs, schedule, daysInMonth, mergedLeaveCodes]);
 
   const dailyStatsMap = useMemo(() => {
-    const next = {};
-    daysInMonth.forEach((dayInfo) => {
-      const stats = { D: 0, E: 0, N: 0, totalLeave: 0 };
-      (staffs || []).forEach((staff) => {
-        const cellData = schedule?.[staff.id]?.[dayInfo.date];
-        const code = typeof cellData === 'object' && cellData !== null ? cellData.value : cellData;
-        if (!code) return;
-        const shiftGroup = getShiftGroupByCode(code);
-        if (shiftGroup === '白班') stats.D += 1;
-        else if (shiftGroup === '小夜') stats.E += 1;
-        else if (shiftGroup === '大夜') stats.N += 1;
-        else if (isConfiguredLeaveCode(code)) stats.totalLeave += 1;
-      });
-      next[dayInfo.date] = stats;
+    return buildDailyStatsMapService({
+      staffs,
+      schedule,
+      daysInMonth,
+      getShiftGroupByCode,
+      isConfiguredLeaveCode
     });
-    return next;
   }, [staffs, schedule, daysInMonth]);
 
   const requiredCountMap = useMemo(() => {
-    const next = {};
-    daysInMonth.forEach((dayInfo) => {
-      const bucket = getRequiredStaffingBucketByDay(dayInfo);
-      next[dayInfo.date] = {
-        D: Number(staffingConfig?.requiredStaffing?.[bucket]?.white || 0),
-        E: Number(staffingConfig?.requiredStaffing?.[bucket]?.evening || 0),
-        N: Number(staffingConfig?.requiredStaffing?.[bucket]?.night || 0)
-      };
+    return buildRequiredCountMapService({
+      daysInMonth,
+      staffingConfig,
+      getRequiredStaffingBucketByDay
     });
-    return next;
   }, [daysInMonth, staffingConfig]);
 
   useEffect(() => {
