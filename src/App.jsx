@@ -1986,39 +1986,6 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
   // ==========================================
   // 5. 規則式半智慧補班功能
   // ==========================================
-  const handleRuleBasedAutoSchedule = createHandleRuleBasedAutoSchedule({
-    setIsRuleFillLoading,
-    setRuleFillFeedback,
-    schedule,
-    ruleFillConfig,
-    staffs,
-    daysInMonth,
-    SHIFT_GROUPS,
-    RULE_FILL_MAIN_SHIFTS,
-    getShiftGroupByCode,
-    GROUP_TO_DEMAND_KEY,
-    staffingConfig,
-    SMART_RULES,
-    getVisiblePreScheduleCode,
-    isConfiguredLeaveCode,
-    requiredLeaves,
-    isShiftCode,
-    isLeaveCode,
-    DEFAULT_SHIFT_BY_GROUP,
-    makeCellKey,
-    getContextCellCode,
-    parseDateKey,
-    addDays,
-    formatDateKey,
-    getRequiredStaffingBucketByDay,
-    getStaffRefFromCurrentMonth,
-    buildEntriesFromSnapshotDiff,
-    applyRuleFillEntries,
-    saveToHistory,
-    defaultAutoLeaveCode
-  });
-
-
   // ==========================================
   // 6. 輔助統計與操作
   // ==========================================
@@ -2060,6 +2027,41 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return clearHistoryService({ setHistoryList, storageKey: STORAGE_KEY });
   };
 
+
+  
+
+  // 規則補空主流程：需在 saveToHistory / loadHistory / clearHistory 定義後再建立
+  const handleRuleBasedAutoSchedule = createHandleRuleBasedAutoSchedule({
+    setIsRuleFillLoading,
+    setRuleFillFeedback,
+    schedule,
+    ruleFillConfig,
+    staffs,
+    daysInMonth,
+    SHIFT_GROUPS,
+    RULE_FILL_MAIN_SHIFTS,
+    getShiftGroupByCode,
+    GROUP_TO_DEMAND_KEY,
+    staffingConfig,
+    SMART_RULES,
+    getVisiblePreScheduleCode,
+    isConfiguredLeaveCode,
+    requiredLeaves,
+    isShiftCode,
+    isLeaveCode,
+    DEFAULT_SHIFT_BY_GROUP,
+    makeCellKey,
+    getContextCellCode,
+    parseDateKey,
+    addDays,
+    formatDateKey,
+    getRequiredStaffingBucketByDay,
+    getStaffRefFromCurrentMonth,
+    buildEntriesFromSnapshotDiff,
+    applyRuleFillEntries,
+    saveToHistory,
+    defaultAutoLeaveCode
+  });
 
   const canAssignWithManualOverride = (staff, dateStr, shiftCode) => {
     const reasons = [];
