@@ -6,6 +6,7 @@ export const createHandleRuleBasedAutoSchedule = (deps = {}) => {
     ruleFillConfig,
     staffs,
     daysInMonth,
+    SHIFT_GROUPS,
     RULE_FILL_MAIN_SHIFTS,
     getShiftGroupByCode,
     GROUP_TO_DEMAND_KEY,
