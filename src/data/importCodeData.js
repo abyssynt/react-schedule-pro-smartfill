@@ -1,4 +1,4 @@
-import { DICT } from './scheduleData';
+import { DICT } from './scheduleData.js';
 
 export const normalizeImportedHalfWidth = (input = '') => String(input ?? '')
   .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
