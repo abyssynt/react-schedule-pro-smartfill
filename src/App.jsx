@@ -88,6 +88,8 @@ import {
 
 import { exportToExcelService, exportToWordService } from './services/exportService.js';
 import { saveToHistoryService, loadHistoryService, clearHistoryService } from './services/historyService.js';
+import { createBlankScheduleForStaffs, createLoadMonthState } from './services/monthStateService.js';
+import { createStartRangeSelection, createUpdateRangeSelection, createMoveSelectedCell, createCopySelectionToClipboard, buildPastePlan, createPasteGridToSelection } from './services/interactionService.js';
 
 const STORAGE_KEY = STORAGE_KEYS.HISTORY;
 const ACTIVE_DRAFT_KEY = STORAGE_KEYS.ACTIVE_DRAFT;
@@ -556,79 +558,32 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
   }, [importRuleViolations, year, month, staffs, schedule, daysInMonth]);
 
-  const createBlankScheduleForStaffs = (staffList = []) => {
-    return staffList.reduce((acc, staff) => {
-      acc[staff.id] = {};
-      return acc;
-    }, {});
-  };
-
-  const loadMonthState = (targetYear, targetMonth, schedulesSource = monthlySchedules) => {
-    const monthKey = buildMonthKey(targetYear, targetMonth);
-    const monthData = schedulesSource?.[monthKey];
-    const preMonthData = preScheduleMonthlySchedules?.[monthKey];
-    const currentRulesText = typeof schedulingRulesText === 'string' ? schedulingRulesText : '';
-    const savedLocalRulesText = readSchedulingRulesTextFromLocalSettings();
-    const resolveRulesText = (...candidates) => {
-      for (const candidate of candidates) {
-        if (typeof candidate === 'string' && candidate.trim() !== '') return candidate;
-      }
-      for (const candidate of candidates) {
-        if (typeof candidate === 'string') return candidate;
-      }
-      return '';
-    };
-    monthLoadSkipRef.current = true;
-
-    if (monthData) {
-      const normalizedMonthStaffs = normalizeStaffGroup(monthData.staffs || []);
-      const legacyScheduleByDay = monthData.scheduleByDay || {};
-      const rebuiltScheduleData = monthData.scheduleData || Object.fromEntries(
-        Object.entries(legacyScheduleByDay).map(([staffId, dayMap]) => [
-          staffId,
-          Object.fromEntries(
-            Object.entries(dayMap || {}).map(([day, cell]) => {
-              const dateKey = `${monthKey}-${String(Number(day)).padStart(2, '0')}`;
-              return [dateKey, cell];
-            })
-          )
-        ])
-      );
-
-      setStaffs(normalizedMonthStaffs);
-      setSchedule(rebuiltScheduleData || createBlankScheduleForStaffs(normalizedMonthStaffs));
-      setCustomColumnValues(monthData.customColumnValues || {});
-      setSchedulingRulesText(resolveRulesText(monthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
-    } else if (preMonthData) {
-      const normalizedPreMonthStaffs = normalizeStaffGroup(preMonthData.staffs || []);
-      setStaffs(normalizedPreMonthStaffs);
-      setSchedule(createBlankScheduleForStaffs(normalizedPreMonthStaffs));
-      setCustomColumnValues(preMonthData.customColumnValues || {});
-      setSchedulingRulesText(resolveRulesText(preMonthData.schedulingRulesText, currentRulesText, savedLocalRulesText));
-    } else {
-      const blankMonthState = createBlankMonthState(targetYear, targetMonth);
-      setStaffs(blankMonthState.staffs);
-      setSchedule(blankMonthState.schedule);
-      setCustomColumnValues(blankMonthState.customColumnValues);
-      setSchedulingRulesText(resolveRulesText(currentRulesText, savedLocalRulesText, blankMonthState.schedulingRulesText));
-    }
-
-    setSelectedGridCell(null);
-    setRangeSelection(null);
-    setSelectionAnchor(null);
-    setCellDrafts({});
-    setInvalidCellKeys({});
-    setCellRuleWarnings({});
-    setKeyInputBuffer('');
-    clearInputAssist();
-    setEditingStaffId(null);
-    setEditingNameDraft('');
-    setDraggingStaffId(null);
-    setDragOverTarget(null);
-    setTimeout(() => {
-      monthLoadSkipRef.current = false;
-    }, 0);
-  };
+  const loadMonthState = createLoadMonthState({
+    buildMonthKey,
+    getPreScheduleMonthlySchedules: () => preScheduleMonthlySchedules,
+    getSchedulingRulesText: () => schedulingRulesText,
+    readSchedulingRulesTextFromLocalSettings,
+    normalizeStaffGroup,
+    createBlankMonthState,
+    setStaffs,
+    setSchedule,
+    setCustomColumnValues,
+    setSchedulingRulesText,
+    setSelectedGridCell,
+    setRangeSelection,
+    setSelectionAnchor,
+    setCellDrafts,
+    setInvalidCellKeys,
+    setCellRuleWarnings,
+    setKeyInputBuffer,
+    clearInputAssist,
+    setEditingStaffId,
+    setEditingNameDraft,
+    setDraggingStaffId,
+    setDragOverTarget,
+    monthLoadSkipRef,
+    createBlankScheduleForStaffs
+  });
 
 
   const currentMonthKey = buildMonthKey(year, month);
@@ -1668,267 +1623,62 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     ).applied;
   };
 
-  const moveSelectedCell = (rowDelta = 0, colDelta = 0) => {
-    const selection = getEffectiveSelection();
-    if (!selection?.start) return false;
+  const moveSelectedCell = createMoveSelectedCell({
+    getEffectiveSelection,
+    selectedGridCell,
+    staffs,
+    daysInMonth,
+    setSelectionAnchor,
+    setRangeSelection,
+    setSelectedGridCell,
+    resetKeyInputBuffer
+  });
 
-    const activeStaffId = selectedGridCell?.staff?.id || selection.end?.staffId || selection.start.staffId;
-    const activeDateStr = selectedGridCell?.dateStr || selection.end?.dateStr || selection.start.dateStr;
-    const activeStaff = staffs.find((staff) => staff.id === activeStaffId);
-    if (!activeStaff || !activeDateStr) return false;
+  const startRangeSelection = createStartRangeSelection({
+    selectionAnchor,
+    setSelectionAnchor,
+    setRangeSelection,
+    setSelectedGridCell,
+    resetKeyInputBuffer
+  });
 
-    const scopedStaffs = staffs.filter((staff) => (staff.group || '白班') === (activeStaff.group || '白班'));
-    const rowIndex = scopedStaffs.findIndex((staff) => staff.id === activeStaff.id);
-    const colIndex = daysInMonth.findIndex((day) => day.date === activeDateStr);
-    if (rowIndex === -1 || colIndex === -1) return false;
+  const updateRangeSelection = createUpdateRangeSelection({
+    isRangeDragging,
+    selectionAnchor,
+    setRangeSelection
+  });
 
-    let nextRowIndex = rowIndex + rowDelta;
-    let nextColIndex = colIndex + colDelta;
+  const copySelectionToClipboard = createCopySelectionToClipboard({
+    getEffectiveSelection,
+    staffs,
+    daysInMonth,
+    getRectFromSelection,
+    preScheduleEditMode,
+    getVisiblePreScheduleCode,
+    getCellCode,
+    setClipboardGrid
+  });
 
-    if (colDelta !== 0 && daysInMonth.length > 0) {
-      while (nextColIndex >= daysInMonth.length) {
-        if (nextRowIndex >= scopedStaffs.length - 1) {
-          nextRowIndex = scopedStaffs.length - 1;
-          nextColIndex = daysInMonth.length - 1;
-          break;
-        }
-        nextRowIndex += 1;
-        nextColIndex -= daysInMonth.length;
-      }
+  const pasteGridToSelection = createPasteGridToSelection({
+    getEffectiveSelection,
+    staffs,
+    daysInMonth,
+    getRectFromSelection,
+    clipboardGrid,
+    parseClipboardGrid,
+    preScheduleEditMode,
+    buildPreSchedulePastePlan,
+    updatePreScheduleEntries,
+    setSelectionRangeFromCells,
+    resetKeyInputBuffer,
+    clearInputAssist,
+    flashInvalidSelection,
+    buildPastePlan: (grid, rect) => buildPastePlan(grid, rect, { daysInMonth, normalizeManualShiftCode, mergedLeaveCodes, mergedShiftCodes }),
+    selectedRangeCells,
+    validateManualEntries,
+    applyScheduleEntries
+  });
 
-      while (nextColIndex < 0) {
-        if (nextRowIndex <= 0) {
-          nextRowIndex = 0;
-          nextColIndex = 0;
-          break;
-        }
-        nextRowIndex -= 1;
-        nextColIndex += daysInMonth.length;
-      }
-    }
-
-    nextRowIndex = Math.max(0, Math.min(scopedStaffs.length - 1, nextRowIndex));
-    nextColIndex = Math.max(0, Math.min(daysInMonth.length - 1, nextColIndex));
-
-    const nextStaff = scopedStaffs[nextRowIndex];
-    const nextDay = daysInMonth[nextColIndex];
-    if (!nextStaff || !nextDay) return false;
-
-    const nextPoint = { staffId: nextStaff.id, dateStr: nextDay.date, group: nextStaff.group || '白班' };
-    setSelectionAnchor(nextPoint);
-    setRangeSelection({ start: nextPoint, end: nextPoint });
-    setSelectedGridCell({ staff: nextStaff, dateStr: nextDay.date });
-    resetKeyInputBuffer();
-    return true;
-  };
-
-  const commitCellValue = (staffId, dateStr, rawValue) => {
-    const cellKey = makeCellKey(staffId, dateStr);
-    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
-
-    if (!isValid) {
-      setInvalidCellKeys(prev => ({ ...prev, [cellKey]: true }));
-      clearInvalidCellLater(cellKey);
-      setCellDrafts(prev => {
-        const next = { ...prev };
-        delete next[cellKey];
-        return next;
-      });
-      return false;
-    }
-
-    const result = applySelectionValue([{ staffId, dateStr }], normalized, { advance: true });
-    if (!result.applied) return false;
-
-    setCellDrafts(prev => {
-      const next = { ...prev };
-      delete next[cellKey];
-      return next;
-    });
-    setInvalidCellKeys(prev => {
-      const next = { ...prev };
-      delete next[cellKey];
-      return next;
-    });
-    return true;
-  };
-
-  const startRangeSelection = (staff, dateStr, event = {}) => {
-    const mouseButton = typeof event.button === 'number' ? event.button : 0;
-    if (mouseButton !== 0) return;
-
-    const point = { staffId: staff.id, dateStr, group: staff.group || '白班' };
-    if (event.shiftKey && selectionAnchor) {
-      setRangeSelection({ start: selectionAnchor, end: point });
-    } else {
-      setSelectionAnchor(point);
-      setRangeSelection({ start: point, end: point });
-    }
-    setSelectedGridCell({ staff, dateStr });
-    resetKeyInputBuffer();
-  };
-
-  const updateRangeSelection = (staff, dateStr) => {
-    if (!isRangeDragging || !selectionAnchor) return;
-    const anchorGroup = selectionAnchor.group || '白班';
-    const targetGroup = staff.group || '白班';
-    if (anchorGroup !== targetGroup) return;
-    setRangeSelection({ start: selectionAnchor, end: { staffId: staff.id, dateStr, group: targetGroup } });
-  };
-
-  const copySelectionToClipboard = async () => {
-    const selection = getEffectiveSelection();
-    const rect = getRectFromSelection(selection, staffs, daysInMonth);
-    if (!rect) return;
-
-    const grid = [];
-    for (let rowIndex = rect.rowStart; rowIndex <= rect.rowEnd; rowIndex += 1) {
-      const row = [];
-      const staff = rect.scopedStaffs[rowIndex];
-      for (let colIndex = rect.colStart; colIndex <= rect.colEnd; colIndex += 1) {
-        const day = daysInMonth[colIndex];
-        const copiedValue = preScheduleEditMode
-          ? (getVisiblePreScheduleCode(staff?.id, day?.date) || '')
-          : (getCellCode(staff?.id, day?.date) || '');
-        row.push(copiedValue);
-      }
-      grid.push(row);
-    }
-
-    setClipboardGrid(grid);
-    const text = grid.map(row => row.join('\t')).join('\n');
-    try {
-      if (navigator?.clipboard?.writeText) await navigator.clipboard.writeText(text);
-    } catch (error) {
-      console.error('寫入剪貼簿失敗', error);
-    }
-  };
-
-  const buildPastePlan = (grid = [], rect = null) => {
-    if (!rect || !Array.isArray(grid) || grid.length === 0) {
-      return { updates: [], affectedCells: [], invalidCount: 0, clearCount: 0, writeCount: 0, clipped: false };
-    }
-
-    const selectionRowCount = rect.rowEnd - rect.rowStart + 1;
-    const selectionColCount = rect.colEnd - rect.colStart + 1;
-    const sourceRowCount = grid.length;
-    const sourceColCount = Math.max(...grid.map(row => (row || []).length), 0);
-    const isSingleCellPaste = sourceRowCount === 1 && sourceColCount === 1;
-
-    let targetRowCount = sourceRowCount;
-    let targetColCount = sourceColCount;
-    let clipped = false;
-
-    if (selectionRowCount > 1 || selectionColCount > 1) {
-      if (isSingleCellPaste) {
-        targetRowCount = selectionRowCount;
-        targetColCount = selectionColCount;
-      } else {
-        targetRowCount = Math.min(sourceRowCount, selectionRowCount);
-        targetColCount = Math.min(sourceColCount, selectionColCount);
-        clipped = sourceRowCount > selectionRowCount || sourceColCount > selectionColCount;
-      }
-    }
-
-    const updates = [];
-    const affectedCells = [];
-    let invalidCount = 0;
-    let clearCount = 0;
-    let writeCount = 0;
-
-    for (let rowOffset = 0; rowOffset < targetRowCount; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < targetColCount; colOffset += 1) {
-        const sourceRow = isSingleCellPaste ? 0 : rowOffset;
-        const sourceCol = isSingleCellPaste ? 0 : colOffset;
-        const targetRow = rect.rowStart + rowOffset;
-        const targetCol = rect.colStart + colOffset;
-        const staff = rect.scopedStaffs[targetRow];
-        const day = daysInMonth[targetCol];
-        if (!staff || !day) continue;
-
-        const targetCell = { staffId: staff.id, dateStr: day.date };
-        affectedCells.push(targetCell);
-
-        const rawValue = grid[sourceRow]?.[sourceCol] ?? '';
-        const rawText = String(rawValue ?? '').trim();
-        if (!rawText) {
-          updates.push({ ...targetCell, value: '', source: 'manual' });
-          clearCount += 1;
-          continue;
-        }
-
-        const { normalized, isValid } = normalizeManualShiftCode(rawText, [...mergedLeaveCodes, ...mergedShiftCodes]);
-        if (!isValid) {
-          invalidCount += 1;
-          continue;
-        }
-
-        updates.push({ ...targetCell, value: normalized, source: 'manual' });
-        writeCount += 1;
-      }
-    }
-
-    return { updates, affectedCells, invalidCount, clearCount, writeCount, clipped };
-  };
-
-  const pasteGridToSelection = async () => {
-    const selection = getEffectiveSelection();
-    const rect = getRectFromSelection(selection, staffs, daysInMonth);
-    if (!rect) return;
-
-    let grid = clipboardGrid;
-    if (!grid || grid.length === 0) {
-      try {
-        if (navigator?.clipboard?.readText) {
-          const text = await navigator.clipboard.readText();
-          grid = parseClipboardGrid(text);
-        }
-      } catch (error) {
-        console.error('讀取剪貼簿失敗', error);
-      }
-    }
-    if (!grid || grid.length === 0) return;
-
-    if (preScheduleEditMode) {
-      const pastePlan = buildPreSchedulePastePlan(grid, rect);
-      if (pastePlan.affectedCells.length === 0) return;
-
-      if (pastePlan.entries.length === 0) {
-        if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-        return;
-      }
-
-      updatePreScheduleEntries(pastePlan.entries);
-      setSelectionRangeFromCells(pastePlan.affectedCells, { activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1] });
-      resetKeyInputBuffer();
-      clearInputAssist();
-      if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-      return;
-    }
-
-    const pastePlan = buildPastePlan(grid, rect);
-    if (pastePlan.updates.length === 0) {
-      if (pastePlan.invalidCount > 0) flashInvalidSelection(selectedRangeCells);
-      return;
-    }
-
-    const { allowedEntries } = validateManualEntries(pastePlan.updates, { showFeedback: false });
-    if (allowedEntries.length === 0) {
-      if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-      return;
-    }
-
-    applyScheduleEntries(allowedEntries, {
-      preserveSelection: true,
-      selectionCells: pastePlan.affectedCells,
-      activeCell: pastePlan.affectedCells[pastePlan.affectedCells.length - 1],
-      clearAssist: false,
-      resetBuffer: true
-    });
-
-    if (pastePlan.invalidCount > 0) flashInvalidSelection(pastePlan.affectedCells);
-    clearInputAssist();
-  };
 
   useEffect(() => {
     const stopDrag = () => setIsRangeDragging(false);
