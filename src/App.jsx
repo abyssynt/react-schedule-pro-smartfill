@@ -89,6 +89,14 @@ import { buildMonthStatePayload } from './services/monthStateService.js';
 
 import { exportToExcelService, exportToWordService } from './services/exportService.js';
 import { saveToHistoryService, loadHistoryService, clearHistoryService } from './services/historyService.js';
+import {
+  normalizePreScheduleInputService,
+  validateManualEntriesService,
+  applyValueToCellsService,
+  applyPreScheduleValueToCellsService,
+  applySelectionValueService,
+  handleCellChangeService
+} from './services/inputService.js';
 
 const STORAGE_KEY = STORAGE_KEYS.HISTORY;
 const ACTIVE_DRAFT_KEY = STORAGE_KEYS.ACTIVE_DRAFT;
@@ -1418,50 +1426,18 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     });
   };
 
-  const applyValueToCells = (cells, normalized, options = {}) => {
-    if (!cells || cells.length === 0) return false;
-    const targetCells = Array.isArray(cells) ? cells : [];
-    const source = options.source || 'manual';
-    const rawEntries = targetCells.map(({ staffId, dateStr }) => ({
-      staffId,
-      dateStr,
-      value: normalized,
-      source
-    }));
-    const { allowedEntries, warningEntries } = source === 'manual'
-      ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
-      : { allowedEntries: rawEntries, warningEntries: [] };
-    if (allowedEntries.length === 0) return false;
-    const nonWarningCells = targetCells.filter(({ staffId, dateStr }) => !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr));
-    if (source === 'manual') clearRuleWarningCells(nonWarningCells);
-    return applyScheduleEntries(
-      allowedEntries,
-      {
-        ...options,
-        clearAssist: options.clearAssist !== false && warningEntries.length === 0,
-        preserveSelection: options.preserveSelection === true || warningEntries.length > 0,
-        selectionCells: options.selectionCells || targetCells,
-        activeCell: options.activeCell || targetCells[targetCells.length - 1]
-      }
-    );
-  };
+  const applyValueToCells = (cells, normalized, options = {}) => applyValueToCellsService(cells, normalized, options, {
+    validateManualEntries,
+    clearRuleWarningCells,
+    applyScheduleEntries
+  });
 
-  const normalizePreScheduleInput = (rawValue = '') => {
-    const raw = String(rawValue ?? '').trim();
-    if (!raw) return { normalized: '', isValid: true };
-
-    const normalizedNumberedLeave = getImportedRawNumberedLeaveValue(raw);
-    if (normalizedNumberedLeave) {
-      return {
-        normalized: normalizedNumberedLeave.startsWith('例') ? '例' : '休',
-        isValid: true
-      };
-    }
-
-    const { normalized, isValid } = normalizeManualShiftCode(raw, [...mergedLeaveCodes, ...mergedShiftCodes]);
-    if (!isValid) return { normalized: '', isValid: false };
-    return { normalized, isValid: true };
-  };
+  const normalizePreScheduleInput = (rawValue = '') => normalizePreScheduleInputService(rawValue, {
+    getImportedRawNumberedLeaveValue,
+    normalizeManualShiftCode,
+    mergedLeaveCodes,
+    mergedShiftCodes
+  });
 
   const buildPreSchedulePastePlan = (grid = [], rect = null) => {
     if (!rect || !Array.isArray(grid) || grid.length === 0) {
@@ -1548,66 +1524,31 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return true;
   };
 
-  const applyPreScheduleValueToCells = (cells = [], rawValue = '', options = {}) => {
-    if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
-    const { normalized, isValid } = normalizePreScheduleInput(rawValue);
-    if (!isValid) {
-      flashInvalidSelection(cells);
-      if (options.showFeedback !== false) showInputAssist('預班可輸入上班或休假代號', 'error');
-      return { applied: false, normalized: '' };
-    }
-
-    const changedCount = updatePreScheduleEntries(cells.map(({ staffId, dateStr }) => ({
-      staffId,
-      dateStr,
-      value: normalized
-    })));
-
-    if (changedCount <= 0 && normalized) return { applied: false, normalized: '' };
-
-    const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
-    if (options.preserveSelection || !shouldAdvance) {
-      setSelectionRangeFromCells(cells, { activeCell: options.activeCell || cells[cells.length - 1] });
-    }
-
-    if (options.clearAssist !== false) clearInputAssist();
-    resetKeyInputBuffer();
-
-    if (shouldAdvance) moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
-
-    return { applied: true, normalized };
-  };
+  const applyPreScheduleValueToCells = (cells = [], rawValue = '', options = {}) => applyPreScheduleValueToCellsService(cells, rawValue, options, {
+    normalizePreScheduleInput,
+    flashInvalidSelection,
+    showInputAssist,
+    updatePreScheduleEntries,
+    setSelectionRangeFromCells,
+    clearInputAssist,
+    resetKeyInputBuffer,
+    moveSelectionAfterInput
+  });
 
   const moveSelectionAfterInput = (cells = [], direction = 1) => {
     if (!Array.isArray(cells) || cells.length !== 1) return false;
     return moveSelectedCell(0, direction);
   };
 
-  const applySelectionValue = (cells = [], rawValue = '', options = {}) => {
-    if (!Array.isArray(cells) || cells.length === 0) return { applied: false, normalized: '' };
-    const { normalized, isValid } = normalizeManualShiftCode(rawValue, [...mergedLeaveCodes, ...mergedShiftCodes]);
-    if (!isValid) return { applied: false, normalized: '' };
-
-    const shouldAdvance = options.advance !== false && normalized && cells.length === 1;
-    const applied = applyValueToCells(cells, normalized, {
-      source: options.source || 'manual',
-      preserveSelection: !shouldAdvance,
-      selectionCells: cells,
-      activeCell: cells[cells.length - 1],
-      clearAssist: options.clearAssist,
-      resetBuffer: options.resetBuffer
-    });
-    if (!applied) return { applied: false, normalized: '' };
-
-    if (options.clearAssist !== false) clearInputAssist();
-    resetKeyInputBuffer();
-
-    if (shouldAdvance) {
-      moveSelectionAfterInput(cells, options.direction === -1 ? -1 : 1);
-    }
-
-    return { applied: true, normalized };
-  };
+  const applySelectionValue = (cells = [], rawValue = '', options = {}) => applySelectionValueService(cells, rawValue, options, {
+    normalizeManualShiftCode,
+    mergedLeaveCodes,
+    mergedShiftCodes,
+    applyValueToCells,
+    clearInputAssist,
+    resetKeyInputBuffer,
+    moveSelectionAfterInput
+  });
 
   const navigateSelection = (rowDelta = 0, colDelta = 0) => {
     clearInputAssist();
@@ -2441,71 +2382,21 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     return { allowed: reasons.length === 0, reasons };
   };
 
-  const validateManualEntries = (entries = [], options = {}) => {
-    const allowedEntries = [];
-    const warningEntries = [];
-    const showFeedback = options.showFeedback !== false;
-    const workingSnapshot = JSON.parse(JSON.stringify(schedule || {}));
+  const validateManualEntries = (entries = [], options = {}) => validateManualEntriesService(entries, options, {
+    schedule,
+    isConfiguredLeaveCode,
+    isShiftCode,
+    staffs,
+    evaluateRuleWarningForCellInSnapshot,
+    setRuleWarningsForEntries,
+    showInputAssist
+  });
 
-    (Array.isArray(entries) ? entries : []).forEach((entry) => {
-      const normalizedValue = String(entry?.value || '').trim();
-      const normalizedEntry = { ...entry, value: normalizedValue, source: entry?.source || 'manual' };
-      if (!normalizedEntry.staffId || !normalizedEntry.dateStr) return;
-
-      if (!workingSnapshot[normalizedEntry.staffId]) workingSnapshot[normalizedEntry.staffId] = {};
-      const existingCell = workingSnapshot[normalizedEntry.staffId]?.[normalizedEntry.dateStr];
-      const existingMeta = typeof existingCell === 'object' && existingCell !== null ? existingCell : {};
-      workingSnapshot[normalizedEntry.staffId][normalizedEntry.dateStr] = normalizedValue
-        ? { ...existingMeta, value: normalizedValue, source: normalizedEntry.source }
-        : null;
-
-      if (!normalizedValue || isConfiguredLeaveCode(normalizedValue) || !isShiftCode(normalizedValue)) {
-        allowedEntries.push(normalizedEntry);
-        return;
-      }
-
-      const staff = staffs.find((item) => item.id === normalizedEntry.staffId);
-      if (!staff) {
-        allowedEntries.push(normalizedEntry);
-        return;
-      }
-
-      const reasons = evaluateRuleWarningForCellInSnapshot(workingSnapshot, staff, normalizedEntry.dateStr);
-      allowedEntries.push(normalizedEntry);
-      if (reasons.length > 0) {
-        warningEntries.push({ ...normalizedEntry, reasons });
-      }
-    });
-
-    if (warningEntries.length > 0 && showFeedback) {
-      setRuleWarningsForEntries(warningEntries);
-      showInputAssist(`已寫入，但有 ${warningEntries.length} 格違反規則`, 'warning', 2200);
-    }
-
-    return { allowedEntries, warningEntries };
-  };
-
-  const handleCellChange = (staffId, dateStr, value, options = {}) => {
-    const source = options.source || 'manual';
-    const rawEntries = [{ staffId, dateStr, value, source }];
-    const { allowedEntries, warningEntries } = source === 'manual'
-      ? validateManualEntries(rawEntries, { showFeedback: options.clearAssist !== false })
-      : { allowedEntries: rawEntries, warningEntries: [] };
-    if (allowedEntries.length === 0) return false;
-    const nonWarningCells = rawEntries.filter(({ staffId, dateStr }) => !warningEntries.some((entry) => entry.staffId === staffId && entry.dateStr === dateStr));
-    if (source === 'manual') clearRuleWarningCells(nonWarningCells);
-    if (!options.allowWarningAssistClear && warningEntries.length > 0) options = { ...options, clearAssist: false };
-    return applyScheduleEntries(
-      allowedEntries,
-      {
-        clearAssist: options.clearAssist !== false,
-        resetBuffer: options.resetBuffer !== false,
-        preserveSelection: options.preserveSelection === true || warningEntries.length > 0,
-        selectionCells: options.selectionCells || [{ staffId, dateStr }],
-        activeCell: options.activeCell || { staffId, dateStr }
-      }
-    );
-  };
+  const handleCellChange = (staffId, dateStr, value, options = {}) => handleCellChangeService(staffId, dateStr, value, options, {
+    validateManualEntries,
+    clearRuleWarningCells,
+    applyScheduleEntries
+  });
 
   const applyCellTextColor = (staffId, dateStr, textColor = '') => {
     const currentCell = getContextCellData(staffId, dateStr);
