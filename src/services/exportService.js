@@ -1,3 +1,11 @@
+const formatWordDayCellValue = (value = "") => {
+  const text = String(value || '').trim();
+  if (/^(例|休)[1-4]$/.test(text)) {
+    return `<span class="word-numbered-leave">${text}</span>`;
+  }
+  return text;
+};
+
 export const exportToExcelService = async (ctx) => {
   const {
     loadExcelJS, year, month, uiSettings, blendHexColors, colors, hexToExcelArgb, mergedLeaveCodes, customColumns, daysInMonth, requiredLeaves, getExportNumberedValue, customColumnValues, getExportCellPresentation, buildExportStaffStats, groupedStaffs, buildExportDailyStats, applyExcelFourWeekDivider, tableFontColor, setShowExportMenu
