@@ -85,12 +85,11 @@ import {
   reconcileScheduleDataMap,
   reconcileMonthStateCollections
 } from './data/index.js';
-
-import { createHandleRuleBasedAutoSchedule } from './services/ruleFillService.js';
 import { buildMonthStatePayload } from './services/monthStateService.js';
 
 import { exportToExcelService, exportToWordService } from './services/exportService.js';
 import { saveToHistoryService, loadHistoryService, clearHistoryService } from './services/historyService.js';
+import { createHandleRuleBasedAutoSchedule } from './services/ruleFillService.js';
 import {
   buildEmptyStaffStatsService,
   buildStaffStatsMapService,
@@ -1994,6 +1993,7 @@ function ScheduleView({ changeScreen, colors, setColors, customHolidays, setCust
     ruleFillConfig,
     staffs,
     daysInMonth,
+    SHIFT_GROUPS,
     RULE_FILL_MAIN_SHIFTS,
     getShiftGroupByCode,
     GROUP_TO_DEMAND_KEY,
