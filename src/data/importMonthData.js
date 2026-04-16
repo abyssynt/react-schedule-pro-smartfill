@@ -1,10 +1,10 @@
-import { DICT, SHIFT_GROUPS } from './scheduleData';
-import { buildMonthKey, buildExistingStaffGroupLookup } from './monthScheduleData';
+import { DICT, SHIFT_GROUPS } from './scheduleData.js';
+import { buildMonthKey, buildExistingStaffGroupLookup } from './monthScheduleData.js';
 import {
   normalizeImportedShiftCode,
   getImportedRawNumberedLeaveValue,
   isConfiguredImportedLeaveCode
-} from './importCodeData';
+} from './importCodeData.js';
 
 export const extractYearMonthCandidates = (...sources) => {
   const fullPatterns = [
